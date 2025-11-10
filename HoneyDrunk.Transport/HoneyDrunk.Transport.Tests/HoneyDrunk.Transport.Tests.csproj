@@ -5,6 +5,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);NU1900</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -15,6 +17,12 @@
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\HoneyDrunk.Transport\HoneyDrunk.Transport.csproj" />
+    <ProjectReference Include="..\HoneyDrunk.Transport.InMemory\HoneyDrunk.Transport.InMemory.csproj" />
+    <ProjectReference Include="..\HoneyDrunk.Transport.AzureServiceBus\HoneyDrunk.Transport.AzureServiceBus.csproj" />
   </ItemGroup>
 
   <ItemGroup>
