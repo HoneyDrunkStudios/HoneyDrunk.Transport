@@ -66,13 +66,12 @@ public static class EnvelopeMapper
         // Parse timestamp
         var timestamp = DateTimeOffset.UtcNow;
         if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue) 
-            && timestampValue is string timestampStr)
+            && timestampValue is string timestampStr
+            && DateTimeOffset.TryParse(timestampStr, out timestamp))
         {
-            if (!DateTimeOffset.TryParse(timestampStr, out timestamp))
-            {
-                timestamp = DateTimeOffset.UtcNow; // fallback if parsing fails
-            }
+            // Successfully parsed timestamp - it's already assigned to 'timestamp' by TryParse
         }
+        // If parsing fails or property doesn't exist, timestamp remains DateTimeOffset.UtcNow (fallback)
 
         // Get message type
         var messageType = message.Subject;

@@ -209,15 +209,243 @@ catch (Exception ex)
 4. **Async disposal** - Transport implementations like `ServiceBusTransportPublisher` implement `IAsyncDisposable` for cleanup
 5. **Immutable envelopes** - Use `With*()` methods to create modified copies, never mutate
 
+## Thread-Safety & Concurrency Patterns
+
+### Disposal Pattern (Critical)
+All transport implementations MUST use thread-safe disposal to prevent race conditions:
+
+```csharp
+public async ValueTask DisposeAsync()
+{
+    // 1. Atomic flag prevents double-disposal
+    if (Interlocked.Exchange(ref _disposed, true))
+        return;
+    
+    // 2. Acquire lock to synchronize with active operations
+    await _initLock.WaitAsync();
+    try
+    {
+        // 3. Dispose resources
+        if (_sender != null)
+        {
+            await _sender.DisposeAsync();
+            _sender = null;
+        }
+    }
+    finally
+    {
+        _initLock.Release();
+        _initLock.Dispose();
+    }
+}
+```
+
+**Why this pattern:**
+- `Interlocked.Exchange` provides atomic test-and-set for disposal flag
+- Lock acquisition ensures no operations in progress during disposal
+- Try-finally guarantees lock cleanup even on exceptions
+- Setting resource to null after disposal prevents use-after-dispose
+
+### Lifecycle Synchronization
+Start/Stop/Dispose operations MUST be synchronized using `SemaphoreSlim`:
+
+```csharp
+private readonly SemaphoreSlim _initLock = new(1, 1);
+private bool _disposed;
+
+public async Task StartAsync(CancellationToken cancellationToken)
+{
+    ObjectDisposedException.ThrowIf(_disposed, this);  // Fast-path check
+    
+    await _initLock.WaitAsync(cancellationToken);
+    try
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);  // Double-check inside lock
+        
+        if (_processor != null)
+            throw new InvalidOperationException("Already started");
+        
+        // Initialize resources
+        _processor = CreateProcessor();
+    }
+    finally
+    {
+        _initLock.Release();
+    }
+}
+```
+
+**Pattern requirements:**
+- Check disposal flag before AND after acquiring lock (double-check pattern)
+- Validate state inside lock to prevent TOCTOU (Time-Of-Check-Time-Of-Use) races
+- Use try-finally to guarantee lock release
+- Prefer `ObjectDisposedException.ThrowIf()` for consistent error messages
+
+### Resource Management Best Practices
+
+**Guaranteed Cleanup Pattern:**
+```csharp
+// Initialize resource BEFORE try block for guaranteed cleanup
+ServiceBusMessageBatch? currentBatch = await CreateMessageBatchAsync(ct);
+
+try
+{
+    foreach (var message in messages)
+    {
+        if (!currentBatch.TryAddMessage(message))
+        {
+            // Send and dispose old batch
+            if (currentBatch.Count > 0)
+                await SendMessagesAsync(currentBatch, ct);
+            
+            currentBatch.Dispose();
+            currentBatch = await CreateMessageBatchAsync(ct);
+            
+            // Validate message fits
+            if (!currentBatch.TryAddMessage(message))
+                throw new InvalidOperationException("Message too large");
+        }
+    }
+}
+finally
+{
+    currentBatch.Dispose();  // Always non-null, guaranteed cleanup
+}
+```
+
+**Try-Finally for Complex Disposal:**
+```csharp
+private async Task StopAndDisposeProcessorsAsync(CancellationToken ct)
+{
+    if (_processor != null)
+    {
+        try
+        {
+            await _processor.StopProcessingAsync(ct);
+        }
+        finally
+        {
+            await _processor.DisposeAsync();  // Guaranteed even if Stop throws
+            _processor = null;
+        }
+    }
+}
+```
+
+### Collection Thread-Safety
+
+**Immutable Collections for Concurrent Access:**
+```csharp
+// Use ImmutableList for collections modified during enumeration
+private readonly ConcurrentDictionary<string, ImmutableList<Handler>> _subscribers = new();
+
+public void Subscribe(string address, Handler handler)
+{
+    _subscribers.AddOrUpdate(
+        address,
+        _ => [handler],  // Create new list
+        (_, existing) => existing.Add(handler));  // Returns new list
+}
+
+// Safe enumeration - no locking needed
+if (_subscribers.TryGetValue(address, out var handlers))
+{
+    foreach (var handler in handlers)  // Iterating immutable snapshot
+        await handler(envelope, ct);
+}
+```
+
+**Why ImmutableList:**
+- Thread-safe for concurrent reads and writes
+- No locking required during enumeration
+- Structural sharing minimizes memory overhead
+- Prevents collection-modified-during-enumeration exceptions
+
+**When to use ConcurrentDictionary:**
+- Frequent lookups with occasional updates
+- Multiple threads accessing different keys
+- Need atomic GetOrAdd/AddOrUpdate operations
+
+### Code Quality Patterns
+
+**Explicit LINQ Filtering:**
+```csharp
+// ❌ BAD: Implicit filtering in foreach
+foreach (var property in message.ApplicationProperties)
+{
+    if (property.Key != "Reserved1" && property.Key != "Reserved2")
+        headers[property.Key] = property.Value;
+}
+
+// ✅ GOOD: Explicit Where clause
+var reservedProperties = new HashSet<string> { "Reserved1", "Reserved2" };
+var headers = message.ApplicationProperties
+    .Where(p => !reservedProperties.Contains(p.Key))
+    .ToDictionary(p => p.Key, p => p.Value);
+```
+
+**Credential Caching:**
+```csharp
+// ✅ Register credential as singleton for reuse
+services.TryAddSingleton<Azure.Core.TokenCredential>(
+    sp => new Azure.Identity.DefaultAzureCredential());
+
+// Use in factory
+services.AddSingleton<ServiceBusClient>(sp =>
+{
+    var credential = sp.GetRequiredService<Azure.Core.TokenCredential>();
+    return new ServiceBusClient(namespace, credential);
+});
+```
+
+**Error Handling for Critical Operations:**
+```csharp
+// ✅ Validate oversized messages explicitly
+if (!currentBatch.TryAddMessage(message))
+{
+    // Create new batch
+    currentBatch.Dispose();
+    currentBatch = await CreateMessageBatchAsync(ct);
+    
+    // Check if message is fundamentally too large
+    if (!currentBatch.TryAddMessage(message))
+    {
+        var error = new InvalidOperationException(
+            $"Message {message.MessageId} exceeds maximum batch size");
+        _logger.LogError(error, "Oversized message");
+        throw error;  // Prevent silent data loss
+    }
+}
+```
+
+### Testing Disposal Safety
+
+**Verify thread-safe disposal:**
+```csharp
+[Fact]
+public async Task DisposeAsync_CalledConcurrently_DisposesOnlyOnce()
+{
+    var publisher = CreatePublisher();
+    var disposeCount = 0;
+    
+    // Simulate concurrent disposal
+    var tasks = Enumerable.Range(0, 10)
+        .Select(_ => Task.Run(async () =>
+        {
+            await publisher.DisposeAsync();
+            Interlocked.Increment(ref disposeCount);
+        }));
+    
+    await Task.WhenAll(tasks);
+    
+    // Only first disposal should proceed
+    Assert.Equal(1, ActualDisposalCount);
+}
+```
+
 ## Extension Points
 
 - **Custom middleware**: Implement `IMessageMiddleware` and register with `services.AddEnumerable()`
 - **Custom serializers**: Implement `IMessageSerializer` and register as singleton
 - **Error handling strategies**: Implement `IErrorHandlingStrategy` for custom retry logic
 - **Outbox stores**: Implement `IOutboxStore` for database-specific transactional outbox
-
-## Related Documentation
-
-- See `Configuration/TransportCoreOptions.cs` for available toggles (telemetry, logging, correlation)
-- Check `Abstractions/MessageProcessingResult.cs` for message outcome enumeration
-- Review `AzureServiceBus/Mapping/EnvelopeMapper.cs` for transport format conversion patterns
