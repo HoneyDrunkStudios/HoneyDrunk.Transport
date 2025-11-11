@@ -1,4 +1,13 @@
 <Solution>
+  <Folder Name="/Docs/">
+    <File Path="../README.md" />
+    <File Path=".github/copilot-instructions.md" />
+    <File Path="docs/FILE_GUIDE.md" />
+  </Folder>
+  <Folder Name="/Pipelines/">
+    <File Path=".github/workflows/publish.yml" />
+    <File Path=".github/workflows/validate-pr.yml" />
+  </Folder>
   <Project Path="HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj" />
   <Project Path="HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj" />
   <Project Path="HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj" />

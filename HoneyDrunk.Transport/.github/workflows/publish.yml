@@ -1,0 +1,171 @@
+name: Publish to NuGet
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (without v prefix, e.g., 0.1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write        # For creating GitHub releases
+  packages: write        # For publishing to NuGet/GitHub Packages
+  id-token: write        # For OIDC authentication (if needed)
+
+jobs:
+  # Determine version from tag or manual input
+  prepare:
+    name: Prepare Release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      version-tag: ${{ steps.get_version.outputs.version-tag }}
+    steps:
+      - name: Determine version
+        id: get_version
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+            VERSION_TAG="v${VERSION}"
+          else
+            # Extract version from tag (removes 'v' prefix)
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            VERSION_TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "version=${VERSION}" >>"$GITHUB_OUTPUT"
+          echo "version-tag=${VERSION_TAG}" >>"$GITHUB_OUTPUT"
+          echo "Publishing version: ${VERSION}"
+          echo "Publishing tag: ${VERSION_TAG}"
+
+  # Build, test, pack, and publish all packages
+  release:
+    name: Build, Pack & Publish
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore HoneyDrunk.Transport.slnx
+
+      - name: Build
+        run: dotnet build HoneyDrunk.Transport.slnx -c Release --no-restore /p:ContinuousIntegrationBuild=true
+
+      - name: Test
+        run: dotnet test HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj -c Release --no-build
+
+      - name: Pack HoneyDrunk.Transport
+        run: >
+          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.csproj
+          -c Release --no-build -o ./artifacts
+          /p:Version=${{ needs.prepare.outputs.version }}
+          /p:ContinuousIntegrationBuild=true
+
+      - name: Pack HoneyDrunk.Transport.InMemory
+        run: >
+          dotnet pack HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj
+          -c Release --no-build -o ./artifacts
+          /p:Version=${{ needs.prepare.outputs.version }}
+          /p:ContinuousIntegrationBuild=true
+
+      - name: Pack HoneyDrunk.Transport.AzureServiceBus
+        run: >
+          dotnet pack HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj
+          -c Release --no-build -o ./artifacts
+          /p:Version=${{ needs.prepare.outputs.version }}
+          /p:ContinuousIntegrationBuild=true
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages-${{ needs.prepare.outputs.version }}
+          path: ./artifacts/*.nupkg
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        run: |
+          dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  # Create GitHub Release
+  github-release:
+    name: Create GitHub Release
+    needs: [prepare, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ needs.prepare.outputs.version-tag }}
+          name: HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
+          body: |
+            ## HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
+
+            Transport-agnostic messaging library for .NET with middleware pipeline pattern.
+
+            ### ?? Packages
+
+            **HoneyDrunk.Transport** - Core abstractions and middleware pipeline
+            ```xml
+            <PackageReference Include="HoneyDrunk.Transport" Version="${{ needs.prepare.outputs.version }}" />
+            ```
+
+            **HoneyDrunk.Transport.InMemory** - In-memory broker for testing
+            ```xml
+            <PackageReference Include="HoneyDrunk.Transport.InMemory" Version="${{ needs.prepare.outputs.version }}" />
+            ```
+
+            **HoneyDrunk.Transport.AzureServiceBus** - Azure Service Bus implementation
+            ```xml
+            <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="${{ needs.prepare.outputs.version }}" />
+            ```
+
+            ### ?? Links
+            - [NuGet: HoneyDrunk.Transport](https://www.nuget.org/packages/HoneyDrunk.Transport/${{ needs.prepare.outputs.version }})
+            - [NuGet: HoneyDrunk.Transport.InMemory](https://www.nuget.org/packages/HoneyDrunk.Transport.InMemory/${{ needs.prepare.outputs.version }})
+            - [NuGet: HoneyDrunk.Transport.AzureServiceBus](https://www.nuget.org/packages/HoneyDrunk.Transport.AzureServiceBus/${{ needs.prepare.outputs.version }})
+            - [Documentation](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme)
+
+            ### ?? Quick Start
+
+            ```csharp
+            using HoneyDrunk.Transport.DependencyInjection;
+
+            var builder = WebApplication.CreateBuilder(args);
+
+            // Add transport core with Azure Service Bus
+            builder.Services.AddHoneyDrunkTransportCore()
+                .AddHoneyDrunkServiceBusTransport(options => 
+                {
+                    options.ConnectionString = builder.Configuration["ServiceBus:ConnectionString"];
+                })
+                .WithTopicSubscription("my-subscription")
+                .WithRetry(retry => retry.MaxAttempts = 5);
+
+            // Register message handlers
+            builder.Services.AddMessageHandler<MyMessage, MyMessageHandler>();
+            ```
+          draft: false
+          prerelease: false
