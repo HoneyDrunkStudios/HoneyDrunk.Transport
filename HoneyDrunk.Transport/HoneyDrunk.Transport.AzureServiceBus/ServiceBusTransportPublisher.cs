@@ -35,6 +35,8 @@ public sealed class ServiceBusTransportPublisher(
         IEndpointAddress destination,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         await EnsureInitializedAsync(cancellationToken);
 
         using var activity = TransportTelemetry.StartPublishActivity(envelope, destination);
@@ -96,6 +98,8 @@ public sealed class ServiceBusTransportPublisher(
         IEndpointAddress destination,
         CancellationToken cancellationToken = default)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
         await EnsureInitializedAsync(cancellationToken);
 
         var messages = envelopes
@@ -129,22 +133,57 @@ public sealed class ServiceBusTransportPublisher(
                     destination.Address);
             }
 
-            // Create a batch and send
-            using var messageBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+            // Create batches and send
+            ServiceBusMessageBatch? currentBatch = null;
 
-            foreach (var message in messages)
+            try
             {
-                if (!messageBatch.TryAddMessage(message))
+                foreach (var message in messages)
                 {
-                    // If message doesn't fit, send current batch and create new one
-                    await _sender.SendMessagesAsync(messageBatch, cancellationToken);
-                    messageBatch.TryAddMessage(message);
+                    // Create initial batch or new batch after sending
+                    currentBatch ??= await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+                    if (!currentBatch.TryAddMessage(message))
+                    {
+                        // Current batch is full, send it
+                        if (currentBatch.Count > 0)
+                        {
+                            await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
+                            currentBatch.Dispose();
+                        }
+
+                        // Create a new batch and try adding the message
+                        currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+                        // If message still doesn't fit in empty batch, it's too large
+                        if (!currentBatch.TryAddMessage(message))
+                        {
+                            var error = new InvalidOperationException(
+                                $"Message {message.MessageId} is too large to fit in a Service Bus batch. " +
+                                $"Maximum batch size is exceeded. Consider reducing message size or sending without batching.");
+
+                            if (_logger.IsEnabled(LogLevel.Error))
+                            {
+                                _logger.LogError(
+                                    error,
+                                    "Message {MessageId} exceeds maximum batch size and cannot be sent",
+                                    message.MessageId);
+                            }
+
+                            throw error;
+                        }
+                    }
+                }
+
+                // Send any remaining messages in the final batch
+                if (currentBatch?.Count > 0)
+                {
+                    await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
                 }
             }
-
-            if (messageBatch.Count > 0)
+            finally
             {
-                await _sender.SendMessagesAsync(messageBatch, cancellationToken);
+                currentBatch?.Dispose();
             }
 
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -170,6 +209,9 @@ public sealed class ServiceBusTransportPublisher(
         await _initLock.WaitAsync(cancellationToken);
         try
         {
+            // Check disposal flag after acquiring lock
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
             if (_sender != null)
                 return;
 
@@ -192,16 +234,28 @@ public sealed class ServiceBusTransportPublisher(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
-            return;
-
-        _disposed = true;
-
-        if (_sender != null)
+        // Thread-safe disposal check using Interlocked.Exchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
+        if (Interlocked.Exchange(ref _disposed, true))
         {
-            await _sender.DisposeAsync();
+            return;
         }
 
-        _initLock.Dispose();
+        // Acquire the initialization lock to ensure no concurrent initialization or disposal
+        await _initLock.WaitAsync();
+        try
+        {
+            if (_sender != null)
+            {
+                await _sender.DisposeAsync();
+                _sender = null;
+            }
+        }
+        finally
+        {
+            _initLock.Release();
+            _initLock.Dispose();
+        }
     }
 }

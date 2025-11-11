@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using HoneyDrunk.Transport.Abstractions;
 
 namespace HoneyDrunk.Transport.Telemetry;

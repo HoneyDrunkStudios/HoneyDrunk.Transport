@@ -1,8 +1,10 @@
-using System.Text.Json;
+using HoneyDrunk.Kernel.DI;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Configuration;
+using HoneyDrunk.Transport.Context;
 using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Pipeline.Middleware;
+using HoneyDrunk.Transport.Primitives;
 using HoneyDrunk.Transport.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -25,6 +27,9 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<TransportCoreOptions>? configure = null)
     {
+        // Register Kernel defaults (Clock, IdGenerator, Context, Metrics)
+        services.AddKernelDefaults();
+
         // Configure options
         if (configure != null)
         {
@@ -34,6 +39,12 @@ public static class ServiceCollectionExtensions
         {
             services.Configure<TransportCoreOptions>(_ => { });
         }
+
+        // Register kernel context factory
+        services.TryAddSingleton<IKernelContextFactory, KernelContextFactory>();
+
+        // Register envelope factory
+        services.TryAddSingleton<EnvelopeFactory>();
 
         // Register default serializer
         services.TryAddSingleton<IMessageSerializer, JsonMessageSerializer>();

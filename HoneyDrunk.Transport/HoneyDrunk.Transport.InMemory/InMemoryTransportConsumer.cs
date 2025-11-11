@@ -20,85 +20,105 @@ public sealed class InMemoryTransportConsumer(
     InMemoryBroker broker,
     IMessagePipeline pipeline,
     IOptions<TransportOptions> options,
-    ILogger<InMemoryTransportConsumer> logger) : ITransportConsumer
+    ILogger<InMemoryTransportConsumer> logger) : ITransportConsumer, IAsyncDisposable
 {
     private readonly InMemoryBroker _broker = broker;
     private readonly IMessagePipeline _pipeline = pipeline;
     private readonly IOptions<TransportOptions> _options = options;
     private readonly ILogger<InMemoryTransportConsumer> _logger = logger;
+    private readonly SemaphoreSlim _startStopLock = new(1, 1);
     private CancellationTokenSource? _cts;
     private Task? _consumeTask;
+    private bool _disposed;
 
     /// <inheritdoc />
-    public Task StartAsync(CancellationToken cancellationToken = default)
+    public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        if (_cts != null)
-        {
-            throw new InvalidOperationException("Consumer is already started");
-        }
+        ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_logger.IsEnabled(LogLevel.Information))
+        await _startStopLock.WaitAsync(cancellationToken);
+        try
         {
-            _logger.LogInformation(
-                "Starting in-memory consumer for endpoint {EndpointName}",
-                _options.Value.EndpointName);
-        }
+            ObjectDisposedException.ThrowIf(_disposed, this);
 
-        _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-
-        // Start multiple concurrent consumers based on MaxConcurrency
-        var tasks = new List<Task>();
-        for (int i = 0; i < _options.Value.MaxConcurrency; i++)
-        {
-            var consumerId = i;
-            var task = Task.Run(async () =>
+            if (_cts != null)
             {
-                await ConsumeMessagesAsync(consumerId, _cts.Token);
-            }, _cts.Token);
-            tasks.Add(task);
+                throw new InvalidOperationException("Consumer is already started");
+            }
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Starting in-memory consumer for endpoint {EndpointName}",
+                    _options.Value.EndpointName);
+            }
+
+            _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            // Start multiple concurrent consumers based on MaxConcurrency
+            var tasks = new List<Task>();
+            for (int i = 0; i < _options.Value.MaxConcurrency; i++)
+            {
+                var consumerId = i;
+                var task = Task.Run(async () =>
+                {
+                    await ConsumeMessagesAsync(consumerId, _cts.Token);
+                }, _cts.Token);
+                tasks.Add(task);
+            }
+
+            _consumeTask = Task.WhenAll(tasks);
         }
-
-        _consumeTask = Task.WhenAll(tasks);
-
-        return Task.CompletedTask;
+        finally
+        {
+            _startStopLock.Release();
+        }
     }
 
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_cts == null)
+        await _startStopLock.WaitAsync(cancellationToken);
+        try
         {
-            return;
-        }
-
-        if (_logger.IsEnabled(LogLevel.Information))
-        {
-            _logger.LogInformation(
-                "Stopping in-memory consumer for endpoint {EndpointName}",
-                _options.Value.EndpointName);
-        }
-
-        _cts.Cancel();
-
-        if (_consumeTask != null)
-        {
-            try
+            if (_cts == null)
             {
-                await _consumeTask;
+                return;
             }
-            catch (OperationCanceledException)
+
+            if (_logger.IsEnabled(LogLevel.Information))
             {
-                // Expected when stopping
+                _logger.LogInformation(
+                    "Stopping in-memory consumer for endpoint {EndpointName}",
+                    _options.Value.EndpointName);
+            }
+
+            _cts.Cancel();
+
+            if (_consumeTask != null)
+            {
+                try
+                {
+                    await _consumeTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when stopping
+                }
+            }
+
+            _cts.Dispose();
+            _cts = null;
+            _consumeTask = null;
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Consumer stopped");
             }
         }
-
-        _cts.Dispose();
-        _cts = null;
-        _consumeTask = null;
-
-        if (_logger.IsEnabled(LogLevel.Information))
+        finally
         {
-            _logger.LogInformation("Consumer stopped");
+            _startStopLock.Release();
         }
     }
 
@@ -184,6 +204,27 @@ public sealed class InMemoryTransportConsumer(
             }
 
             // In a real transport, this would trigger retry logic
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        // Thread-safe disposal check using Interlocked.Exchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
+        if (Interlocked.Exchange(ref _disposed, true))
+        {
+            return;
+        }
+
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            _startStopLock.Dispose();
         }
     }
 }

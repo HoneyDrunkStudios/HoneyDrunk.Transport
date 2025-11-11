@@ -62,11 +62,12 @@ public sealed class RetryOptions
             delay = MaxDelay;
         }
 
-        // Add jitter if enabled
+        // Add jitter if enabled (±30% randomization)
         if (UseJitter)
         {
-            var jitter = Random.Shared.NextDouble() * 0.3; // ±30% jitter
-            delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * (1.0 + jitter - 0.15));
+            var jitter = Random.Shared.NextDouble(); // [0.0, 1.0)
+            var jitterMultiplier = 0.7 + (jitter * 0.6); // [0.7, 1.3) = ±30%
+            delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * jitterMultiplier);
         }
 
         return delay;

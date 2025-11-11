@@ -48,25 +48,30 @@ public static class EnvelopeMapper
     /// </summary>
     public static ITransportEnvelope FromServiceBusMessage(ServiceBusReceivedMessage message)
     {
-        var headers = new Dictionary<string, string>();
-
-        // Extract headers from application properties
-        foreach (var property in message.ApplicationProperties)
+        // Define reserved property keys that shouldn't be copied to headers
+        var reservedProperties = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            if (property.Key != MessageTypeProperty && 
-                property.Key != TimestampProperty && 
-                property.Key != "CausationId")
-            {
-                headers[property.Key] = property.Value?.ToString() ?? string.Empty;
-            }
-        }
+            MessageTypeProperty,
+            TimestampProperty,
+            "CausationId"
+        };
+
+        // Extract headers from application properties, excluding reserved properties
+        var headers = message.ApplicationProperties
+            .Where(property => !reservedProperties.Contains(property.Key))
+            .ToDictionary(
+                property => property.Key,
+                property => property.Value?.ToString() ?? string.Empty);
 
         // Parse timestamp
         var timestamp = DateTimeOffset.UtcNow;
         if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue) 
             && timestampValue is string timestampStr)
         {
-            DateTimeOffset.TryParse(timestampStr, out timestamp);
+            if (!DateTimeOffset.TryParse(timestampStr, out timestamp))
+            {
+                timestamp = DateTimeOffset.UtcNow; // fallback if parsing fails
+            }
         }
 
         // Get message type
@@ -115,17 +120,11 @@ public static class EnvelopeMapper
 /// <summary>
 /// Service Bus specific transaction context.
 /// </summary>
-internal sealed class ServiceBusTransportTransaction : ITransportTransaction
+internal sealed class ServiceBusTransportTransaction(ServiceBusReceivedMessage message) : ITransportTransaction
 {
-    private readonly ServiceBusReceivedMessage _message;
+    private readonly ServiceBusReceivedMessage _message = message;
 
-    public ServiceBusTransportTransaction(ServiceBusReceivedMessage message)
-    {
-        _message = message;
-        TransactionId = message.MessageId;
-    }
-
-    public string TransactionId { get; }
+    public string TransactionId { get; } = message.MessageId;
 
     public IReadOnlyDictionary<string, object> Context => new Dictionary<string, object>
     {

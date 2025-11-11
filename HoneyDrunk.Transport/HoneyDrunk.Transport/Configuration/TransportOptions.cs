@@ -1,5 +1,3 @@
-using HoneyDrunk.Transport.Abstractions;
-
 namespace HoneyDrunk.Transport.Configuration;
 
 /// <summary>

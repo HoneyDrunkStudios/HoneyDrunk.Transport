@@ -2,7 +2,6 @@ using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.DependencyInjection;
-using Microsoft.Extensions.Azure;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using AzureSBRetryOptions = Azure.Messaging.ServiceBus.ServiceBusRetryOptions;
@@ -30,7 +29,7 @@ public static class ServiceCollectionExtensions
         services.Configure(configure);
 
         // Register Service Bus client
-        services.AddSingleton<ServiceBusClient>(sp =>
+        services.AddSingleton(sp =>
         {
             var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<AzureServiceBusOptions>>().Value;
 
@@ -54,10 +53,11 @@ public static class ServiceCollectionExtensions
             }
             else if (!string.IsNullOrEmpty(options.FullyQualifiedNamespace))
             {
-                // Use managed identity (DefaultAzureCredential)
+                // Use managed identity (DefaultAzureCredential is reused as singleton)
+                var credential = sp.GetRequiredService<Azure.Core.TokenCredential>();
                 return new ServiceBusClient(
                     options.FullyQualifiedNamespace,
-                    new Azure.Identity.DefaultAzureCredential(),
+                    credential,
                     clientOptions);
             }
             else
@@ -66,6 +66,9 @@ public static class ServiceCollectionExtensions
                     "Either ConnectionString or FullyQualifiedNamespace must be configured");
             }
         });
+
+        // Register DefaultAzureCredential as singleton for reuse across services
+        services.TryAddSingleton<Azure.Core.TokenCredential>(sp => new Azure.Identity.DefaultAzureCredential());
 
         // Register publisher and consumer
         services.TryAddSingleton<ITransportPublisher, ServiceBusTransportPublisher>();

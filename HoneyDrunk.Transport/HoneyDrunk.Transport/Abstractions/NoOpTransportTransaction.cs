@@ -10,18 +10,23 @@ public sealed class NoOpTransportTransaction : ITransportTransaction
     /// </summary>
     public static readonly ITransportTransaction Instance = new NoOpTransportTransaction();
 
+    private static readonly IReadOnlyDictionary<string, object> EmptyContext = new Dictionary<string, object>();
+
+    private readonly string _transactionId;
+
     /// <summary>
     /// Prevents a default instance of the <see cref="NoOpTransportTransaction"/> class from being created.
     /// </summary>
     private NoOpTransportTransaction()
     {
+        _transactionId = Guid.NewGuid().ToString();
     }
 
     /// <inheritdoc/>
-    public string TransactionId => Guid.NewGuid().ToString();
+    public string TransactionId => _transactionId;
 
     /// <inheritdoc/>
-    public IReadOnlyDictionary<string, object> Context => new Dictionary<string, object>();
+    public IReadOnlyDictionary<string, object> Context => EmptyContext;
 
     /// <inheritdoc/>
     public Task CommitAsync(CancellationToken cancellationToken = default)

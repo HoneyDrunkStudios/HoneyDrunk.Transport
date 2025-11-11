@@ -2,7 +2,6 @@ using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
-using HoneyDrunk.Transport.Configuration;
 using HoneyDrunk.Transport.Pipeline;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -77,28 +76,36 @@ public sealed class ServiceBusTransportConsumer(
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        if (_logger.IsEnabled(LogLevel.Information))
+        await _initLock.WaitAsync(cancellationToken);
+        try
         {
-            _logger.LogInformation("Stopping Service Bus consumer");
-        }
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Stopping Service Bus consumer");
+            }
 
-        if (_processor != null)
-        {
-            await _processor.StopProcessingAsync(cancellationToken);
-            await _processor.DisposeAsync();
-            _processor = null;
-        }
+            if (_processor != null)
+            {
+                await _processor.StopProcessingAsync(cancellationToken);
+                await _processor.DisposeAsync();
+                _processor = null;
+            }
 
-        if (_sessionProcessor != null)
-        {
-            await _sessionProcessor.StopProcessingAsync(cancellationToken);
-            await _sessionProcessor.DisposeAsync();
-            _sessionProcessor = null;
-        }
+            if (_sessionProcessor != null)
+            {
+                await _sessionProcessor.StopProcessingAsync(cancellationToken);
+                await _sessionProcessor.DisposeAsync();
+                _sessionProcessor = null;
+            }
 
-        if (_logger.IsEnabled(LogLevel.Information))
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Service Bus consumer stopped");
+            }
+        }
+        finally
         {
-            _logger.LogInformation("Service Bus consumer stopped");
+            _initLock.Release();
         }
     }
 
@@ -344,12 +351,21 @@ public sealed class ServiceBusTransportConsumer(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (_disposed)
+        // Thread-safe disposal check using Interlocked.CompareExchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
+        if (Interlocked.Exchange(ref _disposed, true))
+        {
             return;
+        }
 
-        _disposed = true;
-
-        await StopAsync();
-        _initLock.Dispose();
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            _initLock.Dispose();
+        }
     }
 }

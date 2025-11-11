@@ -1,6 +1,7 @@
 using HoneyDrunk.Transport.Abstractions;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Threading.Channels;
 
 namespace HoneyDrunk.Transport.InMemory;
@@ -15,7 +16,7 @@ namespace HoneyDrunk.Transport.InMemory;
 public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
 {
     private readonly ConcurrentDictionary<string, Channel<ITransportEnvelope>> _queues = new();
-    private readonly ConcurrentDictionary<string, List<Func<ITransportEnvelope, CancellationToken, Task>>> _subscribers = new();
+    private readonly ConcurrentDictionary<string, ImmutableList<Func<ITransportEnvelope, CancellationToken, Task>>> _subscribers = new();
     private readonly ILogger<InMemoryBroker> _logger = logger;
 
     /// <summary>
@@ -41,7 +42,8 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
         // Also notify any direct subscribers
         if (_subscribers.TryGetValue(address, out var handlers))
         {
-            foreach (var handler in handlers.ToList())
+            // ImmutableList is thread-safe for enumeration
+            foreach (var handler in handlers)
             {
                 _ = Task.Run(async () =>
                 {
@@ -76,11 +78,11 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
             _logger.LogDebug("Subscribing to address {Address}", address);
         }
 
-        var handlers = _subscribers.GetOrAdd(address, _ => []);
-        lock (handlers)
-        {
-            handlers.Add(handler);
-        }
+        // Use AddOrUpdate with ImmutableList for thread-safe modification
+        _subscribers.AddOrUpdate(
+            address,
+            _ => [handler],
+            (_, existingList) => existingList.Add(handler));
     }
 
     /// <summary>
@@ -131,16 +133,29 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
     }
 
     /// <summary>
-    /// Clears all messages from an address.
+    /// Clears all messages from an address by draining the channel without completing it.
     /// </summary>
+    /// <remarks>
+    /// This method drains all pending messages from the queue without completing the channel,
+    /// ensuring that active consumers continue to receive new messages published after the clear.
+    /// </remarks>
     public void ClearQueue(string address)
     {
-        if (_queues.TryRemove(address, out var queue))
+        if (_queues.TryGetValue(address, out var queue))
         {
-            queue.Writer.Complete();
+            // Drain all pending messages without completing the channel
+            var drainedCount = 0;
+            while (queue.Reader.TryRead(out _))
+            {
+                drainedCount++;
+            }
+
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Cleared queue for address {Address}", address);
+                _logger.LogDebug(
+                    "Cleared {Count} message(s) from queue for address {Address}",
+                    drainedCount,
+                    address);
             }
         }
     }

@@ -19,9 +19,9 @@ public sealed class MessagePipeline(
     IServiceProvider serviceProvider,
     ILogger<MessagePipeline> logger) : IMessagePipeline
 {
-    private readonly IEnumerable<IMessageMiddleware> _middlewares = middlewares;
+    private readonly IReadOnlyList<IMessageMiddleware> _reversedMiddlewares = [.. middlewares.Reverse()];
     private readonly IMessageSerializer _serializer = serializer;
-    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly MessageHandlerInvoker _handlerInvoker = new(serviceProvider);
     private readonly ILogger<MessagePipeline> _logger = logger;
 
     /// <inheritdoc/>
@@ -84,14 +84,9 @@ public sealed class MessagePipeline(
 
     private static Type? ResolveMessageType(string typeName)
     {
-        try
-        {
-            return Type.GetType(typeName, throwOnError: false);
-        }
-        catch
-        {
-            return null;
-        }
+        // Type.GetType with throwOnError: false already returns null on failure
+        // No need for try-catch as it won't throw
+        return Type.GetType(typeName, throwOnError: false);
     }
 
     private Func<Task> BuildPipeline(
@@ -105,8 +100,8 @@ public sealed class MessagePipeline(
             await InvokeMessageHandlerAsync(envelope, context, cancellationToken);
         };
 
-        // Apply middleware in reverse order
-        foreach (var middleware in _middlewares.Reverse())
+        // Apply middleware in reverse order (already reversed in constructor)
+        foreach (var middleware in _reversedMiddlewares)
         {
             var next = handler;
             handler = () => middleware.InvokeAsync(envelope, context, next, cancellationToken);
@@ -139,11 +134,10 @@ public sealed class MessagePipeline(
                 ex);
         }
 
-        // Resolve and invoke the handler
-        var handlerType = typeof(IMessageHandler<>).MakeGenericType(messageType);
-        var handler = _serviceProvider.GetService(handlerType);
+        // Invoke the handler using the optimized invoker
+        var task = _handlerInvoker.InvokeHandlerAsync(message, messageType, context, cancellationToken);
 
-        if (handler == null)
+        if (task == null)
         {
             if (_logger.IsEnabled(LogLevel.Warning))
             {
@@ -151,14 +145,10 @@ public sealed class MessagePipeline(
                     "No handler registered for message type {MessageType}",
                     envelope.MessageType);
             }
+
             return;
         }
 
-        var handleMethod = handlerType.GetMethod(nameof(IMessageHandler<>.HandleAsync));
-        if (handleMethod != null)
-        {
-            var task = (Task)handleMethod.Invoke(handler, [message, context, cancellationToken])!;
-            await task;
-        }
+        await task;
     }
 }

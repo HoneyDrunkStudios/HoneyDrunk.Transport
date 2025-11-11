@@ -1,0 +1,32 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - '**.cs'
+      - '**.csproj'
+      - '**.slnx'
+      - '**.props'
+      - '**.targets'
+      - '**/.editorconfig'
+      - '**/stylecop.json'
+
+permissions:
+  contents: read
+  checks: write
+  pull-requests: write  # This allows posting PR comments
+
+jobs:
+  pr-validation:
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/pr-validation.yml@main
+    with:
+      dotnet-version: '10.0.x'
+      configuration: 'Release'
+      runs-on: 'ubuntu-latest'
+      working-directory: 'HoneyDrunk.Transport'
+      enable-code-quality: true
+      post-pr-comment: true
+      actions-ref: 'main'
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
