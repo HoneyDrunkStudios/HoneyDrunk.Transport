@@ -133,55 +133,7 @@ public sealed class ServiceBusTransportPublisher(
                     destination.Address);
             }
 
-            // Create batches and send
-            ServiceBusMessageBatch? currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-            try
-            {
-                foreach (var message in messages)
-                {
-                    if (!currentBatch.TryAddMessage(message))
-                    {
-                        // Current batch is full, send it
-                        if (currentBatch.Count > 0)
-                        {
-                            await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-                        }
-
-                        // Dispose the old batch and create a new one
-                        currentBatch.Dispose();
-                        currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-                        // If message still doesn't fit in empty batch, it's too large
-                        if (!currentBatch.TryAddMessage(message))
-                        {
-                            var error = new InvalidOperationException(
-                                $"Message {message.MessageId} is too large to fit in a Service Bus batch. " +
-                                $"Maximum batch size is exceeded. Consider reducing message size or sending without batching.");
-
-                            if (_logger.IsEnabled(LogLevel.Error))
-                            {
-                                _logger.LogError(
-                                    error,
-                                    "Message {MessageId} exceeds maximum batch size and cannot be sent",
-                                    message.MessageId);
-                            }
-
-                            throw error;
-                        }
-                    }
-                }
-
-                // Send any remaining messages in the final batch
-                if (currentBatch.Count > 0)
-                {
-                    await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-                }
-            }
-            finally
-            {
-                currentBatch.Dispose();
-            }
+            await SendMessageBatchesAsync(messages, cancellationToken);
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
@@ -195,6 +147,53 @@ public sealed class ServiceBusTransportPublisher(
                 _logger.LogError(ex, "Failed to publish batch");
             }
             throw;
+        }
+    }
+
+    private async Task SendMessageBatchesAsync(List<ServiceBusMessage> messages, CancellationToken cancellationToken)
+    {
+        using var currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+        foreach (var message in messages)
+        {
+            if (!currentBatch.TryAddMessage(message))
+            {
+                // Current batch is full, send it
+                if (currentBatch.Count > 0)
+                {
+                    await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
+                }
+
+                // Create a new batch for the message that didn't fit
+                using var newBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+                // If message still doesn't fit in empty batch, it's too large
+                if (!newBatch.TryAddMessage(message))
+                {
+                    var error = new InvalidOperationException(
+                        $"Message {message.MessageId} is too large to fit in a Service Bus batch. " +
+                        $"Maximum batch size is exceeded. Consider reducing message size or sending without batching.");
+
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(
+                            error,
+                            "Message {MessageId} exceeds maximum batch size and cannot be sent",
+                            message.MessageId);
+                    }
+
+                    throw error;
+                }
+
+                // Send the new batch with the single large message
+                await _sender!.SendMessagesAsync(newBatch, cancellationToken);
+            }
+        }
+
+        // Send any remaining messages in the final batch
+        if (currentBatch.Count > 0)
+        {
+            await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
         }
     }
 
