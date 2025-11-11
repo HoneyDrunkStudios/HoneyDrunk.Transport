@@ -1,4 +1,4 @@
-name: Publish to NuGet
+﻿name: Publish to NuGet
 
 on:
   push:
@@ -59,31 +59,31 @@ jobs:
           dotnet-version: '10.0.x'
 
       - name: Restore
-        run: dotnet restore HoneyDrunk.Transport.slnx
+        run: dotnet restore HoneyDrunk.Transport/HoneyDrunk.Transport.slnx
 
       - name: Build
-        run: dotnet build HoneyDrunk.Transport.slnx -c Release --no-restore /p:ContinuousIntegrationBuild=true
+        run: dotnet build HoneyDrunk.Transport/HoneyDrunk.Transport.slnx -c Release --no-restore /p:ContinuousIntegrationBuild=true
 
       - name: Test
-        run: dotnet test HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj -c Release --no-build
+        run: dotnet test HoneyDrunk.Transport/HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj -c Release --no-build
 
       - name: Pack HoneyDrunk.Transport
         run: >
-          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.csproj
+          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport/HoneyDrunk.Transport.csproj
           -c Release --no-build -o ./artifacts
           /p:Version=${{ needs.prepare.outputs.version }}
           /p:ContinuousIntegrationBuild=true
 
       - name: Pack HoneyDrunk.Transport.InMemory
         run: >
-          dotnet pack HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj
+          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj
           -c Release --no-build -o ./artifacts
           /p:Version=${{ needs.prepare.outputs.version }}
           /p:ContinuousIntegrationBuild=true
 
       - name: Pack HoneyDrunk.Transport.AzureServiceBus
         run: >
-          dotnet pack HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj
+          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj
           -c Release --no-build -o ./artifacts
           /p:Version=${{ needs.prepare.outputs.version }}
           /p:ContinuousIntegrationBuild=true
@@ -125,7 +125,7 @@ jobs:
 
             Transport-agnostic messaging library for .NET with middleware pipeline pattern.
 
-            ### ?? Packages
+            ### 📦 Packages
 
             **HoneyDrunk.Transport** - Core abstractions and middleware pipeline
             ```xml
@@ -142,13 +142,13 @@ jobs:
             <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="${{ needs.prepare.outputs.version }}" />
             ```
 
-            ### ?? Links
+            ### 🔗 Links
             - [NuGet: HoneyDrunk.Transport](https://www.nuget.org/packages/HoneyDrunk.Transport/${{ needs.prepare.outputs.version }})
             - [NuGet: HoneyDrunk.Transport.InMemory](https://www.nuget.org/packages/HoneyDrunk.Transport.InMemory/${{ needs.prepare.outputs.version }})
             - [NuGet: HoneyDrunk.Transport.AzureServiceBus](https://www.nuget.org/packages/HoneyDrunk.Transport.AzureServiceBus/${{ needs.prepare.outputs.version }})
             - [Documentation](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme)
 
-            ### ?? Quick Start
+            ### 🚀 Quick Start
 
             ```csharp
             using HoneyDrunk.Transport.DependencyInjection;
