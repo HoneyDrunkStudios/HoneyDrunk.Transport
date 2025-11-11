@@ -79,24 +79,18 @@ public sealed class ServiceBusTransportConsumer(
         await _initLock.WaitAsync(cancellationToken);
         try
         {
+            if (_processor == null && _sessionProcessor == null)
+            {
+                return; // Nothing to stop
+            }
+
             if (_logger.IsEnabled(LogLevel.Information))
             {
                 _logger.LogInformation("Stopping Service Bus consumer");
             }
 
-            if (_processor != null)
-            {
-                await _processor.StopProcessingAsync(cancellationToken);
-                await _processor.DisposeAsync();
-                _processor = null;
-            }
-
-            if (_sessionProcessor != null)
-            {
-                await _sessionProcessor.StopProcessingAsync(cancellationToken);
-                await _sessionProcessor.DisposeAsync();
-                _sessionProcessor = null;
-            }
+            // Stop and dispose processors
+            await StopAndDisposeProcessorsAsync(cancellationToken);
 
             if (_logger.IsEnabled(LogLevel.Information))
             {
@@ -106,6 +100,37 @@ public sealed class ServiceBusTransportConsumer(
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    private async Task StopAndDisposeProcessorsAsync(CancellationToken cancellationToken)
+    {
+        // Stop and dispose standard processor
+        if (_processor != null)
+        {
+            try
+            {
+                await _processor.StopProcessingAsync(cancellationToken);
+            }
+            finally
+            {
+                await _processor.DisposeAsync();
+                _processor = null;
+            }
+        }
+
+        // Stop and dispose session processor
+        if (_sessionProcessor != null)
+        {
+            try
+            {
+                await _sessionProcessor.StopProcessingAsync(cancellationToken);
+            }
+            finally
+            {
+                await _sessionProcessor.DisposeAsync();
+                _sessionProcessor = null;
+            }
         }
     }
 

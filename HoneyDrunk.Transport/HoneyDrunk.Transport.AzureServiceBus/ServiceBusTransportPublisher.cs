@@ -134,25 +134,22 @@ public sealed class ServiceBusTransportPublisher(
             }
 
             // Create batches and send
-            ServiceBusMessageBatch? currentBatch = null;
+            ServiceBusMessageBatch? currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
 
             try
             {
                 foreach (var message in messages)
                 {
-                    // Create initial batch or new batch after sending
-                    currentBatch ??= await _sender!.CreateMessageBatchAsync(cancellationToken);
-
                     if (!currentBatch.TryAddMessage(message))
                     {
                         // Current batch is full, send it
                         if (currentBatch.Count > 0)
                         {
                             await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-                            currentBatch.Dispose();
                         }
 
-                        // Create a new batch and try adding the message
+                        // Dispose the old batch and create a new one
+                        currentBatch.Dispose();
                         currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
 
                         // If message still doesn't fit in empty batch, it's too large
@@ -176,14 +173,14 @@ public sealed class ServiceBusTransportPublisher(
                 }
 
                 // Send any remaining messages in the final batch
-                if (currentBatch?.Count > 0)
+                if (currentBatch.Count > 0)
                 {
                     await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
                 }
             }
             finally
             {
-                currentBatch?.Dispose();
+                currentBatch.Dispose();
             }
 
             if (_logger.IsEnabled(LogLevel.Debug))

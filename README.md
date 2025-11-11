@@ -400,6 +400,25 @@ HoneyDrunk.Transport/
 - **Exactly-Once** – Transactional outbox for guaranteed delivery
 - **Observable** – Telemetry, metrics, and distributed tracing built-in
 
+### Production-Ready Features
+
+HoneyDrunk.Transport is built with production reliability and safety in mind:
+
+- **Thread-Safe Lifecycle** – All Start/Stop/Dispose operations properly synchronized with `SemaphoreSlim`
+- **Concurrent Disposal Safety** – Uses `Interlocked.Exchange` to prevent double-disposal race conditions
+- **Guaranteed Resource Cleanup** – Try-finally patterns ensure resources are always disposed, even on errors
+- **Immutable Collections** – Thread-safe enumeration with `ImmutableList<T>` for concurrent scenarios
+- **Credential Caching** – `DefaultAzureCredential` singleton prevents expensive re-initialization
+- **Batch Safety** – Oversized message detection with clear error messages prevents silent data loss
+- **Explicit Resource Management** – Structured disposal patterns with clear ownership semantics
+
+These patterns ensure reliable operation under:
+- Concurrent health check probes
+- Graceful shutdown during deployments
+- High-throughput message processing
+- Circuit breaker scenarios
+- Multi-threaded application hosts
+
 ### Middleware Pipeline
 
 Messages flow through middleware in this order:
