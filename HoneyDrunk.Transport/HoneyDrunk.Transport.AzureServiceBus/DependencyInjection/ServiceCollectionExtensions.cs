@@ -16,6 +16,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds the HoneyDrunk Azure Service Bus transport implementation.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">Configuration action for Azure Service Bus options.</param>
+    /// <returns>A transport builder for additional configuration.</returns>
     public static ITransportBuilder AddHoneyDrunkServiceBusTransport(
         this IServiceCollection services,
         Action<AzureServiceBusOptions> configure)
@@ -80,6 +83,11 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds Azure Service Bus transport with connection string.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="connectionString">The Azure Service Bus connection string.</param>
+    /// <param name="queueOrTopicName">The queue or topic name.</param>
+    /// <param name="configure">Optional configuration action for additional settings.</param>
+    /// <returns>A transport builder for additional configuration.</returns>
     public static ITransportBuilder AddHoneyDrunkServiceBusTransport(
         this IServiceCollection services,
         string connectionString,
@@ -98,6 +106,11 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds Azure Service Bus transport with managed identity.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="fullyQualifiedNamespace">The fully qualified Service Bus namespace.</param>
+    /// <param name="queueOrTopicName">The queue or topic name.</param>
+    /// <param name="configure">Optional configuration action for additional settings.</param>
+    /// <returns>A transport builder for additional configuration.</returns>
     public static ITransportBuilder AddHoneyDrunkServiceBusTransportWithManagedIdentity(
         this IServiceCollection services,
         string fullyQualifiedNamespace,
@@ -116,6 +129,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Configures the transport for a topic with subscription.
     /// </summary>
+    /// <param name="builder">The transport builder.</param>
+    /// <param name="subscriptionName">The subscription name.</param>
+    /// <returns>The transport builder for additional configuration.</returns>
     public static ITransportBuilder WithTopicSubscription(
         this ITransportBuilder builder,
         string subscriptionName)
@@ -132,6 +148,8 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Enables session support for ordered message processing.
     /// </summary>
+    /// <param name="builder">The transport builder.</param>
+    /// <returns>The transport builder for additional configuration.</returns>
     public static ITransportBuilder WithSessions(this ITransportBuilder builder)
     {
         builder.Services.Configure<AzureServiceBusOptions>(options =>
@@ -145,6 +163,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Configures retry behavior for the transport.
     /// </summary>
+    /// <param name="builder">The transport builder.</param>
+    /// <param name="configure">Configuration action for retry options.</param>
+    /// <returns>The transport builder for additional configuration.</returns>
     public static ITransportBuilder WithRetry(
         this ITransportBuilder builder,
         Action<Configuration.ServiceBusRetryOptions> configure)

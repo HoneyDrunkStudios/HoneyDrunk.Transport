@@ -6,7 +6,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Configuration;
 /// <summary>
 /// Configuration options for Azure Storage Queue transport.
 /// </summary>
-public sealed class StorageQueueOptions : TransportOptions
+public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
 {
     /// <summary>
     /// Gets or sets the connection string for Azure Storage Queue.
@@ -14,7 +14,6 @@ public sealed class StorageQueueOptions : TransportOptions
     /// <remarks>
     /// Required if <see cref="AccountEndpoint"/> is not specified.
     /// </remarks>
-    [Required(ErrorMessage = "ConnectionString or AccountEndpoint must be configured")]
     public string? ConnectionString { get; set; }
 
     /// <summary>
@@ -121,6 +120,63 @@ public sealed class StorageQueueOptions : TransportOptions
     /// Default is 5 seconds.
     /// </remarks>
     public TimeSpan MaxPollingInterval { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Validates the configuration options.
+    /// </summary>
+    /// <param name="validationContext">The validation context.</param>
+    /// <returns>A collection of validation results.</returns>
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        // Validate that either ConnectionString or AccountEndpoint is configured
+        if (string.IsNullOrWhiteSpace(ConnectionString) && AccountEndpoint == null)
+        {
+            yield return new ValidationResult(
+                "Either ConnectionString or AccountEndpoint must be configured",
+                [nameof(ConnectionString), nameof(AccountEndpoint)]);
+        }
+
+        // Validate that EmptyQueuePollingInterval is not greater than MaxPollingInterval
+        if (EmptyQueuePollingInterval > MaxPollingInterval)
+        {
+            yield return new ValidationResult(
+                "EmptyQueuePollingInterval cannot be greater than MaxPollingInterval",
+                [nameof(EmptyQueuePollingInterval), nameof(MaxPollingInterval)]);
+        }
+
+        // Validate that VisibilityTimeout is reasonable (not too short or too long)
+        if (VisibilityTimeout < TimeSpan.FromSeconds(1))
+        {
+            yield return new ValidationResult(
+                "VisibilityTimeout must be at least 1 second",
+                [nameof(VisibilityTimeout)]);
+        }
+
+        if (VisibilityTimeout > TimeSpan.FromDays(7))
+        {
+            yield return new ValidationResult(
+                "VisibilityTimeout cannot exceed 7 days (Azure Storage Queue limit)",
+                [nameof(VisibilityTimeout)]);
+        }
+
+        // Validate MessageTimeToLive if specified
+        if (MessageTimeToLive.HasValue)
+        {
+            if (MessageTimeToLive.Value < TimeSpan.FromSeconds(1))
+            {
+                yield return new ValidationResult(
+                    "MessageTimeToLive must be at least 1 second",
+                    [nameof(MessageTimeToLive)]);
+            }
+
+            if (MessageTimeToLive.Value > TimeSpan.FromDays(7))
+            {
+                yield return new ValidationResult(
+                    "MessageTimeToLive cannot exceed 7 days (Azure Storage Queue limit)",
+                    [nameof(MessageTimeToLive)]);
+            }
+        }
+    }
 
     /// <summary>
     /// Gets the effective poison queue name.

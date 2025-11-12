@@ -126,12 +126,29 @@ internal sealed class QueueClientFactory(
     /// </summary>
     public void Dispose()
     {
+        // Thread-safe disposal check using Interlocked.Exchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
         if (Interlocked.Exchange(ref _disposed, true))
         {
             return;
         }
 
-        _initLock.Dispose();
+        // Acquire the initialization lock to ensure no concurrent queue client creation
+        _initLock.Wait();
+        try
+        {
+            // QueueClient instances are not owned by this factory and should not be disposed here
+            // The Azure SDK QueueClient is designed to be reused and doesn't require explicit disposal
+            // Setting to null allows garbage collection
+            _primaryQueueClient = null;
+            _poisonQueueClient = null;
+        }
+        finally
+        {
+            _initLock.Release();
+            _initLock.Dispose();
+        }
     }
 
     /// <summary>

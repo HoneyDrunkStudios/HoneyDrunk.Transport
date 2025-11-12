@@ -2,11 +2,9 @@ using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
 using Azure;
-using Azure.Storage.Queues;
 using HoneyDrunk.Transport.Abstractions;
-using HoneyDrunk.Transport.Primitives;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
-using HoneyDrunk.Transport.StorageQueue.Exceptions;
 using HoneyDrunk.Transport.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -40,7 +38,6 @@ internal sealed class StorageQueueSender(
     private readonly QueueClientFactory _queueClientFactory = queueClientFactory;
     private readonly StorageQueueOptions _options = options.Value;
     private readonly ILogger<StorageQueueSender> _logger = logger;
-    private readonly SemaphoreSlim _sendLock = new(Environment.ProcessorCount, Environment.ProcessorCount);
     private bool _disposed;
 
     /// <inheritdoc />
@@ -75,7 +72,7 @@ internal sealed class StorageQueueSender(
             var messageSizeBytes = Encoding.UTF8.GetByteCount(messageText);
             if (messageSizeBytes > MaxMessageSizeBytes)
             {
-                var ex = new MessageTooLargeException(envelope.MessageId, messageSizeBytes, MaxMessageSizeBytes);
+                var ex = new MessageTooLargeException(envelope.MessageId, messageSizeBytes, MaxMessageSizeBytes, "Azure Storage Queue");
 
                 if (_logger.IsEnabled(LogLevel.Error))
                 {
@@ -159,26 +156,19 @@ internal sealed class StorageQueueSender(
 
         var exceptions = new List<Exception>();
 
+        // Parallel I/O-bound operations - Azure SDK handles connection pooling
         await Parallel.ForEachAsync(
             envelopeList,
             new ParallelOptions
             {
-                MaxDegreeOfParallelism = Environment.ProcessorCount,
+                MaxDegreeOfParallelism = Environment.ProcessorCount * 4,  // I/O-bound: allow more concurrency
                 CancellationToken = cancellationToken
             },
             async (envelope, ct) =>
             {
                 try
                 {
-                    await _sendLock.WaitAsync(ct);
-                    try
-                    {
-                        await PublishAsync(envelope, destination, ct);
-                    }
-                    finally
-                    {
-                        _sendLock.Release();
-                    }
+                    await PublishAsync(envelope, destination, ct);
                 }
                 catch (Exception ex)
                 {
@@ -205,15 +195,17 @@ internal sealed class StorageQueueSender(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        // Thread-safe disposal check using Interlocked.Exchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
         if (Interlocked.Exchange(ref _disposed, true))
         {
             return;
         }
 
-        _sendLock.Dispose();
+        // Dispose factory - no need for lock synchronization as disposal flag
+        // prevents new operations and Azure SDK QueueClient is thread-safe
         _queueClientFactory.Dispose();
-
-        await Task.CompletedTask;
     }
 
     /// <summary>

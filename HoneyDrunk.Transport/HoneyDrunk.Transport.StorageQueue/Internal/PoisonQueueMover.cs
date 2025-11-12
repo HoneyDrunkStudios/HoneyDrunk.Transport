@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Azure.Storage.Queues;
 using Azure.Storage.Queues.Models;
 using Microsoft.Extensions.Logging;
@@ -111,22 +112,31 @@ internal sealed class PoisonQueueMover(ILogger logger)
     /// </summary>
     private sealed class PoisonEnvelope
     {
+        [JsonPropertyName("originalMessageId")]
         public required string OriginalMessageId { get; init; }
 
+        [JsonPropertyName("originalMessage")]
         public required string OriginalMessage { get; init; }
 
+        [JsonPropertyName("dequeueCount")]
         public long DequeueCount { get; init; }
 
+        [JsonPropertyName("firstFailureTimestamp")]
         public DateTimeOffset FirstFailureTimestamp { get; init; }
 
+        [JsonPropertyName("lastFailureTimestamp")]
         public DateTimeOffset LastFailureTimestamp { get; init; }
 
+        [JsonPropertyName("errorType")]
         public string? ErrorType { get; init; }
 
+        [JsonPropertyName("errorMessage")]
         public string? ErrorMessage { get; init; }
 
+        [JsonPropertyName("errorStackTrace")]
         public string? ErrorStackTrace { get; init; }
 
+        [JsonPropertyName("metadata")]
         public Dictionary<string, string>? Metadata { get; init; }
     }
 }

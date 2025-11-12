@@ -45,10 +45,6 @@ internal sealed class StorageQueueProcessor(
     private Task? _processingTask;
     private bool _disposed;
 
-    // Backoff state
-    private TimeSpan _currentPollingInterval;
-    private int _consecutiveEmptyReceives;
-
     /// <inheritdoc />
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
@@ -70,10 +66,6 @@ internal sealed class StorageQueueProcessor(
                     "Starting Storage Queue consumer for queue {QueueName}",
                     _options.QueueName);
             }
-
-            // Initialize backoff state
-            _currentPollingInterval = _options.EmptyQueuePollingInterval;
-            _consecutiveEmptyReceives = 0;
 
             _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
 
@@ -218,6 +210,9 @@ internal sealed class StorageQueueProcessor(
                 _options.QueueName);
         }
 
+        // Per-consumer backoff state (thread-safe - each consumer has its own)
+        var backoffState = new ConsumerBackoffState(_options.EmptyQueuePollingInterval);
+
         try
         {
             var queueClient = await _queueClientFactory.GetOrCreatePrimaryQueueClientAsync(cancellationToken);
@@ -233,12 +228,12 @@ internal sealed class StorageQueueProcessor(
                     if (messages.Length == 0)
                     {
                         // Queue is empty, apply exponential backoff
-                        await HandleEmptyQueueAsync(consumerId, cancellationToken);
+                        await HandleEmptyQueueAsync(consumerId, backoffState, cancellationToken);
                         continue;
                     }
 
                     // Reset backoff since we got messages
-                    ResetBackoff();
+                    backoffState.Reset(_options.EmptyQueuePollingInterval);
 
                     // Process each message
                     foreach (var message in messages)
@@ -474,22 +469,19 @@ internal sealed class StorageQueueProcessor(
     /// <summary>
     /// Handles empty queue scenario with exponential backoff.
     /// </summary>
-    private async Task HandleEmptyQueueAsync(int consumerId, CancellationToken cancellationToken)
+    private async Task HandleEmptyQueueAsync(
+        int consumerId,
+        ConsumerBackoffState backoffState,
+        CancellationToken cancellationToken)
     {
-        _consecutiveEmptyReceives++;
+        backoffState.IncrementEmptyReceive();
 
         // Apply exponential backoff with jitter
-        if (_consecutiveEmptyReceives > 1)
-        {
-            _currentPollingInterval = TimeSpan.FromMilliseconds(
-                Math.Min(
-                    _currentPollingInterval.TotalMilliseconds * 1.5,
-                    _options.MaxPollingInterval.TotalMilliseconds));
-        }
+        backoffState.ApplyExponentialBackoff(_options.MaxPollingInterval);
 
         // Add jitter (±25%)
         var jitter = (Random.Shared.NextDouble() * 0.5) - 0.25; // -0.25 to +0.25
-        var delayMs = _currentPollingInterval.TotalMilliseconds * (1 + jitter);
+        var delayMs = backoffState.CurrentPollingInterval.TotalMilliseconds * (1 + jitter);
 
         if (_logger.IsEnabled(LogLevel.Trace))
         {
@@ -503,14 +495,38 @@ internal sealed class StorageQueueProcessor(
     }
 
     /// <summary>
-    /// Resets backoff state when messages are received.
+    /// Per-consumer backoff state to avoid race conditions in concurrent consumers.
     /// </summary>
-    private void ResetBackoff()
+    private sealed class ConsumerBackoffState(TimeSpan initialPollingInterval)
     {
-        if (_consecutiveEmptyReceives > 0)
+        private int _consecutiveEmptyReceives;
+        private TimeSpan _currentPollingInterval = initialPollingInterval;
+
+        public TimeSpan CurrentPollingInterval => _currentPollingInterval;
+
+        public void IncrementEmptyReceive()
         {
-            _consecutiveEmptyReceives = 0;
-            _currentPollingInterval = _options.EmptyQueuePollingInterval;
+            _consecutiveEmptyReceives++;
+        }
+
+        public void ApplyExponentialBackoff(TimeSpan maxPollingInterval)
+        {
+            if (_consecutiveEmptyReceives > 1)
+            {
+                _currentPollingInterval = TimeSpan.FromMilliseconds(
+                    Math.Min(
+                        _currentPollingInterval.TotalMilliseconds * 1.5,
+                        maxPollingInterval.TotalMilliseconds));
+            }
+        }
+
+        public void Reset(TimeSpan initialPollingInterval)
+        {
+            if (_consecutiveEmptyReceives > 0)
+            {
+                _consecutiveEmptyReceives = 0;
+                _currentPollingInterval = initialPollingInterval;
+            }
         }
     }
 }

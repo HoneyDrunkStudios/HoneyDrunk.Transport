@@ -31,7 +31,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Queues" Version="12.24.0" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.1.6">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.1.7">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -43,6 +43,14 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Exceptions\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.100" />
   </ItemGroup>
 
 </Project>

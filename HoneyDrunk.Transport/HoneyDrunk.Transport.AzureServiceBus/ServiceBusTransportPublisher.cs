@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -17,6 +19,7 @@ namespace HoneyDrunk.Transport.AzureServiceBus;
 /// <param name="client">The Service Bus client.</param>
 /// <param name="options">The Azure Service Bus configuration options.</param>
 /// <param name="logger">The logger instance.</param>
+[SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "ServiceBusClient is injected via DI and its lifetime is managed by the DI container, not by this class")]
 public sealed class ServiceBusTransportPublisher(
     ServiceBusClient client,
     IOptions<AzureServiceBusOptions> options,
@@ -25,8 +28,8 @@ public sealed class ServiceBusTransportPublisher(
     private readonly ServiceBusClient _client = client;
     private readonly IOptions<AzureServiceBusOptions> _options = options;
     private readonly ILogger<ServiceBusTransportPublisher> _logger = logger;
-    private ServiceBusSender? _sender;
     private readonly SemaphoreSlim _initLock = new(1, 1);
+    private ServiceBusSender? _sender;
     private bool _disposed;
 
     /// <inheritdoc />
@@ -146,91 +149,8 @@ public sealed class ServiceBusTransportPublisher(
             {
                 _logger.LogError(ex, "Failed to publish batch");
             }
+
             throw;
-        }
-    }
-
-    private async Task SendMessageBatchesAsync(List<ServiceBusMessage> messages, CancellationToken cancellationToken)
-    {
-        ServiceBusMessageBatch? currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-        try
-        {
-            foreach (var message in messages)
-            {
-                // Try to add message to current batch
-                if (!currentBatch.TryAddMessage(message))
-                {
-                    // Current batch is full, send and dispose it
-                    if (currentBatch.Count > 0)
-                    {
-                        await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-                    }
-                    currentBatch.Dispose();
-
-                    // Create a new batch for the message that didn't fit
-                    currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-                    // If message still doesn't fit in empty batch, it's too large
-                    if (!currentBatch.TryAddMessage(message))
-                    {
-                        var error = new InvalidOperationException(
-                            $"Message {message.MessageId} is too large to fit in a Service Bus batch. " +
-                            $"Maximum batch size is exceeded. Consider reducing message size or sending without batching.");
-
-                        if (_logger.IsEnabled(LogLevel.Error))
-                        {
-                            _logger.LogError(
-                                error,
-                                "Message {MessageId} exceeds maximum batch size and cannot be sent",
-                                message.MessageId);
-                        }
-
-                        throw error;
-                    }
-                }
-            }
-
-            // Send any remaining messages in the final batch
-            if (currentBatch.Count > 0)
-            {
-                await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-            }
-        }
-        finally
-        {
-            // Ensure batch is disposed even if an exception occurs
-            currentBatch?.Dispose();
-        }
-    }
-
-    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
-    {
-        if (_sender != null)
-            return;
-
-        await _initLock.WaitAsync(cancellationToken);
-        try
-        {
-            // Check disposal flag after acquiring lock
-            ObjectDisposedException.ThrowIf(_disposed, this);
-
-            if (_sender != null)
-                return;
-
-            var queueOrTopicName = _options.Value.Address;
-            _sender = _client.CreateSender(queueOrTopicName);
-
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "Initialized Service Bus sender for {Entity}",
-                    queueOrTopicName);
-            }
-        }
-        finally
-        {
-            _initLock.Release();
         }
     }
 
@@ -259,6 +179,98 @@ public sealed class ServiceBusTransportPublisher(
         {
             _initLock.Release();
             _initLock.Dispose();
+        }
+    }
+
+    private async Task SendMessageBatchesAsync(List<ServiceBusMessage> messages, CancellationToken cancellationToken)
+    {
+        ServiceBusMessageBatch? currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+        try
+        {
+            foreach (var message in messages)
+            {
+                // Try to add message to current batch
+                if (!currentBatch.TryAddMessage(message))
+                {
+                    // Current batch is full, send and dispose it
+                    if (currentBatch.Count > 0)
+                    {
+                        await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
+                    }
+
+                    currentBatch.Dispose();
+
+                    // Create a new batch for the message that didn't fit
+                    currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+                    // If message still doesn't fit in empty batch, it's too large
+                    if (!currentBatch.TryAddMessage(message))
+                    {
+                        var error = new MessageTooLargeException(
+                            message.MessageId,
+                            message.Body.Length,
+                            currentBatch.MaxSizeInBytes,
+                            "Azure Service Bus");
+
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(
+                                error,
+                                "Message {MessageId} exceeds maximum batch size ({MaxSize} bytes) and cannot be sent",
+                                message.MessageId,
+                                currentBatch.MaxSizeInBytes);
+                        }
+
+                        throw error;
+                    }
+                }
+            }
+
+            // Send any remaining messages in the final batch
+            if (currentBatch.Count > 0)
+            {
+                await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
+            }
+        }
+        finally
+        {
+            // Ensure batch is disposed even if an exception occurs
+            currentBatch?.Dispose();
+        }
+    }
+
+    private async Task EnsureInitializedAsync(CancellationToken cancellationToken)
+    {
+        if (_sender != null)
+        {
+            return;
+        }
+
+        await _initLock.WaitAsync(cancellationToken);
+        try
+        {
+            // Check disposal flag after acquiring lock
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            if (_sender != null)
+            {
+                return;
+            }
+
+            var queueOrTopicName = _options.Value.Address;
+            _sender = _client.CreateSender(queueOrTopicName);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation(
+                    "Initialized Service Bus sender for {Entity}",
+                    queueOrTopicName);
+            }
+        }
+        finally
+        {
+            _initLock.Release();
         }
     }
 }
