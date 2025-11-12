@@ -34,6 +34,9 @@ HoneyDrunk.Transport is the **messaging backbone** of HoneyDrunk.OS ("the Hive")
   <!-- Azure Service Bus Provider -->
   <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.1.0" />
   
+  <!-- Azure Storage Queue Provider -->
+  <PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.1.0" />
+  
   <!-- In-Memory Provider (for testing) -->
   <PackageReference Include="HoneyDrunk.Transport.InMemory" Version="0.1.0" />
 </ItemGroup>
@@ -54,7 +57,7 @@ builder.Services.AddHoneyDrunkTransportCore(options =>
     options.EnableCorrelation = true;
 });
 
-// Add Azure Service Bus transport
+// Option 1: Add Azure Service Bus transport
 builder.Services.AddHoneyDrunkServiceBusTransport(options =>
 {
     options.FullyQualifiedNamespace = "mynamespace.servicebus.windows.net";
@@ -62,6 +65,13 @@ builder.Services.AddHoneyDrunkServiceBusTransport(options =>
     options.Address = "my-queue";
     options.AutoComplete = true;
 });
+
+// Option 2: Add Azure Storage Queue transport
+builder.Services.AddHoneyDrunkTransportStorageQueue(
+    connectionString: builder.Configuration["StorageQueue:ConnectionString"]!,
+    queueName: "orders")
+    .WithMaxDequeueCount(5)
+    .WithConcurrency(10);
 
 // Register message handlers
 builder.Services.AddMessageHandler<OrderCreatedEvent, OrderCreatedHandler>();
@@ -102,6 +112,7 @@ HoneyDrunk.Transport **extends** HoneyDrunk.Kernel with messaging primitives:
 | Transport | Package | Status |
 |-----------|---------|--------|
 | **Azure Service Bus** | `HoneyDrunk.Transport.AzureServiceBus` | ✅ Available |
+| **Azure Storage Queue** | `HoneyDrunk.Transport.StorageQueue` | ✅ Available |
 | **In-Memory** | `HoneyDrunk.Transport.InMemory` | ✅ Available (Testing) |
 | **RabbitMQ** | `HoneyDrunk.Transport.RabbitMQ` | 🚧 Planned |
 | **Kafka** | `HoneyDrunk.Transport.Kafka` | 🚧 Planned |
@@ -242,6 +253,109 @@ public class OrderService(IOutboxStore outboxStore, IDbContext dbContext)
 }
 ```
 
+### Azure Storage Queue with Poison Handling
+
+```csharp
+using HoneyDrunk.Transport.Abstractions;
+
+// Handler with explicit error control
+public class PaymentProcessingHandler : IMessageHandler<ProcessPaymentCommand>
+{
+    private readonly IPaymentGateway _gateway;
+    private readonly ILogger<PaymentProcessingHandler> _logger;
+    
+    public PaymentProcessingHandler(
+        IPaymentGateway gateway,
+        ILogger<PaymentProcessingHandler> logger)
+    {
+        _gateway = gateway;
+        _logger = logger;
+    }
+    
+    public async Task<MessageProcessingResult> HandleAsync(
+        ProcessPaymentCommand message,
+        MessageContext context,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Check dequeue count to detect repeated failures
+            if (context.DeliveryCount > 3)
+            {
+                _logger.LogWarning(
+                    "Payment {PaymentId} has been retried {Count} times",
+                    message.PaymentId,
+                    context.DeliveryCount);
+            }
+            
+            var result = await _gateway.ProcessPaymentAsync(
+                message.PaymentId,
+                message.Amount,
+                cancellationToken);
+            
+            if (result.IsSuccess)
+            {
+                return MessageProcessingResult.Success; // Message deleted from queue
+            }
+            else if (result.IsTransientError)
+            {
+                // Transient error (timeout, rate limit) - retry
+                _logger.LogWarning(
+                    "Transient error processing payment {PaymentId}: {Error}",
+                    message.PaymentId,
+                    result.ErrorMessage);
+                
+                return MessageProcessingResult.Retry; // Message becomes visible again
+            }
+            else
+            {
+                // Permanent error (invalid card, insufficient funds) - dead letter
+                _logger.LogError(
+                    "Permanent error processing payment {PaymentId}: {Error}",
+                    message.PaymentId,
+                    result.ErrorMessage);
+                
+                return MessageProcessingResult.DeadLetter; // Moved to poison queue
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error processing payment {PaymentId}", message.PaymentId);
+            
+            // After MaxDequeueCount (default: 5), message automatically moves to poison queue
+            return MessageProcessingResult.Retry;
+        }
+    }
+}
+
+// Configuration
+builder.Services
+    .AddHoneyDrunkTransportStorageQueue(
+        connectionString: config["StorageQueue:ConnectionString"]!,
+        queueName: "payments")
+    .WithMaxDequeueCount(5) // Move to poison after 5 attempts
+    .WithVisibilityTimeout(TimeSpan.FromMinutes(2)) // Hide message for 2 minutes during processing
+    .WithPoisonQueue("payments-poison"); // Custom poison queue name
+
+// Monitoring poison queue
+// Poison messages include original message + error metadata:
+// {
+//   "originalMessageId": "msg-123",
+//   "originalMessage": "{...}", // Full original message
+//   "dequeueCount": 5,
+//   "firstFailureTimestamp": "2025-01-15T10:00:00Z",
+//   "lastFailureTimestamp": "2025-01-15T10:15:00Z",
+//   "errorType": "PaymentGatewayException",
+//   "errorMessage": "Gateway timeout",
+//   "errorStackTrace": "...",
+//   "metadata": {
+//     "popReceipt": "...",
+//     "insertedOn": "2025-01-15T10:00:00Z",
+//     "expiresOn": "2025-01-22T10:00:00Z"
+//   }
+// }
+```
+
 ---
 
 ## 🧪 Testing & Validation
@@ -357,18 +471,50 @@ builder.Services.AddHoneyDrunkServiceBusTransport(options =>
 });
 ```
 
-### Retry Middleware
+### Azure Storage Queue Options
 
 ```csharp
-builder.Services.AddMessageMiddleware(sp => 
-    new RetryMiddleware(
-        sp.GetRequiredService<ILogger<RetryMiddleware>>(),
-        maxAttempts: 3));
+builder.Services.AddHoneyDrunkTransportStorageQueue(options =>
+{
+    // Connection
+    options.ConnectionString = config["StorageQueue:ConnectionString"];
+    options.QueueName = "orders";
+    options.CreateIfNotExists = true;
+    
+    // Message Settings
+    options.Base64EncodePayload = true;
+    options.MessageTimeToLive = TimeSpan.FromDays(7);
+    options.VisibilityTimeout = TimeSpan.FromSeconds(30);
+    
+    // Processing
+    options.MaxConcurrency = 5;
+    options.PrefetchMaxMessages = 16;
+    
+    // Poison Handling
+    options.MaxDequeueCount = 5;
+    options.PoisonQueueName = "orders-poison";
+    
+    // Polling
+    options.EmptyQueuePollingInterval = TimeSpan.FromSeconds(1);
+    options.MaxPollingInterval = TimeSpan.FromSeconds(5);
+    
+    // Observability
+    options.EnableTelemetry = true;
+    options.EnableLogging = true;
+    options.EnableCorrelation = true;
+});
+
+// Or use fluent configuration
+builder.Services
+    .AddHoneyDrunkTransportStorageQueue(
+        config["StorageQueue:ConnectionString"]!,
+        "orders")
+    .WithMaxDequeueCount(3)
+    .WithVisibilityTimeout(TimeSpan.FromSeconds(60))
+    .WithPrefetchCount(32)
+    .WithConcurrency(10)
+    .WithPoisonQueue("orders-dlq");
 ```
-
----
-
-## 🧱 Architecture
 
 ### Repository Layout
 
@@ -383,6 +529,7 @@ HoneyDrunk.Transport/
  │   ├── Outbox/                              # Transactional outbox
  │   └── DependencyInjection/                 # DI registration
  ├── HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
+ ├── HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
  ├── HoneyDrunk.Transport.InMemory/           # In-memory provider
  ├── HoneyDrunk.Transport.Tests/              # Test project
  ├── HoneyDrunk.Transport.slnx
@@ -392,150 +539,29 @@ HoneyDrunk.Transport/
      └── publish.yml
 ```
 
-### Design Philosophy
+#### Storage Queue vs Service Bus
 
-- **Transport Agnostic** – One interface, many brokers
-- **Middleware First** – Composable, testable processing pipeline
-- **Kernel Integrated** – Built on HoneyDrunk.Kernel primitives
-- **Exactly-Once** – Transactional outbox for guaranteed delivery
-- **Observable** – Telemetry, metrics, and distributed tracing built-in
+**When to use Storage Queue:**
+- ✅ Simple queue-based messaging
+- ✅ Cost-effective for high-volume scenarios
+- ✅ No need for advanced features (sessions, transactions)
+- ✅ Message size < 64KB
+- ✅ At-least-once delivery is acceptable
 
-### Production-Ready Features
+**When to use Service Bus:**
+- ✅ Need topics/subscriptions (pub/sub)
+- ✅ Require sessions for ordered processing
+- ✅ Need transactional receive
+- ✅ Message size up to 1MB (or 100MB with Premium)
+- ✅ Dead-letter queue with automatic retry policies
+- ✅ Advanced features (duplicate detection, message deferral)
 
-HoneyDrunk.Transport is built with production reliability and safety in mind:
+**Storage Queue Limitations:**
+- ⚠️ Maximum message size: ~64KB (after base64 encoding)
+- ⚠️ No native dead-letter queue (implemented via poison queue pattern)
+- ⚠️ No FIFO guarantees beyond queue semantics
+- ⚠️ No built-in duplicate detection
+- ⚠️ No transactional receive
+- ⚠️ Batch operations are not atomic (parallelized individual sends)
 
-- **Thread-Safe Lifecycle** – All Start/Stop/Dispose operations properly synchronized with `SemaphoreSlim`
-- **Concurrent Disposal Safety** – Uses `Interlocked.Exchange` to prevent double-disposal race conditions
-- **Guaranteed Resource Cleanup** – Try-finally patterns ensure resources are always disposed, even on errors
-- **Immutable Collections** – Thread-safe enumeration with `ImmutableList<T>` for concurrent scenarios
-- **Credential Caching** – `DefaultAzureCredential` singleton prevents expensive re-initialization
-- **Batch Safety** – Oversized message detection with clear error messages prevents silent data loss
-- **Explicit Resource Management** – Structured disposal patterns with clear ownership semantics
-
-These patterns ensure reliable operation under:
-- Concurrent health check probes
-- Graceful shutdown during deployments
-- High-throughput message processing
-- Circuit breaker scenarios
-- Multi-threaded application hosts
-
-### Middleware Pipeline
-
-Messages flow through middleware in this order:
-
-1. **CorrelationMiddleware** – Creates `IKernelContext` from envelope
-2. **TelemetryMiddleware** – Starts distributed trace activity
-3. **LoggingMiddleware** – Logs message processing lifecycle
-4. **RetryMiddleware** – Enforces retry limits
-5. **Custom Middleware** – Your application middleware
-6. **Message Handler** – Final handler invocation
-
-### Relationships
-
-**Upstream Dependencies:**
-- HoneyDrunk.Kernel (ID generation, time, context)
-- HoneyDrunk.Standards (analyzers, conventions)
-
-**Downstream Consumers:**
-- HoneyDrunk.Data (outbox implementation)
-- HoneyDrunk.Web.Rest (REST APIs with messaging)
-- Service applications (order service, payment service, etc.)
-
----
-
-## ⚙️ Build & Release
-
-### CI/CD Integration
-
-The package is validated and published automatically:
-
-```yaml
-# Validate on PR
-- push → build + test
-- pull_request → validate formatting and analyzers
-
-# Publish on tag
-- tag v* → build + test + pack + publish to NuGet
-```
-
-### Local Development
-
-```sh
-# Clone repository
-git clone https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport
-cd HoneyDrunk.Transport
-
-# Restore dependencies
-dotnet restore
-
-# Build solution
-dotnet build
-
-# Run tests
-dotnet test HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj
-
-# Pack packages
-dotnet pack -c Release -o ./artifacts
-```
-
----
-
-## 📋 Testing Policy
-
-- All tests live in `HoneyDrunk.Transport.Tests` — **none** in runtime projects
-- Use `InMemoryBroker` for integration tests
-- Tests **must** use `IClock` and `IIdGenerator` for deterministic runs
-- CI gate: build fails if tests fail; coverage threshold optional
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Read [.github/copilot-instructions.md](.github/copilot-instructions.md) for coding standards
-2. Open an issue for discussion before major changes
-3. Ensure all tests pass locally
-4. Update documentation for new features
-
----
-
-## 📄 License
-
-This project is licensed under the [MIT License](LICENSE).
-
----
-
-## 🐝 About HoneyDrunk Studios
-
-HoneyDrunk.Transport is part of the **Hive** ecosystem - a collection of tools, libraries, and standards for building high-quality .NET applications.
-
-**Other Projects:**
-- 🚀 [HoneyDrunk.Kernel](https://github.com/HoneyDrunkStudios/HoneyDrunk.Kernel) - Foundational primitives
-- 🚀 [HoneyDrunk.Standards](https://github.com/HoneyDrunkStudios/HoneyDrunk.Standards) - Build-transitive analyzers
-- 🚧 HoneyDrunk.Data *(coming soon)* - Database abstractions
-- 🚧 HoneyDrunk.Auth *(coming soon)* - Authentication/authorization
-
----
-
-## 📞 Support
-
-- **Questions:** Open a [discussion](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/discussions)
-- **Bugs:** File an [issue](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
-- **Feature Requests:** Open an [issue](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues) with the `enhancement` label
-
----
-
-## 🧃 Motto
-
-**"Every message finds its way."**
-
----
-
-<div align="center">
-
-**Built with 🍯 by HoneyDrunk Studios**
-
-[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [NuGet](https://www.nuget.org/packages/HoneyDrunk.Transport) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
-
-</div>
+For large payloads, consider storing data in Blob Storage and sending a reference/pointer message.

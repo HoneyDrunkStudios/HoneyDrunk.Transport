@@ -10,6 +10,7 @@
   </Folder>
   <Project Path="HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj" />
   <Project Path="HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj" />
+  <Project Path="HoneyDrunk.Transport.StorageQueue/HoneyDrunk.Transport.StorageQueue.csproj" />
   <Project Path="HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj" />
   <Project Path="HoneyDrunk.Transport/HoneyDrunk.Transport.csproj" />
 </Solution>
