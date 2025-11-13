@@ -15,6 +15,8 @@ public static class EnvelopeMapper
     /// <summary>
     /// Converts a transport envelope to a Service Bus message.
     /// </summary>
+    /// <param name="envelope">The transport envelope to convert.</param>
+    /// <returns>A Service Bus message.</returns>
     public static ServiceBusMessage ToServiceBusMessage(ITransportEnvelope envelope)
     {
         var message = new ServiceBusMessage(envelope.Payload)
@@ -46,6 +48,8 @@ public static class EnvelopeMapper
     /// <summary>
     /// Converts a Service Bus received message to a transport envelope.
     /// </summary>
+    /// <param name="message">The Service Bus received message to convert.</param>
+    /// <returns>A transport envelope.</returns>
     public static ITransportEnvelope FromServiceBusMessage(ServiceBusReceivedMessage message)
     {
         // Define reserved property keys that shouldn't be copied to headers
@@ -65,12 +69,13 @@ public static class EnvelopeMapper
 
         // Parse timestamp
         var timestamp = DateTimeOffset.UtcNow;
-        if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue) 
+        if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue)
             && timestampValue is string timestampStr
             && DateTimeOffset.TryParse(timestampStr, out timestamp))
         {
             // Successfully parsed timestamp - it's already assigned to 'timestamp' by TryParse
         }
+
         // If parsing fails or property doesn't exist, timestamp remains DateTimeOffset.UtcNow (fallback)
 
         // Get message type
@@ -102,6 +107,8 @@ public static class EnvelopeMapper
     /// <summary>
     /// Extracts delivery count from Service Bus message.
     /// </summary>
+    /// <param name="message">The Service Bus received message.</param>
+    /// <returns>The delivery count.</returns>
     public static int GetDeliveryCount(ServiceBusReceivedMessage message)
     {
         return (int)message.DeliveryCount;
@@ -110,38 +117,10 @@ public static class EnvelopeMapper
     /// <summary>
     /// Creates a transaction context from Service Bus message.
     /// </summary>
+    /// <param name="message">The Service Bus received message.</param>
+    /// <returns>A transport transaction context.</returns>
     public static ITransportTransaction CreateTransaction(ServiceBusReceivedMessage message)
     {
         return new ServiceBusTransportTransaction(message);
-    }
-}
-
-/// <summary>
-/// Service Bus specific transaction context.
-/// </summary>
-internal sealed class ServiceBusTransportTransaction(ServiceBusReceivedMessage message) : ITransportTransaction
-{
-    private readonly ServiceBusReceivedMessage _message = message;
-
-    public string TransactionId { get; } = message.MessageId;
-
-    public IReadOnlyDictionary<string, object> Context => new Dictionary<string, object>
-    {
-        ["ServiceBusMessage"] = _message,
-        ["LockToken"] = _message.LockToken,
-        ["SequenceNumber"] = _message.SequenceNumber,
-        ["EnqueuedTime"] = _message.EnqueuedTime
-    };
-
-    public Task CommitAsync(CancellationToken cancellationToken = default)
-    {
-        // Completion is handled by the processor
-        return Task.CompletedTask;
-    }
-
-    public Task RollbackAsync(CancellationToken cancellationToken = default)
-    {
-        // Abandonment is handled by the processor
-        return Task.CompletedTask;
     }
 }

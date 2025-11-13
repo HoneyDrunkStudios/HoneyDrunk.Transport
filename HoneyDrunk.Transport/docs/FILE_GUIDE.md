@@ -997,221 +997,466 @@ Just like how the postal service lets you send letters without worrying about tr
 
 ---
 
-## ☁️ HoneyDrunk.Transport.AzureServiceBus
+## 🗄️ HoneyDrunk.Transport.StorageQueue
 
-*The "real postal service" using Microsoft Azure*
+*Azure Storage Queue transport for cost-effective, high-volume messaging*
 
-### ServiceBusTransportPublisher.cs
-- **What it is:** The Azure Service Bus sender
-- **Real-world analogy:** The interface to FedEx/UPS for sending packages
-- **What it does:** Publishes messages to real Azure Service Bus topics/queues
-- **How it's used:** Injected as `ITransportPublisher`; converts envelopes to ServiceBusMessage
-- **Why it matters:** Production-grade message delivery with Azure's reliability guarantees
-- **When to use:** Production deployments requiring durable messaging
+### Overview
+
+The Storage Queue transport provides a lightweight, cost-effective messaging solution using Azure Storage Queues. It's ideal for high-volume scenarios where advanced features like sessions, transactions, or pub/sub aren't required.
+
+**Key Characteristics:**
+- ✅ Simple queue-based messaging (no topics/subscriptions)
+- ✅ Cost-effective for high-volume scenarios
+- ✅ Message size limit: ~64KB (after base64 encoding)
+- ✅ At-least-once delivery semantics
+- ✅ Built-in poison queue pattern
+- ✅ Exponential backoff for empty queues
+- ⚠️ No FIFO guarantees beyond basic queue semantics
+- ⚠️ No native dead-letter queue (implemented via poison queue)
+- ⚠️ No built-in duplicate detection
+
+### When to Use Storage Queue vs Service Bus
+
+**Choose Storage Queue when:**
+- Cost optimization is a priority
+- Message volume is very high (millions per day)
+- Simple queue semantics are sufficient
+- Message size < 64KB
+- At-least-once delivery is acceptable
+- No need for pub/sub patterns
+
+**Choose Service Bus when:**
+- Need topics/subscriptions (pub/sub)
+- Require sessions for ordered processing
+- Need transactional receive
+- Message size up to 1MB+ 
+- Dead-letter queue with automatic retry policies
+- Duplicate detection is required
+
+### StorageQueueOptions.cs
+
+- **What it is:** Configuration for Azure Storage Queue transport
+- **Real-world analogy:** Settings for a simpler, more economical postal service
+- **What it does:** Configures connection, queue names, polling, and poison handling
+- **How it's used:** Configure via builder pattern or options binding
+- **Why it matters:** Controls all aspects of Storage Queue behavior
+- **When to use:** During startup when registering Storage Queue transport
 - **Example:**
   ```csharp
-  services.AddHoneyDrunkTransportCore()
-      .AddHoneyDrunkServiceBusTransport(options =>
-      {
-          options.ConnectionString = configuration["AzureServiceBus:ConnectionString"];
-          options.TopicName = "orders";
-      });
-  
-  // Publisher uses Azure Service Bus automatically
-  await _publisher.PublishAsync(envelope, ct); // Sends to Azure
-  ```
-
-### ServiceBusTransportConsumer.cs
-- **What it is:** The Azure Service Bus receiver
-- **Real-world analogy:** The interface that receives packages from FedEx/UPS
-- **What it does:** Listens to Azure Service Bus and processes incoming messages
-- **How it's used:** Runs as background service; supports queues, topics, sessions
-- **Why it matters:** Reliable message reception with automatic lock renewal and dead-lettering
-- **When to use:** Production deployments consuming from Azure Service Bus
-- **Example:**
-  ```csharp
-  services.AddHoneyDrunkTransportCore()
-      .AddHoneyDrunkServiceBusTransport(options => /* ... */)
-      .WithTopicSubscription("order-processor") // Consumer listens to subscription
-      .WithSessions(); // Enable session support if needed
-  ```
-
-### Configuration/AzureServiceBusOptions.cs
-- **What it is:** Settings specific to Azure Service Bus
-- **Real-world analogy:** Your FedEx account settings (connection string, retry policy)
-- **What it does:** Configures connection strings, topic names, subscriptions, sessions
-- **How it's used:** Configure via builder or IOptions binding
-- **Why it matters:** Centralizes Azure-specific settings
-- **When to use:** Configure during startup for Azure deployments
-- **Example:**
-  ```csharp
-  // appsettings.json
+  services.AddHoneyDrunkTransportStorageQueue(options =>
   {
-    "AzureServiceBus": {
-      "ConnectionString": "Endpoint=sb://...",
-      "TopicName": "orders",
-      "SubscriptionName": "order-processor",
-      "EnableSessions": false,
-      "MaxConcurrentCalls": 10,
-      "PrefetchCount": 100
-    }
-  }
-  
-  // Startup
-  services.AddHoneyDrunkTransportCore()
-      .AddHoneyDrunkServiceBusTransport(
-          configuration.GetSection("AzureServiceBus"));
+      // Connection
+      options.ConnectionString = config["StorageQueue:ConnectionString"];
+      options.QueueName = "orders";
+      options.CreateIfNotExists = true;
+      
+      // Message Settings
+      options.Base64EncodePayload = true;  // Handle binary data safely
+      options.MessageTimeToLive = TimeSpan.FromDays(7);
+      options.VisibilityTimeout = TimeSpan.FromSeconds(30);
+      
+      // Processing
+      options.MaxConcurrency = 5;
+      options.PrefetchMaxMessages = 16;  // 1-32 range
+      
+      // Poison Handling
+      options.MaxDequeueCount = 5;  // Move to poison after 5 attempts
+      options.PoisonQueueName = "orders-poison";
+      
+      // Polling (empty queue optimization)
+      options.EmptyQueuePollingInterval = TimeSpan.FromSeconds(1);
+      options.MaxPollingInterval = TimeSpan.FromSeconds(5);
+      
+      // Observability
+      options.EnableTelemetry = true;
+      options.EnableLogging = true;
+      options.EnableCorrelation = true;
+  });
   ```
 
-### Mapping/EnvelopeMapper.cs
-- **What it is:** The "format converter"
-- **Real-world analogy:** Converts your internal envelope format to Azure's package format
-- **What it does:** Maps between TransportEnvelope and Azure ServiceBusMessage
-- **How it's used:** Internal component used by publisher/consumer
-- **Why it matters:** Bridges library abstraction with Azure's native message format
-- **When to use:** Used internally - not typically interacted with directly
-- **Example:**
-  ```csharp
-  // Internal mapping:
-  // TransportEnvelope.MessageId → ServiceBusMessage.MessageId
-  // TransportEnvelope.CorrelationId → ServiceBusMessage.CorrelationId
-  // TransportEnvelope.Headers → ServiceBusMessage.ApplicationProperties
-  // TransportEnvelope.Payload → ServiceBusMessage.Body
-  ```
+**Key Properties:**
+- `ConnectionString` / `AccountEndpoint`: Azure Storage authentication
+- `QueueName`: Primary queue name (required)
+- `PoisonQueueName`: Dead-letter queue name (defaults to `{QueueName}-poison`)
+- `MaxDequeueCount`: Attempts before poisoning (default: 5)
+- `VisibilityTimeout`: Message lock duration (default: 30s)
+- `PrefetchMaxMessages`: Batch size 1-32 (default: 16)
+- `MaxConcurrency`: Number of concurrent fetch loops (default: 5)
+- `BatchProcessingConcurrency`: Concurrent processing per batch (default: 1, range: 1-32)
+- `EmptyQueuePollingInterval`: Initial backoff delay (default: 1s)
+- `MaxPollingInterval`: Max backoff delay (default: 5s)
 
-### DependencyInjection/ServiceCollectionExtensions.cs
-- **What it is:** Setup wizard for Azure Service Bus
-- **Real-world analogy:** "Connect to Azure" configuration wizard
-- **What it does:** Registers Azure Service Bus transport with your application
-- **How it's used:** Call `AddHoneyDrunkServiceBusTransport()` in startup
-- **Why it matters:** Fluent API for Azure-specific configuration
-- **When to use:** Production deployments using Azure Service Bus
-- **Example:**
-  ```csharp
-  services.AddHoneyDrunkTransportCore()
-      .AddHoneyDrunkServiceBusTransport(options =>
-      {
-          options.ConnectionString = configuration["AzureServiceBus:ConnectionString"];
-          options.TopicName = "orders";
-      })
-      .WithTopicSubscription("order-processor")
-      .WithSessions() // Enable sessions
-      .WithRetry(retry =>
-      {
-          retry.MaxAttempts = 5;
-          retry.BackoffStrategy = BackoffStrategy.Exponential;
-      });
-  ```
-
----
-
-## 🎯 Summary: The Big Picture
-
-### What problem does this solve?
-
-Applications need to send messages to each other, but each messaging system (Azure Service Bus, RabbitMQ, Kafka, etc.) works differently. This library provides one consistent way to send and receive messages, and you can swap out the underlying technology without changing your code.
-
-### How to explain it to a non-technical person:
-
-> "Imagine you write letters, but you don't want to care whether they're sent by USPS, FedEx, or carrier pigeon. This library is like having one mailbox where you drop letters, and it figures out which delivery service to use. You can switch from one delivery service to another without rewriting your letters."
-
-### How to explain it to a developer:
-
-> "It's a transport-agnostic messaging abstraction layer with a middleware pipeline pattern (like ASP.NET Core). Write your message handlers once, then plug in Azure Service Bus, RabbitMQ, or in-memory for testing. Includes retry policies, correlation tracking, telemetry, and transactional outbox pattern out of the box."
-
----
-
-## 📚 Quick Reference
-
-### Core Concepts
-
-| Concept | Description | Analogy |
-|---------|-------------|---------|
-| **Envelope** | Message wrapper with metadata | Physical envelope with address |
-| **Publisher** | Sends messages | Post office counter |
-| **Consumer** | Receives messages | Mailbox |
-| **Handler** | Processes specific message types | Mail sorter |
-| **Middleware** | Processing pipeline steps | Assembly line stations |
-| **Serializer** | Converts objects to/from bytes | Translator |
-| **Outbox** | Transactional message store | Safe for important mail |
-
-### Message Flow
-
+**Concurrency Model:**
 ```
-1. Create Message → 2. Wrap in Envelope → 3. Serialize → 4. Publish
-                                                              ↓
-5. Consumer Receives ← 6. Deserialize ← 7. Pipeline (Middleware) ← 8. Handler
+Total Concurrent Processing = MaxConcurrency × BatchProcessingConcurrency
+
+Examples:
+- MaxConcurrency=5, BatchProcessingConcurrency=1 (default) = 5 total
+- MaxConcurrency=10, BatchProcessingConcurrency=4 = 40 total
+- MaxConcurrency=5, BatchProcessingConcurrency=8 = 40 total (different topology)
 ```
 
-### Middleware Pipeline Order
+### StorageQueueSender.cs
 
-```
-Message → Correlation → Telemetry → Logging → Custom → Retry → Handler
-```
+- **What it is:** Azure Storage Queue publisher implementation
+- **Real-world analogy:** The budget postal counter that handles high volumes
+- **What it does:** Serializes envelopes to JSON and sends to Azure Storage Queue
+- **How it's used:** Injected as `ITransportPublisher`; automatically used when Storage Queue transport is registered
+- **Why it matters:** Provides cost-effective, reliable message publishing
+- **When to use:** Automatically used - no direct interaction needed
+- **Technical Details:**
+  - Serializes `ITransportEnvelope` → `StorageQueueEnvelope` → JSON
+  - Base64-encodes payload for safe text transmission
+  - Validates message size (max ~64KB)
+  - Throws `MessageTooLargeException` if size exceeded
+  - Batch publishing uses parallelized individual sends (non-atomic)
+  - Detects transient errors (HTTP 5xx) for retry
 
-### Common Usage Patterns
-
-#### Basic Publish/Subscribe
+**Example Usage:**
 ```csharp
-// Publish
-var message = new OrderCreated(orderId, customerId);
-var envelope = factory.Create(message, "orders.created");
-await publisher.PublishAsync(envelope, ct);
-
-// Subscribe (handler)
-public class OrderCreatedHandler : IMessageHandler<OrderCreated>
+// Automatic usage through ITransportPublisher
+public class OrderService(ITransportPublisher publisher, EnvelopeFactory factory)
 {
-    public async Task<MessageProcessingResult> HandleAsync(OrderCreated message, MessageContext context, CancellationToken ct)
+    public async Task PublishOrderAsync(Order order, CancellationToken ct)
     {
-        // Process message
+        var message = new OrderCreated(order.Id, order.CustomerId);
+        var envelope = factory.CreateEnvelope<OrderCreated>(
+            serializer.Serialize(message));
+        
+        // Publishes to Storage Queue automatically
+        await publisher.PublishAsync(envelope, new EndpointAddress("orders"), ct);
+    }
+}
+```
+
+**Size Limit Handling:**
+```csharp
+try
+{
+    await publisher.PublishAsync(largeEnvelope, destination, ct);
+}
+catch (MessageTooLargeException ex)
+{
+    // Message exceeds 64KB - consider using Blob Storage + reference
+    _logger.LogError(ex, 
+        "Message {MessageId} is {ActualSize}KB (max: {MaxSize}KB)",
+        ex.MessageId, ex.ActualSize / 1024, ex.MaxSize / 1024);
+    
+    // Alternative: Store payload in Blob Storage
+    var blobUrl = await _blobStorage.UploadAsync(payload);
+    var referenceMessage = new BlobReferenceMessage(blobUrl);
+    await publisher.PublishAsync(CreateEnvelope(referenceMessage), destination, ct);
+}
+```
+
+### StorageQueueProcessor.cs
+
+- **What it is:** Azure Storage Queue consumer implementation
+- **Real-world analogy:** The receiving station that polls for mail and handles bad letters
+- **What it does:** Polls queue, processes messages through pipeline, handles poison messages
+- **How it's used:** Runs as background service; automatically started when transport is registered
+- **Why it matters:** Reliable message consumption with automatic poison handling and backoff
+- **When to use:** Automatically started - no direct interaction needed
+- **Technical Details:**
+  - **Two-Level Concurrency Model:**
+    - `MaxConcurrency`: Number of concurrent fetch loops (default: 5)
+    - `BatchProcessingConcurrency`: Concurrent messages per fetch loop (default: 1)
+    - Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency
+    - See `docs/STORAGE_QUEUE_CONCURRENCY.md` for detailed explanation
+  - Sequential processing within batches by default (backward compatible)
+  - Optional parallel processing via `BatchProcessingConcurrency` configuration
+  - Uses `SemaphoreSlim` to control batch-level concurrency
+  - Exponential backoff with jitter when queue is empty
+  - Automatic poison queue handling after `MaxDequeueCount` attempts
+  - Deserializes JSON → `StorageQueueEnvelope` → `TransportEnvelope`
+  - Integrates with message pipeline for middleware/handler execution
+  - Uses visibility timeout for message locking during processing
+
+**Processing Flow:**
+```
+1. Poll queue (batch: PrefetchMaxMessages)
+2. For each message:
+   - Deserialize envelope
+   - Create message context (with DeliveryCount)
+   - Process through pipeline (sequential or parallel based on BatchProcessingConcurrency)
+   - On Success: Delete message
+   - On DeadLetter: Move to poison queue + delete
+   - On Retry: 
+     - If dequeue count >= MaxDequeueCount: Move to poison + delete
+     - Else: Leave in queue (becomes visible after VisibilityTimeout)
+3. If queue empty: Apply exponential backoff
+4. Repeat
+```
+
+**Concurrency Examples:**
+```csharp
+// Example 1: Default (backward compatible)
+services.AddHoneyDrunkTransportStorageQueue(...)
+    .WithConcurrency(5);  // 5 fetch loops × 1 sequential = 5 concurrent operations
+
+// Example 2: High throughput
+services.AddHoneyDrunkTransportStorageQueue(...)
+    .WithConcurrency(10)                    // 10 fetch loops
+    .WithBatchProcessingConcurrency(4);     // 4 concurrent per batch
+    // Total: 10 × 4 = 40 concurrent operations
+```
+
+**Backoff Strategy:**
+- Initial delay: `EmptyQueuePollingInterval` (1s)
+- Each empty poll: delay *= 1.5
+- Maximum delay: `MaxPollingInterval` (5s)
+- Jitter: ±25% to prevent thundering herd
+- Reset when messages found
+
+**Example Handler with Retry Control:**
+```csharp
+public class PaymentProcessingHandler : IMessageHandler<ProcessPayment>
+{
+    public async Task<MessageProcessingResult> HandleAsync(
+        ProcessPayment message, 
+        MessageContext context, 
+        CancellationToken ct)
+    {
+        // Check delivery count for monitoring
+        if (context.DeliveryCount > 3)
+        {
+            _logger.LogWarning(
+                "Payment {PaymentId} retry attempt {Attempt}",
+                message.PaymentId, context.DeliveryCount);
+        }
+        
+        try
+        {
+            var result = await _paymentGateway.ProcessAsync(message, ct);
+            
+            if (result.IsSuccess)
+                return MessageProcessingResult.Success;  // Delete from queue
+            
+            if (result.IsTransient)
+                return MessageProcessingResult.Retry;    // Retry with backoff
+            
+            // Permanent error - move to poison immediately
+            return MessageProcessingResult.DeadLetter;
+        }
+        catch (TimeoutException)
+        {
+            return MessageProcessingResult.Retry;  // Transient - retry
+        }
+        catch (ValidationException)
+        {
+            return MessageProcessingResult.DeadLetter;  // Invalid data - poison
+        }
+    }
+}
+```
+
+### PoisonQueueMover.cs
+
+- **What it is:** Helper for moving poison messages with rich error metadata
+- **Real-world analogy:** The undeliverable mail processing center that documents why delivery failed
+- **What it does:** Moves failed messages to poison queue with detailed error information
+- **How it's used:** Internal helper used by `StorageQueueProcessor`
+- **Why it matters:** Preserves failed messages for debugging and manual intervention
+- **When to use:** Automatically invoked when `MaxDequeueCount` is exceeded
+- **Technical Details:**
+  - Creates `PoisonEnvelope` with original message + error metadata
+  - Includes exception type, message, stack trace
+  - Tracks first/last failure timestamps
+  - Records dequeue count history
+  - Preserves Azure Storage metadata (PopReceipt, timestamps)
+
+**Poison Envelope Structure:**
+```json
+{
+  "originalMessageId": "msg-abc-123",
+  "originalMessage": "{...}",  // Full original message JSON
+  "dequeueCount": 5,
+  "firstFailureTimestamp": "2025-01-15T10:00:00Z",
+  "lastFailureTimestamp": "2025-01-15T10:15:00Z",
+  "errorType": "System.TimeoutException",
+  "errorMessage": "Payment gateway timeout after 30s",
+  "errorStackTrace": "at PaymentGateway.ProcessAsync...",
+  "metadata": {
+    "popReceipt": "...",
+    "insertedOn": "2025-01-15T10:00:00Z",
+    "expiresOn": "2025-01-22T10:00:00Z",
+    "nextVisibleOn": "2025-01-15T10:05:00Z"
+  }
+}
+```
+
+**Monitoring Poison Queue:**
+```csharp
+// Check poison queue for failed messages
+var poisonQueueClient = new QueueClient(connectionString, "orders-poison");
+var messages = await poisonQueueClient.ReceiveMessagesAsync(maxMessages: 32);
+
+foreach (var message in messages.Value)
+{
+    var poisonEnvelope = JsonSerializer.Deserialize<PoisonEnvelope>(
+        message.Body.ToString());
+    
+    _logger.LogError(
+        "Poison message {MessageId}: {ErrorType} after {Attempts} attempts",
+        poisonEnvelope.OriginalMessageId,
+        poisonEnvelope.ErrorType,
+        poisonEnvelope.DequeueCount);
+    
+    // Analyze error, fix root cause, then:
+    // Option 1: Replay to main queue
+    // Option 2: Delete if permanently invalid
+}
+```
+
+### QueueClientFactory.cs
+
+- **What it is:** Factory for creating and managing Azure Storage Queue clients
+- **Real-world analogy:** The connection pool manager for postal service locations
+- **What it does:** Thread-safe lazy initialization of primary and poison queue clients
+- **How it's used:** Internal service managing queue client lifecycle
+- **Why it matters:** Ensures single client instances, handles queue creation
+- **When to use:** Used internally - not directly accessed
+- **Technical Details:**
+  - Implements `IDisposable` for proper resource cleanup
+  - Thread-safe initialization using `SemaphoreSlim`
+  - Double-check locking pattern for lazy initialization
+  - Optionally creates queues if they don't exist
+  - Supports connection string authentication (managed identity TODO)
+
+**Initialization Pattern:**
+```csharp
+// First call initializes and creates queue (if CreateIfNotExists = true)
+var queueClient = await factory.GetOrCreatePrimaryQueueClientAsync(ct);
+// Subsequent calls return cached instance (no Azure calls)
+
+var poisonClient = await factory.GetOrCreatePoisonQueueClientAsync(ct);
+```
+
+### StorageQueueEnvelope.cs
+
+- **What it is:** Serializable envelope for Azure Storage Queue messages
+- **Real-world analogy:** The standardized postal format that fits in queue "mailboxes"
+- **What it does:** JSON-serializable representation of `ITransportEnvelope`
+- **How it's used:** Internal DTO for serialization/deserialization
+- **Why it matters:** Bridges binary envelope format with text-based Azure Storage Queue
+- **When to use:** Used internally - not directly accessed
+- **Technical Details:**
+  - All `ITransportEnvelope` properties mapped
+  - Payload stored as Base64-encoded string
+  - Headers preserved as dictionary
+  - Metadata includes envelope version and transport name
+  - Uses camelCase JSON naming for consistency
+
+**Serialization Flow:**
+```
+ITransportEnvelope (in-memory)
+    ↓
+StorageQueueEnvelope (POCO)
+    ↓
+JSON string
+    ↓
+Azure Storage Queue message (text)
+```
+
+### MessageTooLargeException.cs
+
+- **What it is:** Exception for messages exceeding Azure Storage Queue size limit
+- **Real-world analogy:** "Package too large for mailbox" rejection
+- **What it does:** Signals that message exceeds ~64KB limit with actionable guidance
+- **How it's used:** Thrown by `StorageQueueSender` when size validation fails
+- **Why it matters:** Prevents silent failures, provides clear guidance for resolution
+- **When to use:** Catch when publishing large messages, implement fallback strategy
+- **Technical Details:**
+  - Includes `MessageId`, `ActualSize`, `MaxSize` properties
+  - Suggests Blob Storage + reference pattern
+  - Clear, actionable error message
+
+**Handling Large Messages:**
+```csharp
+public async Task PublishLargePayloadAsync(
+    OrderData order, 
+    CancellationToken ct)
+{
+    try
+    {
+        var envelope = CreateEnvelope(order);
+        await _publisher.PublishAsync(envelope, destination, ct);
+    }
+    catch (MessageTooLargeException ex)
+    {
+        _logger.LogWarning(ex, 
+            "Order {OrderId} payload too large ({Size}KB), using Blob reference pattern",
+            order.Id, ex.ActualSize / 1024);
+        
+        // Strategy: Store large data in Blob Storage
+        var blobUri = await _blobStorage.UploadAsync(
+            $"orders/{order.Id}.json",
+            JsonSerializer.Serialize(order),
+            ct);
+        
+        // Send lightweight reference message
+        var reference = new OrderBlobReference(order.Id, blobUri);
+        var refEnvelope = CreateEnvelope(reference);
+        await _publisher.PublishAsync(refEnvelope, destination, ct);
+    }
+}
+
+// Handler retrieves from blob
+public class OrderBlobReferenceHandler(BlobStorageClient blobStorage)
+    : IMessageHandler<OrderBlobReference>
+{
+    public async Task<MessageProcessingResult> HandleAsync(
+        OrderBlobReference message, 
+        MessageContext context, 
+        CancellationToken ct)
+    {
+        var orderJson = await blobStorage.DownloadAsync(message.BlobUri, ct);
+        var order = JsonSerializer.Deserialize<OrderData>(orderJson);
+        
+        await ProcessOrderAsync(order, ct);
         return MessageProcessingResult.Success;
     }
 }
 ```
 
-#### With Retry Logic
-```csharp
-services.AddHoneyDrunkTransportCore()
-    .AddHoneyDrunkServiceBusTransport(options => /* ... */)
-    .WithRetry(retry =>
-    {
-        retry.MaxAttempts = 5;
-        retry.BackoffStrategy = BackoffStrategy.Exponential;
-    });
-```
+### Complete Example
 
-#### With Transactional Outbox
+**Setup:**
 ```csharp
-// In service
-using var transaction = await db.Database.BeginTransactionAsync(ct);
-db.Orders.Add(order);
-await outbox.SaveAsync(new OutboxMessage(envelope), ct);
-await db.SaveChangesAsync(ct);
-await transaction.CommitAsync(ct);
+// Program.cs
+var builder = WebApplication.CreateBuilder(args);
 
-// Background dispatcher publishes later
-services.AddHostedService<OutboxDispatcherService>();
-```
-
-#### Testing with InMemory
-```csharp
-// Test setup
-services.AddHoneyDrunkTransportCore()
-    .AddHoneyDrunkInMemoryTransport(); // No connection strings needed
-  
-// Test can publish and consume in-process
-[Fact]
-public async Task ProcessesOrderCreatedMessage()
+builder.Services.AddHoneyDrunkTransportCore(options =>
 {
-    await _publisher.PublishAsync(envelope, ct);
-    await Task.Delay(100); // Give consumer time to process
-    
-    // Assert handler was called
-    _mockHandler.Verify(h => h.HandleAsync(It.IsAny<OrderCreated>(), It.IsAny<MessageContext>(), It.IsAny<CancellationToken>()));
-}
+    options.EnableTelemetry = true;
+    options.EnableLogging = true;
+    options.EnableCorrelation = true;
+});
+
+builder.Services
+    .AddHoneyDrunkTransportStorageQueue(
+        builder.Configuration["StorageQueue:ConnectionString"]!,
+        "orders")
+    .WithMaxDequeueCount(5)
+    .WithConcurrency(10)
+    .WithBatchProcessingConcurrency(4)  // NEW: 4 concurrent per batch
+    .WithPoisonQueue("orders-poison");
+
+// Total concurrent processing: 10 fetch loops × 4 per batch = 40 concurrent operations
+
+// Register handlers
+builder.Services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
+builder.Services.AddMessageHandler<OrderCancelled, OrderCancelledHandler>();
+
+var app = builder.Build();
+
+// Start consumer
+var consumer = app.Services.GetRequiredService<ITransportConsumer>();
+await consumer.StartAsync();
+
+app.Run();
+
 ```
 
----
-
-*Last Updated: 2025-11-11*
-*Version: 0.1.0*
+**For more details on concurrency tuning, see:** `docs/STORAGE_QUEUE_CONCURRENCY.md`

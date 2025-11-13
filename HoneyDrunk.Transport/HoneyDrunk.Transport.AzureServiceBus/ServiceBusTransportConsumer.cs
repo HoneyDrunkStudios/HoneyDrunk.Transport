@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
@@ -18,6 +19,7 @@ namespace HoneyDrunk.Transport.AzureServiceBus;
 /// <param name="pipeline">The message processing pipeline.</param>
 /// <param name="options">The Azure Service Bus configuration options.</param>
 /// <param name="logger">The logger instance.</param>
+[SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "ServiceBusClient is injected via DI and its lifetime is managed by the DI container, not by this class")]
 public sealed class ServiceBusTransportConsumer(
     ServiceBusClient client,
     IMessagePipeline pipeline,
@@ -28,9 +30,9 @@ public sealed class ServiceBusTransportConsumer(
     private readonly IMessagePipeline _pipeline = pipeline;
     private readonly IOptions<AzureServiceBusOptions> _options = options;
     private readonly ILogger<ServiceBusTransportConsumer> _logger = logger;
+    private readonly SemaphoreSlim _initLock = new(1, 1);
     private ServiceBusProcessor? _processor;
     private ServiceBusSessionProcessor? _sessionProcessor;
-    private readonly SemaphoreSlim _initLock = new(1, 1);
     private bool _disposed;
 
     /// <inheritdoc />
@@ -100,6 +102,77 @@ public sealed class ServiceBusTransportConsumer(
         finally
         {
             _initLock.Release();
+        }
+    }
+
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        // Thread-safe disposal check using Interlocked.CompareExchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
+        if (Interlocked.Exchange(ref _disposed, true))
+        {
+            return;
+        }
+
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            _initLock.Dispose();
+        }
+    }
+
+    private static async Task CompleteMessageAsync(object args, CancellationToken cancellationToken)
+    {
+        if (args is ProcessMessageEventArgs msgArgs)
+        {
+            await msgArgs.CompleteMessageAsync(msgArgs.Message, cancellationToken);
+        }
+        else if (args is ProcessSessionMessageEventArgs sessionArgs)
+        {
+            await sessionArgs.CompleteMessageAsync(sessionArgs.Message, cancellationToken);
+        }
+    }
+
+    private static async Task AbandonMessageAsync(object args, CancellationToken cancellationToken)
+    {
+        if (args is ProcessMessageEventArgs msgArgs)
+        {
+            await msgArgs.AbandonMessageAsync(msgArgs.Message, cancellationToken: cancellationToken);
+        }
+        else if (args is ProcessSessionMessageEventArgs sessionArgs)
+        {
+            await sessionArgs.AbandonMessageAsync(sessionArgs.Message, cancellationToken: cancellationToken);
+        }
+    }
+
+    private static async Task DeadLetterMessageAsync(
+        object args,
+        ITransportEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        var reason = "Message processing failed";
+        var description = $"Message {envelope.MessageId} could not be processed";
+
+        if (args is ProcessMessageEventArgs msgArgs)
+        {
+            await msgArgs.DeadLetterMessageAsync(
+                msgArgs.Message,
+                reason,
+                description,
+                cancellationToken);
+        }
+        else if (args is ProcessSessionMessageEventArgs sessionArgs)
+        {
+            await sessionArgs.DeadLetterMessageAsync(
+                sessionArgs.Message,
+                reason,
+                description,
+                cancellationToken);
         }
     }
 
@@ -309,56 +382,6 @@ public sealed class ServiceBusTransportConsumer(
         }
     }
 
-    private static async Task CompleteMessageAsync(object args, CancellationToken cancellationToken)
-    {
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.CompleteMessageAsync(msgArgs.Message, cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.CompleteMessageAsync(sessionArgs.Message, cancellationToken);
-        }
-    }
-
-    private static async Task AbandonMessageAsync(object args, CancellationToken cancellationToken)
-    {
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.AbandonMessageAsync(msgArgs.Message, cancellationToken: cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.AbandonMessageAsync(sessionArgs.Message, cancellationToken: cancellationToken);
-        }
-    }
-
-    private static async Task DeadLetterMessageAsync(
-        object args,
-        ITransportEnvelope envelope,
-        CancellationToken cancellationToken)
-    {
-        var reason = "Message processing failed";
-        var description = $"Message {envelope.MessageId} could not be processed";
-
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.DeadLetterMessageAsync(
-                msgArgs.Message,
-                reason,
-                description,
-                cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.DeadLetterMessageAsync(
-                sessionArgs.Message,
-                reason,
-                description,
-                cancellationToken);
-        }
-    }
-
     private Task ProcessErrorAsync(ProcessErrorEventArgs args)
     {
         if (_logger.IsEnabled(LogLevel.Error))
@@ -371,26 +394,5 @@ public sealed class ServiceBusTransportConsumer(
         }
 
         return Task.CompletedTask;
-    }
-
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        // Thread-safe disposal check using Interlocked.CompareExchange
-        // Atomically sets _disposed to true and returns the previous value
-        // If previous value was true, we've already disposed
-        if (Interlocked.Exchange(ref _disposed, true))
-        {
-            return;
-        }
-
-        try
-        {
-            await StopAsync();
-        }
-        finally
-        {
-            _initLock.Dispose();
-        }
     }
 }

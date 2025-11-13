@@ -60,10 +60,12 @@ public sealed class InMemoryTransportConsumer(
             for (int i = 0; i < _options.Value.MaxConcurrency; i++)
             {
                 var consumerId = i;
-                var task = Task.Run(async () =>
-                {
-                    await ConsumeMessagesAsync(consumerId, _cts.Token);
-                }, _cts.Token);
+                var task = Task.Run(
+                    async () =>
+                    {
+                        await ConsumeMessagesAsync(consumerId, _cts.Token);
+                    },
+                    _cts.Token);
                 tasks.Add(task);
             }
 
@@ -93,7 +95,7 @@ public sealed class InMemoryTransportConsumer(
                     _options.Value.EndpointName);
             }
 
-            _cts.Cancel();
+            await _cts.CancelAsync();
 
             if (_consumeTask != null)
             {
@@ -122,6 +124,27 @@ public sealed class InMemoryTransportConsumer(
         }
     }
 
+    /// <inheritdoc />
+    public async ValueTask DisposeAsync()
+    {
+        // Thread-safe disposal check using Interlocked.Exchange
+        // Atomically sets _disposed to true and returns the previous value
+        // If previous value was true, we've already disposed
+        if (Interlocked.Exchange(ref _disposed, true))
+        {
+            return;
+        }
+
+        try
+        {
+            await StopAsync();
+        }
+        finally
+        {
+            _startStopLock.Dispose();
+        }
+    }
+
     private async Task ConsumeMessagesAsync(int consumerId, CancellationToken cancellationToken)
     {
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -136,7 +159,7 @@ public sealed class InMemoryTransportConsumer(
         {
             await _broker.ConsumeAsync(
                 _options.Value.Address,
-                async (envelope, ct) => await ProcessMessageAsync(envelope, ct),
+                ProcessMessageAsync,
                 cancellationToken);
         }
         catch (OperationCanceledException)
@@ -204,27 +227,6 @@ public sealed class InMemoryTransportConsumer(
             }
 
             // In a real transport, this would trigger retry logic
-        }
-    }
-
-    /// <inheritdoc />
-    public async ValueTask DisposeAsync()
-    {
-        // Thread-safe disposal check using Interlocked.Exchange
-        // Atomically sets _disposed to true and returns the previous value
-        // If previous value was true, we've already disposed
-        if (Interlocked.Exchange(ref _disposed, true))
-        {
-            return;
-        }
-
-        try
-        {
-            await StopAsync();
-        }
-        finally
-        {
-            _startStopLock.Dispose();
         }
     }
 }

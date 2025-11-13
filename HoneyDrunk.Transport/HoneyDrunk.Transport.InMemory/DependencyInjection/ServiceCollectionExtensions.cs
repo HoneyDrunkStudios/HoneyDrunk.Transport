@@ -14,6 +14,9 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds the HoneyDrunk in-memory transport implementation.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="configure">Optional configuration action for transport options.</param>
+    /// <returns>A transport builder for additional configuration.</returns>
     public static ITransportBuilder AddHoneyDrunkInMemoryTransport(
         this IServiceCollection services,
         Action<TransportOptions>? configure = null)
@@ -40,6 +43,11 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Adds the HoneyDrunk in-memory transport with specific endpoint configuration.
     /// </summary>
+    /// <param name="services">The service collection.</param>
+    /// <param name="endpointName">The endpoint name.</param>
+    /// <param name="address">The endpoint address.</param>
+    /// <param name="configure">Optional configuration action for additional settings.</param>
+    /// <returns>A transport builder for additional configuration.</returns>
     public static ITransportBuilder AddHoneyDrunkInMemoryTransport(
         this IServiceCollection services,
         string endpointName,
@@ -57,6 +65,8 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Extension to start the in-memory consumer from the builder.
     /// </summary>
+    /// <param name="builder">The transport builder.</param>
+    /// <returns>The transport builder for additional configuration.</returns>
     public static ITransportBuilder WithConsumer(this ITransportBuilder builder)
     {
         // Consumer is already registered; this is for fluent API completeness

@@ -1,18 +1,19 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
 
     <!-- Package Metadata -->
-    <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
+    <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
     <Version>0.1.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
-    <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.1.0: Initial release with Azure Service Bus publisher and consumer, topic subscription management, session support, envelope mapping, and telemetry integration.</PackageReleaseNotes>
-    <PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session</PackageTags>
+    <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
+    <PackageReleaseNotes>v0.1.0: Initial release with Azure Storage Queue support including poison queue pattern, configurable retry policies, batch processing, and thread-safe lifecycle management.</PackageReleaseNotes>
+    <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport</RepositoryUrl>
@@ -22,7 +23,6 @@
     <!-- Symbol Package Configuration -->
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
-    
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,15 +30,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.17.0" />
-    <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
+    <PackageReference Include="Azure.Storage.Queues" Version="12.24.0" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.3">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.13.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
