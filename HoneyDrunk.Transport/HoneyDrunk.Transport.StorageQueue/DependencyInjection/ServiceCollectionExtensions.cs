@@ -10,6 +10,40 @@ namespace HoneyDrunk.Transport.StorageQueue.DependencyInjection;
 /// <summary>
 /// Extension methods for registering Azure Storage Queue transport services.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <strong>Single Transport Per Application:</strong> Only ONE transport implementation
+/// (Storage Queue, Service Bus, InMemory) should be registered per application. The library
+/// uses TryAddSingleton for ITransportPublisher and ITransportConsumer, meaning the FIRST
+/// registration wins and subsequent registrations are silently ignored.
+/// </para>
+/// <para>
+/// <strong>Correct Usage:</strong>
+/// </para>
+/// <code>
+/// // ? CORRECT: Single transport
+/// services.AddHoneyDrunkTransportCore()
+///     .AddHoneyDrunkTransportStorageQueue(...);
+///
+/// // ? WRONG: Multiple transports - second is ignored!
+/// services.AddHoneyDrunkTransportCore()
+///     .AddHoneyDrunkServiceBusTransport(...)  // ? This registers
+///     .AddHoneyDrunkTransportStorageQueue(...); // ? Silently ignored!
+///
+/// // ? CORRECT: Test override
+/// #if DEBUG
+/// services.AddHoneyDrunkTransportCore()
+///     .AddHoneyDrunkInMemoryTransport();  // ? Overrides for testing
+/// #else
+/// services.AddHoneyDrunkTransportCore()
+///     .AddHoneyDrunkTransportStorageQueue(...);
+/// #endif
+/// </code>
+/// <para>
+/// To use multiple message brokers simultaneously, deploy separate application instances,
+/// each with its own transport registration.
+/// </para>
+/// </remarks>
 public static class ServiceCollectionExtensions
 {
     /// <summary>
@@ -246,6 +280,43 @@ public static class ServiceCollectionExtensions
         builder.Services.Configure<StorageQueueOptions>(options =>
         {
             options.MaxBatchPublishConcurrency = maxBatchConcurrency;
+        });
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Configures concurrent message processing within each consumer's batch.
+    /// </summary>
+    /// <param name="builder">The transport builder.</param>
+    /// <param name="batchConcurrency">The number of messages to process concurrently per batch (1-32).</param>
+    /// <returns>The transport builder for fluent configuration.</returns>
+    /// <remarks>
+    /// <para>
+    /// Controls parallelism within each fetch loop. Default is 1 (sequential).
+    /// Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency.
+    /// </para>
+    /// <para>
+    /// <strong>Example:</strong> WithConcurrency(5).WithBatchProcessingConcurrency(4) = 20 total concurrent operations.
+    /// </para>
+    /// <para>
+    /// Must be ? PrefetchMaxMessages. Start with low values and increase based on monitoring.
+    /// </para>
+    /// </remarks>
+    public static ITransportBuilder WithBatchProcessingConcurrency(
+        this ITransportBuilder builder,
+        int batchConcurrency)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        if (batchConcurrency < 1 || batchConcurrency > 32)
+        {
+            throw new ArgumentOutOfRangeException(nameof(batchConcurrency), "BatchProcessingConcurrency must be between 1 and 32");
+        }
+
+        builder.Services.Configure<StorageQueueOptions>(options =>
+        {
+            options.BatchProcessingConcurrency = batchConcurrency;
         });
 
         return builder;

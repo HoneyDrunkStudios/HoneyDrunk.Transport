@@ -1082,8 +1082,20 @@ The Storage Queue transport provides a lightweight, cost-effective messaging sol
 - `MaxDequeueCount`: Attempts before poisoning (default: 5)
 - `VisibilityTimeout`: Message lock duration (default: 30s)
 - `PrefetchMaxMessages`: Batch size 1-32 (default: 16)
+- `MaxConcurrency`: Number of concurrent fetch loops (default: 5)
+- `BatchProcessingConcurrency`: Concurrent processing per batch (default: 1, range: 1-32)
 - `EmptyQueuePollingInterval`: Initial backoff delay (default: 1s)
 - `MaxPollingInterval`: Max backoff delay (default: 5s)
+
+**Concurrency Model:**
+```
+Total Concurrent Processing = MaxConcurrency × BatchProcessingConcurrency
+
+Examples:
+- MaxConcurrency=5, BatchProcessingConcurrency=1 (default) = 5 total
+- MaxConcurrency=10, BatchProcessingConcurrency=4 = 40 total
+- MaxConcurrency=5, BatchProcessingConcurrency=8 = 40 total (different topology)
+```
 
 ### StorageQueueSender.cs
 
@@ -1147,7 +1159,14 @@ catch (MessageTooLargeException ex)
 - **Why it matters:** Reliable message consumption with automatic poison handling and backoff
 - **When to use:** Automatically started - no direct interaction needed
 - **Technical Details:**
-  - Concurrent processing based on `MaxConcurrency`
+  - **Two-Level Concurrency Model:**
+    - `MaxConcurrency`: Number of concurrent fetch loops (default: 5)
+    - `BatchProcessingConcurrency`: Concurrent messages per fetch loop (default: 1)
+    - Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency
+    - See `docs/STORAGE_QUEUE_CONCURRENCY.md` for detailed explanation
+  - Sequential processing within batches by default (backward compatible)
+  - Optional parallel processing via `BatchProcessingConcurrency` configuration
+  - Uses `SemaphoreSlim` to control batch-level concurrency
   - Exponential backoff with jitter when queue is empty
   - Automatic poison queue handling after `MaxDequeueCount` attempts
   - Deserializes JSON → `StorageQueueEnvelope` → `TransportEnvelope`
@@ -1160,7 +1179,7 @@ catch (MessageTooLargeException ex)
 2. For each message:
    - Deserialize envelope
    - Create message context (with DeliveryCount)
-   - Process through pipeline
+   - Process through pipeline (sequential or parallel based on BatchProcessingConcurrency)
    - On Success: Delete message
    - On DeadLetter: Move to poison queue + delete
    - On Retry: 
@@ -1168,6 +1187,19 @@ catch (MessageTooLargeException ex)
      - Else: Leave in queue (becomes visible after VisibilityTimeout)
 3. If queue empty: Apply exponential backoff
 4. Repeat
+```
+
+**Concurrency Examples:**
+```csharp
+// Example 1: Default (backward compatible)
+services.AddHoneyDrunkTransportStorageQueue(...)
+    .WithConcurrency(5);  // 5 fetch loops × 1 sequential = 5 concurrent operations
+
+// Example 2: High throughput
+services.AddHoneyDrunkTransportStorageQueue(...)
+    .WithConcurrency(10)                    // 10 fetch loops
+    .WithBatchProcessingConcurrency(4);     // 4 concurrent per batch
+    // Total: 10 × 4 = 40 concurrent operations
 ```
 
 **Backoff Strategy:**
@@ -1388,65 +1420,6 @@ public class OrderBlobReferenceHandler(BlobStorageClient blobStorage)
 }
 ```
 
-#### ServiceCollectionExtensions.cs
-
-- **What it is:** Fluent API for registering Storage Queue transport
-- **Real-world analogy:** The enrollment form for the budget postal service
-- **What it does:** Registers all Storage Queue services with dependency injection
-- **How it's used:** Call extension methods during startup
-- **Why it matters:** Provides discoverable, type-safe configuration
-- **When to use:** Application startup/configuration
-- **Example:**
-  ```csharp
-  // Simple registration
-  services.AddHoneyDrunkTransportStorageQueue(
-      connectionString: config["StorageQueue:ConnectionString"]!,
-      queueName: "orders");
-  
-  // Fluent configuration
-  services.AddHoneyDrunkTransportStorageQueue(
-          config["StorageQueue:ConnectionString"]!,
-          "orders")
-      .WithMaxDequeueCount(3)                    // Poison after 3 attempts
-      .WithVisibilityTimeout(TimeSpan.FromMinutes(2))  // 2-minute lock
-      .WithPrefetchCount(32)                     // Max batch size
-      .WithConcurrency(10)                       // 10 concurrent processors
-      .WithPoisonQueue("orders-dlq")             // Custom poison queue name
-      .WithMessageTimeToLive(TimeSpan.FromDays(3));  // Auto-delete after 3 days
-  ```
-
-**Fluent Builder Methods:**
-- `WithPoisonQueue(string)` - Custom poison queue name
-- `WithMaxDequeueCount(int)` - Attempts before poisoning (1-100)
-- `WithVisibilityTimeout(TimeSpan)` - Message lock duration
-- `WithMessageTimeToLive(TimeSpan)` - Message expiration
-- `WithPrefetchCount(int)` - Batch size (1-32)
-- `WithConcurrency(int)` - Concurrent processors
-- `WithoutBase64Encoding()` - Disable payload encoding (use with caution)
-- `WithoutAutoCreateQueue()` - Skip automatic queue creation
-
-**Configuration from IConfiguration:**
-```csharp
-// appsettings.json
-{
-  "StorageQueue": {
-    "ConnectionString": "DefaultEndpointsProtocol=https;...",
-    "QueueName": "orders",
-    "MaxDequeueCount": 5,
-    "VisibilityTimeout": "00:00:30",
-    "MaxConcurrency": 10,
-    "PrefetchMaxMessages": 16,
-    "PoisonQueueName": "orders-poison"
-  }
-}
-
-// Startup.cs
-services.AddHoneyDrunkTransportStorageQueue(options =>
-{
-    config.GetSection("StorageQueue").Bind(options);
-});
-```
-
 ### Complete Example
 
 **Setup:**
@@ -1467,7 +1440,10 @@ builder.Services
         "orders")
     .WithMaxDequeueCount(5)
     .WithConcurrency(10)
+    .WithBatchProcessingConcurrency(4)  // NEW: 4 concurrent per batch
     .WithPoisonQueue("orders-poison");
+
+// Total concurrent processing: 10 fetch loops × 4 per batch = 40 concurrent operations
 
 // Register handlers
 builder.Services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
@@ -1480,3 +1456,7 @@ var consumer = app.Services.GetRequiredService<ITransportConsumer>();
 await consumer.StartAsync();
 
 app.Run();
+
+```
+
+**For more details on concurrency tuning, see:** `docs/STORAGE_QUEUE_CONCURRENCY.md`

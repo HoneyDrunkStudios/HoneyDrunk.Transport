@@ -102,23 +102,34 @@ internal sealed class PoisonQueueMover(ILogger<PoisonQueueMover> logger)
     /// <param name="dequeueCount">The number of times the message was dequeued.</param>
     /// <returns>A poison envelope containing the original message and failure metadata.</returns>
     /// <remarks>
+    /// <para>
     /// When <paramref name="error"/> is null, the ErrorType, ErrorMessage, and ErrorStackTrace
     /// fields will be null in the resulting envelope. This is expected for scenarios where a message
     /// is dead-lettered without an exception (e.g., explicit dead-letter, max dequeue count exceeded
     /// on successful processing that returns Retry).
+    /// </para>
+    /// <para>
+    /// <strong>Timestamp Semantics:</strong> Both FirstFailureTimestamp and LastFailureTimestamp are set
+    /// to the current UTC time when the message is moved to the poison queue. Azure Storage Queue does not
+    /// track when processing first failed, only when the message was originally enqueued (InsertedOn).
+    /// Therefore, the "first failure" timestamp represents when we made the decision to poison the message,
+    /// not the absolute first processing attempt.
+    /// </para>
     /// </remarks>
     private static PoisonEnvelope CreatePoisonEnvelope(
         QueueMessage message,
         Exception? error,
         long dequeueCount)
     {
+        var now = DateTimeOffset.UtcNow;
+
         return new PoisonEnvelope
         {
             OriginalMessageId = message.MessageId,
             OriginalMessage = message.Body.ToString(),
             DequeueCount = dequeueCount,
-            FirstFailureTimestamp = message.InsertedOn ?? DateTimeOffset.UtcNow,
-            LastFailureTimestamp = DateTimeOffset.UtcNow,
+            FirstFailureTimestamp = now,
+            LastFailureTimestamp = now,
             ErrorType = error?.GetType().FullName,
             ErrorMessage = error?.Message,
             ErrorStackTrace = error?.StackTrace,

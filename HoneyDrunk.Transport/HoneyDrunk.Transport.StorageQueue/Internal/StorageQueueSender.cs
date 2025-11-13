@@ -35,6 +35,7 @@ internal sealed class StorageQueueSender(
     private readonly QueueClientFactory _queueClientFactory = queueClientFactory;
     private readonly StorageQueueOptions _options = options.Value;
     private readonly ILogger<StorageQueueSender> _logger = logger;
+    private readonly SemaphoreSlim _disposalLock = new(1, 1);
     private bool _disposed;
 
     /// <inheritdoc />
@@ -47,94 +48,106 @@ internal sealed class StorageQueueSender(
         ArgumentNullException.ThrowIfNull(envelope);
         ArgumentNullException.ThrowIfNull(destination);
 
-        using var activity = _options.EnableTelemetry
-            ? TransportTelemetry.StartPublishActivity(envelope, destination)
-            : null;
-
+        // Acquire disposal lock to prevent disposal during operation
+        await _disposalLock.WaitAsync(cancellationToken);
         try
         {
-            if (_logger.IsEnabled(LogLevel.Debug))
+            // Check disposal flag after acquiring lock
+            ObjectDisposedException.ThrowIf(_disposed, this);
+
+            using var activity = _options.EnableTelemetry
+                ? TransportTelemetry.StartPublishActivity(envelope, destination)
+                : null;
+
+            try
             {
-                _logger.LogDebug(
-                    "Publishing message {MessageId} of type {MessageType} to queue {QueueName}",
-                    envelope.MessageId,
-                    envelope.MessageType,
-                    destination.Address);
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug(
+                        "Publishing message {MessageId} of type {MessageType} to queue {QueueName}",
+                        envelope.MessageId,
+                        envelope.MessageType,
+                        destination.Address);
+                }
+
+                // Serialize envelope to JSON with base64-encoded payload
+                var messageText = SerializeEnvelope(envelope);
+
+                // Validate size - Azure Storage Queue SDK will base64-encode the entire message
+                // for transmission, so account for ~33% overhead
+                var messageSizeBytes = Encoding.UTF8.GetByteCount(messageText);
+                var estimatedTransmissionSize = (long)(messageSizeBytes * 1.34);
+
+                if (estimatedTransmissionSize > MaxMessageSizeBytes)
+                {
+                    var ex = new MessageTooLargeException(
+                        envelope.MessageId,
+                        estimatedTransmissionSize,
+                        MaxMessageSizeBytes,
+                        "Azure Storage Queue");
+
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(
+                            ex,
+                            "Message {MessageId} exceeds size limit: {ActualSize} bytes (estimated with base64 overhead: {EstimatedSize} bytes, max: {MaxSize} bytes)",
+                            envelope.MessageId,
+                            messageSizeBytes,
+                            estimatedTransmissionSize,
+                            MaxMessageSizeBytes);
+                    }
+
+                    TransportTelemetry.RecordError(activity, ex);
+                    throw ex;
+                }
+
+                // Get queue client
+                var queueClient = await _queueClientFactory.GetOrCreatePrimaryQueueClientAsync(cancellationToken);
+
+                // Send message
+                await queueClient.SendMessageAsync(
+                    messageText,
+                    visibilityTimeout: null, // Visible immediately
+                    timeToLive: _options.MessageTimeToLive,
+                    cancellationToken: cancellationToken);
+
+                TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
+
+                if (_logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("Successfully published message {MessageId}", envelope.MessageId);
+                }
             }
-
-            // Serialize envelope to JSON with base64-encoded payload
-            var messageText = SerializeEnvelope(envelope);
-
-            // Validate size - Azure Storage Queue SDK will base64-encode the entire message
-            // for transmission, so account for ~33% overhead
-            var messageSizeBytes = Encoding.UTF8.GetByteCount(messageText);
-            var estimatedTransmissionSize = (long)(messageSizeBytes * 1.34);
-
-            if (estimatedTransmissionSize > MaxMessageSizeBytes)
+            catch (RequestFailedException ex) when (IsTransientError(ex))
             {
-                var ex = new MessageTooLargeException(
-                    envelope.MessageId,
-                    estimatedTransmissionSize,
-                    MaxMessageSizeBytes,
-                    "Azure Storage Queue");
+                if (_logger.IsEnabled(LogLevel.Warning))
+                {
+                    _logger.LogWarning(
+                        ex,
+                        "Transient error publishing message {MessageId}, may be retried",
+                        envelope.MessageId);
+                }
 
+                TransportTelemetry.RecordError(activity, ex);
+                throw;
+            }
+            catch (Exception ex)
+            {
                 if (_logger.IsEnabled(LogLevel.Error))
                 {
                     _logger.LogError(
                         ex,
-                        "Message {MessageId} exceeds size limit: {ActualSize} bytes (estimated with base64 overhead: {EstimatedSize} bytes, max: {MaxSize} bytes)",
-                        envelope.MessageId,
-                        messageSizeBytes,
-                        estimatedTransmissionSize,
-                        MaxMessageSizeBytes);
+                        "Failed to publish message {MessageId}",
+                        envelope.MessageId);
                 }
 
                 TransportTelemetry.RecordError(activity, ex);
-                throw ex;
-            }
-
-            // Get queue client
-            var queueClient = await _queueClientFactory.GetOrCreatePrimaryQueueClientAsync(cancellationToken);
-
-            // Send message
-            await queueClient.SendMessageAsync(
-                messageText,
-                visibilityTimeout: null, // Visible immediately
-                timeToLive: _options.MessageTimeToLive,
-                cancellationToken: cancellationToken);
-
-            TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
-
-            if (_logger.IsEnabled(LogLevel.Debug))
-            {
-                _logger.LogDebug("Successfully published message {MessageId}", envelope.MessageId);
+                throw;
             }
         }
-        catch (RequestFailedException ex) when (IsTransientError(ex))
+        finally
         {
-            if (_logger.IsEnabled(LogLevel.Warning))
-            {
-                _logger.LogWarning(
-                    ex,
-                    "Transient error publishing message {MessageId}, may be retried",
-                    envelope.MessageId);
-            }
-
-            TransportTelemetry.RecordError(activity, ex);
-            throw;
-        }
-        catch (Exception ex)
-        {
-            if (_logger.IsEnabled(LogLevel.Error))
-            {
-                _logger.LogError(
-                    ex,
-                    "Failed to publish message {MessageId}",
-                    envelope.MessageId);
-            }
-
-            TransportTelemetry.RecordError(activity, ex);
-            throw;
+            _disposalLock.Release();
         }
     }
 
@@ -239,9 +252,18 @@ internal sealed class StorageQueueSender(
             return;
         }
 
-        // Dispose factory - no need for lock synchronization as disposal flag
-        // prevents new operations and Azure SDK QueueClient is thread-safe
-        await _queueClientFactory.DisposeAsync();
+        // Acquire disposal lock to ensure no active publish operations
+        await _disposalLock.WaitAsync();
+        try
+        {
+            // Dispose factory after ensuring no operations in progress
+            await _queueClientFactory.DisposeAsync();
+        }
+        finally
+        {
+            _disposalLock.Release();
+            _disposalLock.Dispose();
+        }
     }
 
     /// <summary>

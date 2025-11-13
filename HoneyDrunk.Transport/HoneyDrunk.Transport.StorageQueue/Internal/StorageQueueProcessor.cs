@@ -16,6 +16,21 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <summary>
 /// Azure Storage Queue implementation of transport consumer.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Implements a two-level concurrency model:
+/// </para>
+/// <list type="bullet">
+/// <item><description><strong>MaxConcurrency</strong>: Number of concurrent fetch loops (default: 5).</description></item>
+/// <item><description><strong>BatchProcessingConcurrency</strong>: Concurrent messages per fetch loop (default: 1).</description></item>
+/// </list>
+/// <para>
+/// Total concurrent message processing = MaxConcurrency × BatchProcessingConcurrency.
+/// </para>
+/// <para>
+/// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 concurrent operations.
+/// </para>
+/// </remarks>
 /// <param name="queueClientFactory">The queue client factory.</param>
 /// <param name="pipeline">The message processing pipeline.</param>
 /// <param name="poisonQueueMover">The poison queue mover for handling dead-lettered messages.</param>
@@ -234,14 +249,41 @@ internal sealed class StorageQueueProcessor(
                     // Reset backoff since we got messages
                     backoffState.Reset(_options.EmptyQueuePollingInterval);
 
-                    // Process each message
-                    foreach (var message in messages)
+                    // Process messages with configured batch concurrency
+                    if (_options.BatchProcessingConcurrency == 1)
                     {
-                        await ProcessMessageAsync(
-                            queueClient,
-                            poisonQueueClient,
-                            message,
-                            cancellationToken);
+                        // Sequential processing (default, backward compatible)
+                        foreach (var message in messages)
+                        {
+                            await ProcessMessageAsync(
+                                queueClient,
+                                poisonQueueClient,
+                                message,
+                                cancellationToken);
+                        }
+                    }
+                    else
+                    {
+                        // Parallel processing within batch
+                        using var semaphore = new SemaphoreSlim(_options.BatchProcessingConcurrency);
+                        var tasks = messages.Select(async message =>
+                        {
+                            await semaphore.WaitAsync(cancellationToken);
+                            try
+                            {
+                                await ProcessMessageAsync(
+                                    queueClient,
+                                    poisonQueueClient,
+                                    message,
+                                    cancellationToken);
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
+                        });
+
+                        await Task.WhenAll(tasks);
                     }
                 }
                 catch (RequestFailedException ex) when (IsTransientError(ex))
@@ -367,7 +409,7 @@ internal sealed class StorageQueueProcessor(
                 else if (result == MessageProcessingResult.DeadLetter)
                 {
                     // Move to poison queue immediately
-                    // Note: If deletion fails after poison queue insertion, message may be reprocessed
+                    // Note: If deletion fails after poison queue insertion, message may be reprocesseds
                     // The PoisonQueueMover includes MessageId which can be used for deduplication
                     try
                     {

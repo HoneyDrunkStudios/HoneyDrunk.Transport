@@ -124,6 +124,33 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     public int? MaxBatchPublishConcurrency { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of messages to process concurrently within each consumer's batch.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Controls parallelism within each fetch loop. Default is 1 (sequential processing).
+    /// </para>
+    /// <para>
+    /// <strong>Concurrency Model:</strong>
+    /// - MaxConcurrency = number of concurrent fetch loops (default: 5).
+    /// - BatchProcessingConcurrency = concurrent messages per fetch loop (default: 1).
+    /// - Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency.
+    /// </para>
+    /// <para>
+    /// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 total concurrent message processing.
+    /// </para>
+    /// <para>
+    /// <strong>Tuning Guidelines:</strong>
+    /// - Start with 1 (sequential) and increase if throughput insufficient.
+    /// - Must be ? PrefetchMaxMessages (no benefit processing more than fetched).
+    /// - Consider message processing time: longer processing = more benefit from parallelism.
+    /// - Monitor CPU, memory, and thread pool when increasing.
+    /// </para>
+    /// </remarks>
+    [Range(1, 32, ErrorMessage = "BatchProcessingConcurrency must be between 1 and 32")]
+    public int BatchProcessingConcurrency { get; set; } = 1;
+
+    /// <summary>
     /// Validates the configuration options.
     /// </summary>
     /// <param name="validationContext">The validation context.</param>
@@ -144,6 +171,14 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
             yield return new ValidationResult(
                 "MaxConcurrency cannot exceed 100 to prevent resource exhaustion",
                 [nameof(MaxConcurrency)]);
+        }
+
+        // Validate BatchProcessingConcurrency doesn't exceed PrefetchMaxMessages
+        if (BatchProcessingConcurrency > PrefetchMaxMessages)
+        {
+            yield return new ValidationResult(
+                $"BatchProcessingConcurrency ({BatchProcessingConcurrency}) cannot exceed PrefetchMaxMessages ({PrefetchMaxMessages})",
+                [nameof(BatchProcessingConcurrency), nameof(PrefetchMaxMessages)]);
         }
 
         // Validate that EmptyQueuePollingInterval is not greater than MaxPollingInterval
