@@ -159,7 +159,7 @@ public sealed class InMemoryTransportConsumer(
         {
             await _broker.ConsumeAsync(
                 _options.Value.Address,
-                async (envelope, ct) => await ProcessMessageAsync(envelope, ct),
+                ProcessMessageAsync,
                 cancellationToken);
         }
         catch (OperationCanceledException)

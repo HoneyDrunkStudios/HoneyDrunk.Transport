@@ -542,9 +542,8 @@ internal sealed class StorageQueueProcessor(
     private sealed class ConsumerBackoffState(TimeSpan initialPollingInterval)
     {
         private int _consecutiveEmptyReceives;
-        private TimeSpan _currentPollingInterval = initialPollingInterval;
 
-        public TimeSpan CurrentPollingInterval => _currentPollingInterval;
+        public TimeSpan CurrentPollingInterval { get; private set; } = initialPollingInterval;
 
         /// <summary>
         /// Increments the empty receive counter.
@@ -562,9 +561,9 @@ internal sealed class StorageQueueProcessor(
         {
             if (_consecutiveEmptyReceives > 1)
             {
-                _currentPollingInterval = TimeSpan.FromMilliseconds(
+                CurrentPollingInterval = TimeSpan.FromMilliseconds(
                     Math.Min(
-                        _currentPollingInterval.TotalMilliseconds * 1.5,
+                        CurrentPollingInterval.TotalMilliseconds * 1.5,
                         maxPollingInterval.TotalMilliseconds));
             }
         }
@@ -578,7 +577,7 @@ internal sealed class StorageQueueProcessor(
             if (_consecutiveEmptyReceives > 0)
             {
                 _consecutiveEmptyReceives = 0;
-                _currentPollingInterval = initialPollingInterval;
+                CurrentPollingInterval = initialPollingInterval;
             }
         }
     }

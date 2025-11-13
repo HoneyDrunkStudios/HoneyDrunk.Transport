@@ -12,18 +12,16 @@ public sealed class NoOpTransportTransaction : ITransportTransaction
 
     private static readonly IReadOnlyDictionary<string, object> EmptyContext = new Dictionary<string, object>();
 
-    private readonly string _transactionId;
-
     /// <summary>
     /// Prevents a default instance of the <see cref="NoOpTransportTransaction"/> class from being created.
     /// </summary>
     private NoOpTransportTransaction()
     {
-        _transactionId = Guid.NewGuid().ToString();
+        TransactionId = Guid.NewGuid().ToString();
     }
 
     /// <inheritdoc/>
-    public string TransactionId => _transactionId;
+    public string TransactionId { get; }
 
     /// <inheritdoc/>
     public IReadOnlyDictionary<string, object> Context => EmptyContext;
