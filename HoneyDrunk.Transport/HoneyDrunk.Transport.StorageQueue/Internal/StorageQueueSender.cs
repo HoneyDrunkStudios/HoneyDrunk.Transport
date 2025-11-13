@@ -14,9 +14,6 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <summary>
 /// Azure Storage Queue implementation of transport publisher.
 /// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="StorageQueueSender"/> class.
-/// </remarks>
 /// <param name="queueClientFactory">The queue client factory.</param>
 /// <param name="options">The storage queue configuration options.</param>
 /// <param name="logger">The logger instance.</param>
@@ -65,18 +62,31 @@ internal sealed class StorageQueueSender(
                     destination.Address);
             }
 
-            // Serialize envelope to JSON
+            // Serialize envelope to JSON with base64-encoded payload
             var messageText = SerializeEnvelope(envelope);
 
-            // Validate size
+            // Validate size - Azure Storage Queue SDK will base64-encode the entire message
+            // for transmission, so account for ~33% overhead
             var messageSizeBytes = Encoding.UTF8.GetByteCount(messageText);
-            if (messageSizeBytes > MaxMessageSizeBytes)
+            var estimatedTransmissionSize = (long)(messageSizeBytes * 1.34);
+
+            if (estimatedTransmissionSize > MaxMessageSizeBytes)
             {
-                var ex = new MessageTooLargeException(envelope.MessageId, messageSizeBytes, MaxMessageSizeBytes, "Azure Storage Queue");
+                var ex = new MessageTooLargeException(
+                    envelope.MessageId,
+                    estimatedTransmissionSize,
+                    MaxMessageSizeBytes,
+                    "Azure Storage Queue");
 
                 if (_logger.IsEnabled(LogLevel.Error))
                 {
-                    _logger.LogError(ex, "Message {MessageId} exceeds size limit", envelope.MessageId);
+                    _logger.LogError(
+                        ex,
+                        "Message {MessageId} exceeds size limit: {ActualSize} bytes (estimated with base64 overhead: {EstimatedSize} bytes, max: {MaxSize} bytes)",
+                        envelope.MessageId,
+                        messageSizeBytes,
+                        estimatedTransmissionSize,
+                        MaxMessageSizeBytes);
                 }
 
                 TransportTelemetry.RecordError(activity, ex);
@@ -154,14 +164,20 @@ internal sealed class StorageQueueSender(
                 destination.Address);
         }
 
-        var exceptions = new List<Exception>();
+        // Track failures with message context for better observability
+        var failures = new System.Collections.Concurrent.ConcurrentBag<MessagePublishFailure>();
 
-        // Parallel I/O-bound operations - Azure SDK handles connection pooling
+        // Parallel I/O-bound operations with configurable concurrency
+        // Default: Min(ProcessorCount * 2, 32) to balance throughput and resource usage
+        // Azure Storage Queue standard tier limit: ~2,000 operations/second
+        var maxConcurrency = _options.MaxBatchPublishConcurrency
+            ?? Math.Min(Environment.ProcessorCount * 2, 32);
+
         await Parallel.ForEachAsync(
             envelopeList,
             new ParallelOptions
             {
-                MaxDegreeOfParallelism = Environment.ProcessorCount * 4,  // I/O-bound: allow more concurrency
+                MaxDegreeOfParallelism = maxConcurrency,
                 CancellationToken = cancellationToken
             },
             async (envelope, ct) =>
@@ -172,18 +188,38 @@ internal sealed class StorageQueueSender(
                 }
                 catch (Exception ex)
                 {
-                    lock (exceptions)
+                    failures.Add(new MessagePublishFailure(envelope, ex));
+
+                    if (_logger.IsEnabled(LogLevel.Warning))
                     {
-                        exceptions.Add(ex);
+                        _logger.LogWarning(
+                            ex,
+                            "Failed to publish message {MessageId} of type {MessageType} in batch",
+                            envelope.MessageId,
+                            envelope.MessageType);
                     }
                 }
             });
 
-        if (exceptions.Count > 0)
+        if (!failures.IsEmpty)
         {
-            throw new AggregateException(
-                $"Failed to publish {exceptions.Count} of {envelopeList.Count} messages",
-                exceptions);
+            // Create detailed failure report
+            var failureDetails = string.Join(
+                ", ",
+                failures.Select(f => $"{f.Envelope.MessageId}({f.Envelope.MessageType})"));
+
+            var message = $"Failed to publish {failures.Count} of {envelopeList.Count} messages. " +
+                         $"Failed messages: {failureDetails}";
+
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(
+                    "Batch publish completed with {FailureCount} failures out of {TotalCount} messages",
+                    failures.Count,
+                    envelopeList.Count);
+            }
+
+            throw new AggregateException(message, failures.Select(f => f.Exception));
         }
 
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -205,7 +241,7 @@ internal sealed class StorageQueueSender(
 
         // Dispose factory - no need for lock synchronization as disposal flag
         // prevents new operations and Azure SDK QueueClient is thread-safe
-        _queueClientFactory.Dispose();
+        await _queueClientFactory.DisposeAsync();
     }
 
     /// <summary>
@@ -220,13 +256,13 @@ internal sealed class StorageQueueSender(
             CausationId = envelope.CausationId,
             Timestamp = envelope.Timestamp,
             MessageType = envelope.MessageType,
-            ContentType = envelope.Headers.TryGetValue("ContentType", out var contentType) ? contentType : null,
             Headers = new Dictionary<string, string>(envelope.Headers),
             PayloadBase64 = Convert.ToBase64String(envelope.Payload.ToArray()),
             Metadata = new Dictionary<string, string>
             {
                 ["EnvelopeVersion"] = "1.0",
-                ["Transport"] = "StorageQueue"
+                ["Transport"] = "StorageQueue",
+                ["ContentType"] = "application/json"
             }
         };
 
@@ -241,4 +277,9 @@ internal sealed class StorageQueueSender(
         // HTTP 5xx errors (server errors) are typically transient
         return ex.Status >= 500 && ex.Status < 600;
     }
+
+    /// <summary>
+    /// Represents a failed message publication in a batch operation.
+    /// </summary>
+    private sealed record MessagePublishFailure(ITransportEnvelope Envelope, Exception Exception);
 }

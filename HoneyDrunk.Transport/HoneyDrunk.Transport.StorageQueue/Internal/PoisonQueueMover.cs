@@ -11,11 +11,16 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// Helper for moving poison messages to a dedicated poison queue.
 /// </summary>
 /// <remarks>
-/// Initializes a new instance of the <see cref="PoisonQueueMover"/> class.
+/// <para>
+/// <strong>Duplicate Handling:</strong> Due to Azure Storage Queue's lack of transactions,
+/// a message may be moved to the poison queue multiple times if deletion from the primary
+/// queue fails. The OriginalMessageId can be used for deduplication when processing the
+/// poison queue.
+/// </para>
 /// </remarks>
 /// <param name="logger">The logger instance.</param>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by dependency injection")]
-internal sealed class PoisonQueueMover(ILogger logger)
+internal sealed class PoisonQueueMover(ILogger<PoisonQueueMover> logger)
 {
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -23,16 +28,21 @@ internal sealed class PoisonQueueMover(ILogger logger)
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private readonly ILogger _logger = logger;
+    private readonly ILogger<PoisonQueueMover> _logger = logger;
 
     /// <summary>
     /// Moves a message to the poison queue with error metadata.
     /// </summary>
     /// <param name="poisonQueueClient">The poison queue client.</param>
     /// <param name="message">The original queue message.</param>
-    /// <param name="error">The exception that caused the message to be poisoned.</param>
+    /// <param name="error">The exception that caused the message to be poisoned, or null if explicitly dead-lettered without an exception.</param>
     /// <param name="originalDequeueCount">The dequeue count from the original message.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
+    /// <remarks>
+    /// The <paramref name="error"/> parameter may be null when a message is explicitly moved to the poison queue
+    /// via MessageProcessingResult.DeadLetter without an exception being thrown, or when
+    /// the maximum dequeue count is exceeded during a retry scenario.
+    /// </remarks>
     public async Task MoveMessageToPoisonQueueAsync(
         QueueClient poisonQueueClient,
         QueueMessage message,
@@ -46,6 +56,7 @@ internal sealed class PoisonQueueMover(ILogger logger)
         try
         {
             // Create poison envelope with error metadata
+            // Note: error may be null for explicit dead-letter operations or max dequeue count scenarios
             var poisonEnvelope = CreatePoisonEnvelope(message, error, originalDequeueCount);
 
             // Serialize to JSON
@@ -58,11 +69,15 @@ internal sealed class PoisonQueueMover(ILogger logger)
 
             if (_logger.IsEnabled(LogLevel.Warning))
             {
+                var errorDescription = error != null
+                    ? $"{error.GetType().Name}: {error.Message}"
+                    : "Explicit dead-letter or max dequeue count exceeded";
+
                 _logger.LogWarning(
-                    "Moved message {MessageId} to poison queue after {DequeueCount} attempts. Error: {ErrorType}",
+                    "Moved message {MessageId} to poison queue after {DequeueCount} attempts. Reason: {Reason}",
                     message.MessageId,
                     originalDequeueCount,
-                    error?.GetType().Name ?? "Unknown");
+                    errorDescription);
             }
         }
         catch (Exception ex)
@@ -82,6 +97,16 @@ internal sealed class PoisonQueueMover(ILogger logger)
     /// <summary>
     /// Creates a poison envelope with error metadata.
     /// </summary>
+    /// <param name="message">The original queue message.</param>
+    /// <param name="error">The exception that caused poisoning, or null if no exception occurred.</param>
+    /// <param name="dequeueCount">The number of times the message was dequeued.</param>
+    /// <returns>A poison envelope containing the original message and failure metadata.</returns>
+    /// <remarks>
+    /// When <paramref name="error"/> is null, the ErrorType, ErrorMessage, and ErrorStackTrace
+    /// fields will be null in the resulting envelope. This is expected for scenarios where a message
+    /// is dead-lettered without an exception (e.g., explicit dead-letter, max dequeue count exceeded
+    /// on successful processing that returns Retry).
+    /// </remarks>
     private static PoisonEnvelope CreatePoisonEnvelope(
         QueueMessage message,
         Exception? error,

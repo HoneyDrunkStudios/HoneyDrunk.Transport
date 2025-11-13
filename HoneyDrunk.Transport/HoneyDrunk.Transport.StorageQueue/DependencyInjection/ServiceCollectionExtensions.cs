@@ -39,6 +39,9 @@ public static class ServiceCollectionExtensions
         // Register queue client factory
         services.TryAddSingleton<QueueClientFactory>();
 
+        // Register poison queue mover
+        services.TryAddSingleton<PoisonQueueMover>();
+
         // Register publisher and consumer
         services.TryAddSingleton<ITransportPublisher, StorageQueueSender>();
         services.TryAddSingleton<ITransportConsumer, StorageQueueProcessor>();
@@ -207,9 +210,9 @@ public static class ServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        if (maxConcurrency < 1)
+        if (maxConcurrency < 1 || maxConcurrency > 100)
         {
-            throw new ArgumentOutOfRangeException(nameof(maxConcurrency), "MaxConcurrency must be at least 1");
+            throw new ArgumentOutOfRangeException(nameof(maxConcurrency), "MaxConcurrency must be between 1 and 100");
         }
 
         builder.Services.Configure<StorageQueueOptions>(options =>
@@ -221,20 +224,28 @@ public static class ServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Disables base64 encoding for message payloads.
+    /// Configures the maximum concurrent operations for batch publishing.
     /// </summary>
     /// <param name="builder">The transport builder.</param>
+    /// <param name="maxBatchConcurrency">The maximum batch publish concurrency.</param>
     /// <returns>The transport builder for fluent configuration.</returns>
     /// <remarks>
-    /// Use with caution - disabling base64 encoding may cause issues with binary payloads.
+    /// Default is Min(ProcessorCount * 2, 32). Increase cautiously to avoid Azure Storage rate limits.
     /// </remarks>
-    public static ITransportBuilder WithoutBase64Encoding(this ITransportBuilder builder)
+    public static ITransportBuilder WithBatchPublishConcurrency(
+        this ITransportBuilder builder,
+        int maxBatchConcurrency)
     {
         ArgumentNullException.ThrowIfNull(builder);
 
+        if (maxBatchConcurrency < 1 || maxBatchConcurrency > 128)
+        {
+            throw new ArgumentOutOfRangeException(nameof(maxBatchConcurrency), "MaxBatchPublishConcurrency must be between 1 and 128");
+        }
+
         builder.Services.Configure<StorageQueueOptions>(options =>
         {
-            options.Base64EncodePayload = false;
+            options.MaxBatchPublishConcurrency = maxBatchConcurrency;
         });
 
         return builder;

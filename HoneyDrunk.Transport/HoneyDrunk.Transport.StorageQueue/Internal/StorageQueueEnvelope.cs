@@ -7,7 +7,8 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// </summary>
 /// <remarks>
 /// This class represents the serialized form of a transport envelope that can be
-/// stored in Azure Storage Queue as JSON text.
+/// stored in Azure Storage Queue as JSON text. The payload is base64-encoded to
+/// safely transmit binary data in text format.
 /// </remarks>
 internal sealed class StorageQueueEnvelope
 {
@@ -42,12 +43,6 @@ internal sealed class StorageQueueEnvelope
     public required string MessageType { get; set; }
 
     /// <summary>
-    /// Gets or sets the content type (e.g., "application/json").
-    /// </summary>
-    [JsonPropertyName("contentType")]
-    public string? ContentType { get; set; }
-
-    /// <summary>
     /// Gets or sets the message headers.
     /// </summary>
     [JsonPropertyName("headers")]
@@ -57,7 +52,9 @@ internal sealed class StorageQueueEnvelope
     /// Gets or sets the base64-encoded payload.
     /// </summary>
     /// <remarks>
-    /// The actual message payload is stored as base64 to safely transmit binary data.
+    /// The actual message payload is stored as base64 to safely transmit binary data
+    /// in Azure Storage Queue's text-based format. The payload is always JSON-serialized
+    /// by the transport layer before base64 encoding.
     /// </remarks>
     [JsonPropertyName("payload")]
     public required string PayloadBase64 { get; set; }

@@ -36,15 +36,6 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     public bool CreateIfNotExists { get; set; } = true;
 
     /// <summary>
-    /// Gets or sets a value indicating whether to base64-encode message payloads.
-    /// </summary>
-    /// <remarks>
-    /// Azure Storage Queues support base64 encoding for binary data.
-    /// Default is true to handle arbitrary byte payloads safely.
-    /// </remarks>
-    public bool Base64EncodePayload { get; set; } = true;
-
-    /// <summary>
     /// Gets or sets the message time-to-live (TTL).
     /// </summary>
     /// <remarks>
@@ -122,6 +113,17 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     public TimeSpan MaxPollingInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Gets or sets the maximum concurrent publish operations for batch publishing.
+    /// </summary>
+    /// <remarks>
+    /// Null means use default calculation: Min(ProcessorCount * 2, 32).
+    /// Azure Storage Queue standard tier: ~2,000 ops/sec limit.
+    /// Default is conservative to avoid rate limiting and connection exhaustion.
+    /// </remarks>
+    [Range(1, 128, ErrorMessage = "MaxBatchPublishConcurrency must be between 1 and 128")]
+    public int? MaxBatchPublishConcurrency { get; set; }
+
+    /// <summary>
     /// Validates the configuration options.
     /// </summary>
     /// <param name="validationContext">The validation context.</param>
@@ -134,6 +136,14 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
             yield return new ValidationResult(
                 "Either ConnectionString or AccountEndpoint must be configured",
                 [nameof(ConnectionString), nameof(AccountEndpoint)]);
+        }
+
+        // Validate MaxConcurrency upper bound
+        if (MaxConcurrency > 100)
+        {
+            yield return new ValidationResult(
+                "MaxConcurrency cannot exceed 100 to prevent resource exhaustion",
+                [nameof(MaxConcurrency)]);
         }
 
         // Validate that EmptyQueuePollingInterval is not greater than MaxPollingInterval

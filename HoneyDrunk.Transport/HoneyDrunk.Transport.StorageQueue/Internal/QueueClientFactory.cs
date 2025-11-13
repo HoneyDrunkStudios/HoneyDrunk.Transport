@@ -17,7 +17,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by dependency injection")]
 internal sealed class QueueClientFactory(
     IOptions<StorageQueueOptions> options,
-    ILogger<QueueClientFactory> logger) : IDisposable
+    ILogger<QueueClientFactory> logger) : IAsyncDisposable
 {
     private readonly StorageQueueOptions _options = options.Value;
     private readonly ILogger<QueueClientFactory> _logger = logger;
@@ -124,7 +124,7 @@ internal sealed class QueueClientFactory(
     /// <summary>
     /// Disposes resources used by the factory.
     /// </summary>
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
         // Thread-safe disposal check using Interlocked.Exchange
         // Atomically sets _disposed to true and returns the previous value
@@ -135,7 +135,7 @@ internal sealed class QueueClientFactory(
         }
 
         // Acquire the initialization lock to ensure no concurrent queue client creation
-        _initLock.Wait();
+        await _initLock.WaitAsync();
         try
         {
             // QueueClient instances are not owned by this factory and should not be disposed here

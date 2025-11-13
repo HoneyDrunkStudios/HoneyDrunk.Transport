@@ -16,17 +16,16 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <summary>
 /// Azure Storage Queue implementation of transport consumer.
 /// </summary>
-/// <remarks>
-/// Initializes a new instance of the <see cref="StorageQueueProcessor"/> class.
-/// </remarks>
 /// <param name="queueClientFactory">The queue client factory.</param>
 /// <param name="pipeline">The message processing pipeline.</param>
+/// <param name="poisonQueueMover">The poison queue mover for handling dead-lettered messages.</param>
 /// <param name="options">The storage queue configuration options.</param>
 /// <param name="logger">The logger instance.</param>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by dependency injection")]
 internal sealed class StorageQueueProcessor(
     QueueClientFactory queueClientFactory,
     IMessagePipeline pipeline,
+    PoisonQueueMover poisonQueueMover,
     IOptions<StorageQueueOptions> options,
     ILogger<StorageQueueProcessor> logger) : ITransportConsumer, IAsyncDisposable
 {
@@ -37,9 +36,9 @@ internal sealed class StorageQueueProcessor(
 
     private readonly QueueClientFactory _queueClientFactory = queueClientFactory;
     private readonly IMessagePipeline _pipeline = pipeline;
+    private readonly PoisonQueueMover _poisonMover = poisonQueueMover;
     private readonly StorageQueueOptions _options = options.Value;
     private readonly ILogger<StorageQueueProcessor> _logger = logger;
-    private readonly PoisonQueueMover _poisonMover = new(logger);
     private readonly SemaphoreSlim _startStopLock = new(1, 1);
     private CancellationTokenSource? _cts;
     private Task? _processingTask;
@@ -161,7 +160,7 @@ internal sealed class StorageQueueProcessor(
         finally
         {
             _startStopLock.Dispose();
-            _queueClientFactory.Dispose();
+            await _queueClientFactory.DisposeAsync();
         }
     }
 
@@ -368,17 +367,36 @@ internal sealed class StorageQueueProcessor(
                 else if (result == MessageProcessingResult.DeadLetter)
                 {
                     // Move to poison queue immediately
-                    await _poisonMover.MoveMessageToPoisonQueueAsync(
-                        poisonQueueClient,
-                        message,
-                        null,
-                        message.DequeueCount,
-                        cancellationToken);
+                    // Note: If deletion fails after poison queue insertion, message may be reprocessed
+                    // The PoisonQueueMover includes MessageId which can be used for deduplication
+                    try
+                    {
+                        await _poisonMover.MoveMessageToPoisonQueueAsync(
+                            poisonQueueClient,
+                            message,
+                            null,
+                            message.DequeueCount,
+                            cancellationToken);
 
-                    // Delete from primary queue
-                    await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
+                        // Delete from primary queue only after successful poison queue insertion
+                        await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
 
-                    TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
+                        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
+                    }
+                    catch (Exception poisonEx)
+                    {
+                        if (_logger.IsEnabled(LogLevel.Error))
+                        {
+                            _logger.LogError(
+                                poisonEx,
+                                "Failed to complete dead-letter operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.",
+                                envelope.MessageId);
+                        }
+
+                        // Don't throw - let message become visible again for retry
+                        // Poison queue deduplication should be handled by MessageId
+                        TransportTelemetry.RecordError(activity, poisonEx);
+                    }
                 }
                 else
                 {
@@ -393,16 +411,33 @@ internal sealed class StorageQueueProcessor(
                                 _options.MaxDequeueCount);
                         }
 
-                        await _poisonMover.MoveMessageToPoisonQueueAsync(
-                            poisonQueueClient,
-                            message,
-                            null,
-                            message.DequeueCount,
-                            cancellationToken);
+                        try
+                        {
+                            await _poisonMover.MoveMessageToPoisonQueueAsync(
+                                poisonQueueClient,
+                                message,
+                                null,
+                                message.DequeueCount,
+                                cancellationToken);
 
-                        await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
+                            // Delete from primary queue only after successful poison queue insertion
+                            await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
 
-                        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
+                            TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
+                        }
+                        catch (Exception poisonEx)
+                        {
+                            if (_logger.IsEnabled(LogLevel.Error))
+                            {
+                                _logger.LogError(
+                                    poisonEx,
+                                    "Failed to complete poison queue operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.",
+                                    envelope.MessageId);
+                            }
+
+                            // Don't throw - let message become visible again for retry
+                            TransportTelemetry.RecordError(activity, poisonEx);
+                        }
                     }
                     else
                     {
@@ -479,24 +514,31 @@ internal sealed class StorageQueueProcessor(
         // Apply exponential backoff with jitter
         backoffState.ApplyExponentialBackoff(_options.MaxPollingInterval);
 
-        // Add jitter (±25%)
-        var jitter = (Random.Shared.NextDouble() * 0.5) - 0.25; // -0.25 to +0.25
+        // Add jitter to prevent thundering herd
+        // Random factor ranges from -0.25 to +0.25, producing 75%-125% of base delay
+        var jitter = (Random.Shared.NextDouble() * 0.5) - 0.25;
         var delayMs = backoffState.CurrentPollingInterval.TotalMilliseconds * (1 + jitter);
 
         if (_logger.IsEnabled(LogLevel.Trace))
         {
             _logger.LogTrace(
-                "Consumer {ConsumerId} queue empty, waiting {DelayMs}ms",
+                "Consumer {ConsumerId} queue empty, waiting {DelayMs}ms (base: {BaseMs}ms)",
                 consumerId,
-                delayMs);
+                delayMs,
+                backoffState.CurrentPollingInterval.TotalMilliseconds);
         }
 
         await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
     }
 
     /// <summary>
-    /// Per-consumer backoff state to avoid race conditions in concurrent consumers.
+    /// Per-consumer backoff state to avoid race conditions between concurrent consumers.
     /// </summary>
+    /// <remarks>
+    /// Thread-safety: Each consumer task has its own instance accessed sequentially within
+    /// that consumer's loop. No synchronization needed as methods are never called concurrently
+    /// within the same consumer.
+    /// </remarks>
     private sealed class ConsumerBackoffState(TimeSpan initialPollingInterval)
     {
         private int _consecutiveEmptyReceives;
@@ -504,11 +546,18 @@ internal sealed class StorageQueueProcessor(
 
         public TimeSpan CurrentPollingInterval => _currentPollingInterval;
 
+        /// <summary>
+        /// Increments the empty receive counter.
+        /// </summary>
         public void IncrementEmptyReceive()
         {
             _consecutiveEmptyReceives++;
         }
 
+        /// <summary>
+        /// Applies exponential backoff to the current polling interval.
+        /// </summary>
+        /// <param name="maxPollingInterval">The maximum allowed polling interval.</param>
         public void ApplyExponentialBackoff(TimeSpan maxPollingInterval)
         {
             if (_consecutiveEmptyReceives > 1)
@@ -520,6 +569,10 @@ internal sealed class StorageQueueProcessor(
             }
         }
 
+        /// <summary>
+        /// Resets the backoff state when messages are received.
+        /// </summary>
+        /// <param name="initialPollingInterval">The initial polling interval to reset to.</param>
         public void Reset(TimeSpan initialPollingInterval)
         {
             if (_consecutiveEmptyReceives > 0)
