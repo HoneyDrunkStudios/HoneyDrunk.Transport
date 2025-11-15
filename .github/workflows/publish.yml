@@ -12,12 +12,11 @@ on:
         type: string
 
 permissions:
-  contents: write        # For creating GitHub releases
-  packages: write        # For publishing to NuGet/GitHub Packages
-  id-token: write        # For OIDC authentication (if needed)
+  contents: write
+  packages: write
+  id-token: write
 
 jobs:
-  # Determine version from tag or manual input
   prepare:
     name: Prepare Release
     runs-on: ubuntu-latest
@@ -33,76 +32,30 @@ jobs:
             VERSION="${{ github.event.inputs.version }}"
             VERSION_TAG="v${VERSION}"
           else
-            # Extract version from tag (removes 'v' prefix)
             VERSION="${GITHUB_REF#refs/tags/v}"
-            VERSION_TAG="${GITHUB_REF#refs/tags/}"
+            VERSION_TAG="v${VERSION}"
           fi
-          echo "version=${VERSION}" >>"$GITHUB_OUTPUT"
-          echo "version-tag=${VERSION_TAG}" >>"$GITHUB_OUTPUT"
-          echo "Publishing version: ${VERSION}"
-          echo "Publishing tag: ${VERSION_TAG}"
+          echo "version=$VERSION" >>"$GITHUB_OUTPUT"
+          echo "version-tag=$VERSION_TAG" >>"$GITHUB_OUTPUT"
+          echo "Publishing version: $VERSION"
 
-  # Build, test, pack, and publish all packages
   release:
     name: Build, Pack & Publish
     needs: prepare
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/dotnet-library-release.yml@main
+    with:
+      dotnet-version: '10.0.x'
+      configuration: 'Release'
+      runs-on: 'ubuntu-latest'
+      working-directory: 'HoneyDrunk.Transport'
+      project-path: 'HoneyDrunk.Transport.slnx'
+      package-version: ${{ needs.prepare.outputs.version }}
+      nuget-source: 'https://api.nuget.org/v3/index.json'
+      skip-duplicate: true
+      actions-ref: 'main'
+    secrets:
+      nuget-api-key: ${{ secrets.NUGET_API_KEY }}
 
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Restore
-        run: dotnet restore HoneyDrunk.Transport/HoneyDrunk.Transport.slnx
-
-      - name: Build
-        run: dotnet build HoneyDrunk.Transport/HoneyDrunk.Transport.slnx -c Release --no-restore /p:ContinuousIntegrationBuild=true
-
-      - name: Test
-        run: dotnet test HoneyDrunk.Transport/HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj -c Release --no-build
-
-      - name: Pack HoneyDrunk.Transport
-        run: >
-          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport/HoneyDrunk.Transport.csproj
-          -c Release --no-build -o ./artifacts
-          /p:Version=${{ needs.prepare.outputs.version }}
-          /p:ContinuousIntegrationBuild=true
-
-      - name: Pack HoneyDrunk.Transport.InMemory
-        run: >
-          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj
-          -c Release --no-build -o ./artifacts
-          /p:Version=${{ needs.prepare.outputs.version }}
-          /p:ContinuousIntegrationBuild=true
-
-      - name: Pack HoneyDrunk.Transport.AzureServiceBus
-        run: >
-          dotnet pack HoneyDrunk.Transport/HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj
-          -c Release --no-build -o ./artifacts
-          /p:Version=${{ needs.prepare.outputs.version }}
-          /p:ContinuousIntegrationBuild=true
-
-      - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-packages-${{ needs.prepare.outputs.version }}
-          path: ./artifacts/*.nupkg
-          if-no-files-found: error
-          retention-days: 90
-
-      - name: Publish to NuGet.org
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          dotnet nuget push ./artifacts/*.nupkg --api-key "$NUGET_API_KEY" --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-  # Create GitHub Release
   github-release:
     name: Create GitHub Release
     needs: [prepare, release]
@@ -115,8 +68,6 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.prepare.outputs.version-tag }}
           name: HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
@@ -149,7 +100,6 @@ jobs:
             - [Documentation](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme)
 
             ### 🚀 Quick Start
-
             ```csharp
             using HoneyDrunk.Transport.DependencyInjection;
 
