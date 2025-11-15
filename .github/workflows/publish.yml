@@ -47,7 +47,6 @@ jobs:
       dotnet-version: '10.0.x'
       configuration: 'Release'
       runs-on: 'ubuntu-latest'
-      working-directory: 'HoneyDrunk.Transport'
       project-path: 'HoneyDrunk.Transport.slnx'
       package-version: ${{ needs.prepare.outputs.version }}
       nuget-source: 'https://api.nuget.org/v3/index.json'
