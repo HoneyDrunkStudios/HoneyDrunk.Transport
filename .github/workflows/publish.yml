@@ -38,6 +38,7 @@ jobs:
           echo "version=$VERSION" >>"$GITHUB_OUTPUT"
           echo "version-tag=$VERSION_TAG" >>"$GITHUB_OUTPUT"
           echo "Publishing version: $VERSION"
+          echo "Publishing tag: $VERSION_TAG"
 
   release:
     name: Build, Pack & Publish
