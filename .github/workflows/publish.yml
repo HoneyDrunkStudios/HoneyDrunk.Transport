@@ -33,7 +33,7 @@ jobs:
             VERSION_TAG="v${VERSION}"
           else
             VERSION="${GITHUB_REF#refs/tags/v}"
-            VERSION_TAG="v${VERSION}"
+            VERSION_TAG="${GITHUB_REF#refs/tags/}"
           fi
           echo "version=$VERSION" >>"$GITHUB_OUTPUT"
           echo "version-tag=$VERSION_TAG" >>"$GITHUB_OUTPUT"
