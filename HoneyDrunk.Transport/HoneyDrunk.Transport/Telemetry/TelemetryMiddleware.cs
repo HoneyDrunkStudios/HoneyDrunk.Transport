@@ -14,6 +14,9 @@ public sealed class TelemetryMiddleware : Pipeline.IMessageMiddleware
         Func<Task> next,
         CancellationToken cancellationToken = default)
     {
+        // Check for cancellation before processing
+        cancellationToken.ThrowIfCancellationRequested();
+
         using var activity = TransportTelemetry.StartProcessActivity(envelope, "consumer");
         TransportTelemetry.RecordDeliveryCount(activity, context.DeliveryCount);
 

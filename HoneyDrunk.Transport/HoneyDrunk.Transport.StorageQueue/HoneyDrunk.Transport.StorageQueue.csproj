@@ -26,6 +26,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HoneyDrunk.Transport.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\HoneyDrunk.Transport\HoneyDrunk.Transport.csproj" />
   </ItemGroup>
 

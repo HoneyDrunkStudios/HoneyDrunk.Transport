@@ -25,6 +25,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="HoneyDrunk.Transport.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="HoneyDrunk.Kernel" Version="0.1.2" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.3">
       <PrivateAssets>all</PrivateAssets>

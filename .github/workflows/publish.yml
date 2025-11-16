@@ -43,15 +43,14 @@ jobs:
   release:
     name: Build, Pack & Publish
     needs: prepare
-    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/dotnet-library-release.yml@main
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/release.yml@main
     with:
       dotnet-version: '10.0.x'
       configuration: 'Release'
       runs-on: 'ubuntu-latest'
       project-path: 'HoneyDrunk.Transport/HoneyDrunk.Transport.slnx'
-      package-version: ${{ needs.prepare.outputs.version }}
+      enable-nuget-publish: true
       nuget-source: 'https://api.nuget.org/v3/index.json'
-      skip-duplicate: true
       actions-ref: 'main'
     secrets:
       nuget-api-key: ${{ secrets.NUGET_API_KEY }}
@@ -79,16 +78,19 @@ jobs:
             ### 📦 Packages
 
             **HoneyDrunk.Transport** - Core abstractions and middleware pipeline
+
             ```xml
             <PackageReference Include="HoneyDrunk.Transport" Version="${{ needs.prepare.outputs.version }}" />
             ```
 
             **HoneyDrunk.Transport.InMemory** - In-memory broker for testing
+
             ```xml
             <PackageReference Include="HoneyDrunk.Transport.InMemory" Version="${{ needs.prepare.outputs.version }}" />
             ```
 
             **HoneyDrunk.Transport.AzureServiceBus** - Azure Service Bus implementation
+
             ```xml
             <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="${{ needs.prepare.outputs.version }}" />
             ```
@@ -100,6 +102,7 @@ jobs:
             - [Documentation](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme)
 
             ### 🚀 Quick Start
+
             ```csharp
             using HoneyDrunk.Transport.DependencyInjection;
 
