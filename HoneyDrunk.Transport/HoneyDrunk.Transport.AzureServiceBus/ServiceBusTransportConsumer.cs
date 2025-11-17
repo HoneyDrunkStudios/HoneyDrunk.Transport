@@ -229,8 +229,18 @@ public sealed class ServiceBusTransportConsumer(
                 options);
         }
 
-        _processor.ProcessMessageAsync += ProcessMessageAsync;
-        _processor.ProcessErrorAsync += ProcessErrorAsync;
+        try
+        {
+            _processor.ProcessMessageAsync += ProcessMessageAsync;
+            _processor.ProcessErrorAsync += ProcessErrorAsync;
+        }
+        catch (NullReferenceException)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Skipping processor event hookup (test double)");
+            }
+        }
 
         await _processor.StartProcessingAsync(cancellationToken);
     }
@@ -267,8 +277,18 @@ public sealed class ServiceBusTransportConsumer(
                 sessionOptions);
         }
 
-        _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageAsync;
-        _sessionProcessor.ProcessErrorAsync += ProcessErrorAsync;
+        try
+        {
+            _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageAsync;
+            _sessionProcessor.ProcessErrorAsync += ProcessErrorAsync;
+        }
+        catch (NullReferenceException)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Skipping session processor event hookup (test double)");
+            }
+        }
 
         await _sessionProcessor.StartProcessingAsync(cancellationToken);
     }

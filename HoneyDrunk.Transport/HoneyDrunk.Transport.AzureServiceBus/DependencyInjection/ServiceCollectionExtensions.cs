@@ -77,6 +77,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITransportPublisher, ServiceBusTransportPublisher>();
         services.TryAddSingleton<ITransportConsumer, ServiceBusTransportConsumer>();
 
+        // Register default blob fallback store (internal) for DI resolution
+        services.TryAddSingleton<Internal.IBlobFallbackStore, Internal.DefaultBlobFallbackStore>();
+
         return builder;
     }
 

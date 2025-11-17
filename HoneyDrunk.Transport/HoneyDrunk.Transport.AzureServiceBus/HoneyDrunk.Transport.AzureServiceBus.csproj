@@ -8,11 +8,11 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.1.0: Initial release with Azure Service Bus publisher and consumer, topic subscription management, session support, envelope mapping, and telemetry integration.</PackageReleaseNotes>
-    <PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session</PackageTags>
+	<PackageReleaseNotes>v0.1.1: InitialAdded support for optional blob storage for failed messages in Azure Service Bus.</PackageReleaseNotes>
+	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport</RepositoryUrl>

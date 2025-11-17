@@ -1,8 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
-using System.Text;
-using System.Text.Json;
 using Azure.Messaging.ServiceBus;
-using Azure.Storage.Blobs;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
@@ -26,14 +23,27 @@ namespace HoneyDrunk.Transport.AzureServiceBus;
 public sealed class ServiceBusTransportPublisher(
     ServiceBusClient client,
     IOptions<AzureServiceBusOptions> options,
-    ILogger<ServiceBusTransportPublisher> logger) : ITransportPublisher, IAsyncDisposable
+    ILogger<ServiceBusTransportPublisher> logger)
+    : ITransportPublisher, IAsyncDisposable
 {
     private readonly ServiceBusClient _client = client;
     private readonly IOptions<AzureServiceBusOptions> _options = options;
     private readonly ILogger<ServiceBusTransportPublisher> _logger = logger;
+    private readonly Internal.IBlobFallbackStore? _blobFallbackStore;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private ServiceBusSender? _sender;
     private bool _disposed;
+
+    // Internal testing/DI constructor allowing injection of fallback store
+    internal ServiceBusTransportPublisher(
+        ServiceBusClient client,
+        IOptions<AzureServiceBusOptions> options,
+        ILogger<ServiceBusTransportPublisher> logger,
+        Internal.IBlobFallbackStore? blobFallbackStore)
+        : this(client, options, logger)
+    {
+        _blobFallbackStore = blobFallbackStore;
+    }
 
     /// <inheritdoc />
     public async Task PublishAsync(
@@ -339,7 +349,7 @@ public sealed class ServiceBusTransportPublisher(
         }
     }
 
-    private async Task<Uri> SaveToBlobFallbackAsync(
+    private Task<Uri> SaveToBlobFallbackAsync(
         ITransportEnvelope envelope,
         IEndpointAddress destination,
         Exception failure,
@@ -351,53 +361,7 @@ public sealed class ServiceBusTransportPublisher(
             throw new InvalidOperationException("Blob fallback is not enabled.");
         }
 
-        BlobServiceClient blobServiceClient;
-        if (!string.IsNullOrWhiteSpace(fallback.ConnectionString))
-        {
-            blobServiceClient = new BlobServiceClient(fallback.ConnectionString);
-        }
-        else if (!string.IsNullOrWhiteSpace(fallback.AccountUrl))
-        {
-            blobServiceClient = new BlobServiceClient(new Uri(fallback.AccountUrl), new Azure.Identity.DefaultAzureCredential());
-        }
-        else
-        {
-            throw new InvalidOperationException("Blob fallback requires either ConnectionString or AccountUrl to be configured.");
-        }
-
-        var container = blobServiceClient.GetBlobContainerClient(fallback.ContainerName);
-        await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
-
-        var now = DateTimeOffset.UtcNow;
-        var prefix = string.IsNullOrWhiteSpace(fallback.BlobPrefix) ? "servicebus" : fallback.BlobPrefix!.Trim('/');
-        var addressSafe = destination.Address.Replace('/', '_');
-        var blobName = $"{prefix}/{addressSafe}/{now:yyyy/MM/dd/HH}/{envelope.MessageId}.json";
-
-        var record = new Internal.BlobFallbackRecord
-        {
-            MessageId = envelope.MessageId,
-            CorrelationId = envelope.CorrelationId,
-            CausationId = envelope.CausationId,
-            Timestamp = envelope.Timestamp,
-            MessageType = envelope.MessageType,
-            Headers = new Dictionary<string, string>(envelope.Headers),
-            PayloadBase64 = Convert.ToBase64String(envelope.Payload.ToArray()),
-            Destination = new Internal.BlobFallbackDestination
-            {
-                Address = destination.Address,
-                Properties = new Dictionary<string, string>(destination.Properties)
-            },
-            FailureTimestamp = now,
-            FailureExceptionType = failure.GetType().FullName ?? failure.GetType().Name,
-            FailureMessage = failure.Message
-        };
-
-        var json = JsonSerializer.Serialize(record);
-        using var content = new MemoryStream(Encoding.UTF8.GetBytes(json));
-        var blob = container.GetBlobClient(blobName);
-
-        await blob.UploadAsync(content, overwrite: true, cancellationToken);
-
-        return blob.Uri;
+        var store = _blobFallbackStore ?? new Internal.DefaultBlobFallbackStore();
+        return store.SaveAsync(envelope, destination, failure, fallback, cancellationToken);
     }
 }
