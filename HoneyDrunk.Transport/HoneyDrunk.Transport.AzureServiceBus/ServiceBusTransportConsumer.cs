@@ -229,16 +229,22 @@ public sealed class ServiceBusTransportConsumer(
                 options);
         }
 
+        // NOTE: Event handler registration is wrapped in try-catch for testability.
+        // Azure SDK types are sealed with non-virtual event handlers that cannot be properly
+        // mocked with NSubstitute. The alternative would be introducing wrapper abstractions
+        // which adds unnecessary complexity. In production, this will never throw.
         try
         {
             _processor.ProcessMessageAsync += ProcessMessageAsync;
             _processor.ProcessErrorAsync += ProcessErrorAsync;
         }
-        catch (NullReferenceException)
+        catch (NullReferenceException) when (_processor.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly") == true)
         {
+            // Test double detected - event handlers can't be registered on NSubstitute mocks
+            // of sealed types. This is acceptable for lifecycle testing.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Skipping processor event hookup (test double)");
+                _logger.LogDebug("Skipping processor event hookup (test substitute detected)");
             }
         }
 
@@ -277,16 +283,22 @@ public sealed class ServiceBusTransportConsumer(
                 sessionOptions);
         }
 
+        // NOTE: Event handler registration is wrapped in try-catch for testability.
+        // Azure SDK types are sealed with non-virtual event handlers that cannot be properly
+        // mocked with NSubstitute. The alternative would be introducing wrapper abstractions
+        // which adds unnecessary complexity. In production, this will never throw.
         try
         {
             _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageAsync;
             _sessionProcessor.ProcessErrorAsync += ProcessErrorAsync;
         }
-        catch (NullReferenceException)
+        catch (NullReferenceException) when (_sessionProcessor.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly") == true)
         {
+            // Test double detected - event handlers can't be registered on NSubstitute mocks
+            // of sealed types. This is acceptable for lifecycle testing.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Skipping session processor event hookup (test double)");
+                _logger.LogDebug("Skipping session processor event hookup (test substitute detected)");
             }
         }
 

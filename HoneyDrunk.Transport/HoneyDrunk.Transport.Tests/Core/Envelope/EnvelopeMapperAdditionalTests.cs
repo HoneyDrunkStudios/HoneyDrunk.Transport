@@ -82,7 +82,7 @@ public sealed class EnvelopeMapperAdditionalTests
         using var listener = new ActivityListener
         {
             ShouldListenTo = source => source.Name == TransportTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData
+            Sample = (ref _) => ActivitySamplingResult.AllData
         };
         ActivitySource.AddActivityListener(listener);
 
