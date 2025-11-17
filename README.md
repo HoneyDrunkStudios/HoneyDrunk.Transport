@@ -19,6 +19,7 @@ HoneyDrunk.Transport is the **messaging backbone** of HoneyDrunk.OS ("the Hive")
 - ✅ **Transactional Outbox** - Exactly-once processing with database transactions
 - ✅ **Kernel Integration** - Uses `IClock`, `IIdGenerator`, `IKernelContext` for deterministic, testable messaging
 - ✅ **Framework Integration** - Extends Microsoft.Extensions, integrates seamlessly with ASP.NET Core
+- ✅ **Blob Fallback for Service Bus** - Persist failed publishes to Azure Blob Storage for later replay
 
 ---
 
@@ -64,6 +65,12 @@ builder.Services.AddHoneyDrunkServiceBusTransport(options =>
     options.EntityType = ServiceBusEntityType.Queue;
     options.Address = "my-queue";
     options.AutoComplete = true;
+
+    // Optional: enable Blob fallback for publish failures
+    // options.BlobFallback.Enabled = true;
+    // options.BlobFallback.ConnectionString = builder.Configuration["Blob:ConnectionString"];
+    // options.BlobFallback.ContainerName = "transport-fallback";
+    // options.BlobPrefix = "servicebus";
 });
 
 // Option 2: Add Azure Storage Queue transport
@@ -253,6 +260,24 @@ public class OrderService(IOutboxStore outboxStore, IDbContext dbContext)
 }
 ```
 
+### Azure Service Bus Blob Fallback (optional)
+
+```csharp
+// Enable fallback to Azure Blob Storage when publish fails
+builder.Services.AddHoneyDrunkServiceBusTransport(options =>
+{
+    options.ConnectionString = builder.Configuration["ServiceBus:ConnectionString"];    
+    options.Address = "orders";
+
+    options.BlobFallback.Enabled = true;
+    options.BlobFallback.ConnectionString = builder.Configuration["Blob:ConnectionString"]; // or use AccountUrl with MSI
+    options.BlobFallback.ContainerName = "transport-fallback";
+    options.BlobFallback.BlobPrefix = "servicebus";
+});
+```
+
+Behavior: on publish exception, the publisher saves the full envelope + destination metadata to blob JSON and suppresses the error if the upload succeeds. If blob upload fails too, the original error is rethrown.
+
 ### Azure Storage Queue with Poison Handling
 
 ```csharp
@@ -327,33 +352,6 @@ public class PaymentProcessingHandler : IMessageHandler<ProcessPaymentCommand>
         }
     }
 }
-
-// Configuration
-builder.Services
-    .AddHoneyDrunkTransportStorageQueue(
-        connectionString: config["StorageQueue:ConnectionString"]!,
-        queueName: "payments")
-    .WithMaxDequeueCount(5) // Move to poison after 5 attempts
-    .WithVisibilityTimeout(TimeSpan.FromMinutes(2)) // Hide message for 2 minutes during processing
-    .WithPoisonQueue("payments-poison"); // Custom poison queue name
-
-// Monitoring poison queue
-// Poison messages include original message + error metadata:
-// {
-//   "originalMessageId": "msg-123",
-//   "originalMessage": "{...}", // Full original message
-//   "dequeueCount": 5,
-//   "firstFailureTimestamp": "2025-01-15T10:00:00Z",
-//   "lastFailureTimestamp": "2025-01-15T10:15:00Z",
-//   "errorType": "PaymentGatewayException",
-//   "errorMessage": "Gateway timeout",
-//   "errorStackTrace": "...",
-//   "metadata": {
-//     "popReceipt": "...",
-//     "insertedOn": "2025-01-15T10:00:00Z",
-//     "expiresOn": "2025-01-22T10:00:00Z"
-//   }
-// }
 ```
 
 ---
@@ -468,6 +466,12 @@ builder.Services.AddHoneyDrunkServiceBusTransport(options =>
     // Dead Letter
     options.EnableDeadLetterQueue = true;
     options.MaxDeliveryCount = 10;
+    
+    // Blob fallback (optional)
+    // options.BlobFallback.Enabled = true;
+    // options.BlobFallback.ConnectionString = config["Blob:ConnectionString"]; // or AccountUrl + MSI
+    // options.BlobFallback.ContainerName = "transport-fallback";
+    // options.BlobFallback.BlobPrefix = "servicebus";
 });
 ```
 

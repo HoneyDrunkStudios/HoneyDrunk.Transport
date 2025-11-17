@@ -1,5 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text;
+using System.Text.Json;
 using Azure.Messaging.ServiceBus;
+using Azure.Storage.Blobs;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
@@ -91,6 +94,35 @@ public sealed class ServiceBusTransportPublisher(
                     envelope.MessageId);
             }
 
+            // Attempt Blob Storage fallback if configured
+            if (_options.Value.BlobFallback.Enabled)
+            {
+                try
+                {
+                    var blobUri = await SaveToBlobFallbackAsync(envelope, destination, ex, cancellationToken);
+
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning(
+                            "Message {MessageId} persisted to Blob fallback at {BlobUri}",
+                            envelope.MessageId,
+                            blobUri);
+                    }
+
+                    // Swallow the publish exception since the message is durably stored
+                    return;
+                }
+                catch (Exception blobEx)
+                {
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
+                    }
+
+                    // If fallback fails, rethrow original exception to signal publish failure
+                }
+            }
+
             throw;
         }
     }
@@ -105,7 +137,8 @@ public sealed class ServiceBusTransportPublisher(
 
         await EnsureInitializedAsync(cancellationToken);
 
-        var messages = envelopes
+        var envelopeList = envelopes.ToList();
+        var messages = envelopeList
             .Select(envelope =>
             {
                 var message = EnvelopeMapper.ToServiceBusMessage(envelope);
@@ -148,6 +181,38 @@ public sealed class ServiceBusTransportPublisher(
             if (_logger.IsEnabled(LogLevel.Error))
             {
                 _logger.LogError(ex, "Failed to publish batch");
+            }
+
+            // Best-effort: persist each envelope to Blob fallback when enabled
+            if (_options.Value.BlobFallback.Enabled)
+            {
+                var attempts = new List<Exception>();
+                foreach (var env in envelopeList)
+                {
+                    try
+                    {
+                        await SaveToBlobFallbackAsync(env, destination, ex, cancellationToken);
+                    }
+                    catch (Exception blobEx)
+                    {
+                        attempts.Add(blobEx);
+                    }
+                }
+
+                if (attempts.Count == 0)
+                {
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning("Batch persisted to Blob fallback");
+                    }
+
+                    return; // Suppress publish error since all messages were saved
+                }
+
+                if (_logger.IsEnabled(LogLevel.Error))
+                {
+                    _logger.LogError("One or more blob fallback uploads failed for the batch");
+                }
             }
 
             throw;
@@ -272,5 +337,67 @@ public sealed class ServiceBusTransportPublisher(
         {
             _initLock.Release();
         }
+    }
+
+    private async Task<Uri> SaveToBlobFallbackAsync(
+        ITransportEnvelope envelope,
+        IEndpointAddress destination,
+        Exception failure,
+        CancellationToken cancellationToken)
+    {
+        var fallback = _options.Value.BlobFallback;
+        if (!fallback.Enabled)
+        {
+            throw new InvalidOperationException("Blob fallback is not enabled.");
+        }
+
+        BlobServiceClient blobServiceClient;
+        if (!string.IsNullOrWhiteSpace(fallback.ConnectionString))
+        {
+            blobServiceClient = new BlobServiceClient(fallback.ConnectionString);
+        }
+        else if (!string.IsNullOrWhiteSpace(fallback.AccountUrl))
+        {
+            blobServiceClient = new BlobServiceClient(new Uri(fallback.AccountUrl), new Azure.Identity.DefaultAzureCredential());
+        }
+        else
+        {
+            throw new InvalidOperationException("Blob fallback requires either ConnectionString or AccountUrl to be configured.");
+        }
+
+        var container = blobServiceClient.GetBlobContainerClient(fallback.ContainerName);
+        await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var prefix = string.IsNullOrWhiteSpace(fallback.BlobPrefix) ? "servicebus" : fallback.BlobPrefix!.Trim('/');
+        var addressSafe = destination.Address.Replace('/', '_');
+        var blobName = $"{prefix}/{addressSafe}/{now:yyyy/MM/dd/HH}/{envelope.MessageId}.json";
+
+        var record = new Internal.BlobFallbackRecord
+        {
+            MessageId = envelope.MessageId,
+            CorrelationId = envelope.CorrelationId,
+            CausationId = envelope.CausationId,
+            Timestamp = envelope.Timestamp,
+            MessageType = envelope.MessageType,
+            Headers = new Dictionary<string, string>(envelope.Headers),
+            PayloadBase64 = Convert.ToBase64String(envelope.Payload.ToArray()),
+            Destination = new Internal.BlobFallbackDestination
+            {
+                Address = destination.Address,
+                Properties = new Dictionary<string, string>(destination.Properties)
+            },
+            FailureTimestamp = now,
+            FailureExceptionType = failure.GetType().FullName ?? failure.GetType().Name,
+            FailureMessage = failure.Message
+        };
+
+        var json = JsonSerializer.Serialize(record);
+        using var content = new MemoryStream(Encoding.UTF8.GetBytes(json));
+        var blob = container.GetBlobClient(blobName);
+
+        await blob.UploadAsync(content, overwrite: true, cancellationToken);
+
+        return blob.Uri;
     }
 }

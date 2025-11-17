@@ -1460,3 +1460,69 @@ app.Run();
 ```
 
 **For more details on concurrency tuning, see:** `docs/STORAGE_QUEUE_CONCURRENCY.md`
+
+---
+
+## 🛡️ HoneyDrunk.Transport.AzureServiceBus — Blob Storage Fallback
+
+When publishing to Azure Service Bus fails (e.g., transient outage, permission issues), the publisher can persist the full envelope and destination metadata to Azure Blob Storage so the message isn’t lost and can be replayed later.
+
+### Enable and Configure
+
+```csharp
+services.AddHoneyDrunkServiceBusTransport(options =>
+{
+    options.ConnectionString = configuration["AzureServiceBus:ConnectionString"];
+    options.Address = "orders";
+
+    // Enable Blob fallback via options
+    options.BlobFallback.Enabled = true;
+    options.BlobFallback.ConnectionString = configuration["Blob:ConnectionString"]; // or use AccountUrl
+    options.BlobFallback.AccountUrl = configuration["Blob:AccountUrl"];           // used with DefaultAzureCredential
+    options.BlobFallback.ContainerName = "transport-fallback";
+    options.BlobFallback.BlobPrefix = "servicebus"; // optional folder prefix
+})
+// Or via fluent configuration
+.WithBlobFallback(fb =>
+{
+    fb.Enabled = true;
+    fb.ConnectionString = configuration["Blob:ConnectionString"];
+    fb.ContainerName = "transport-fallback";
+    fb.BlobPrefix = "servicebus";
+});
+```
+
+### Behavior
+- On publish exception, the publisher writes a JSON record to the configured container and suppresses the exception if the blob upload succeeds.
+- If the blob upload also fails, the original publish exception is re-thrown.
+- Batch publishing will persist each envelope individually; if all save, the error is suppressed.
+
+### Blob Naming
+`{prefix}/{address}/{yyyy/MM/dd/HH}/{MessageId}.json`
+
+Example: `servicebus/orders/2025/01/15/10/01FZ8E1Y3M2R7R5K62YB9S6Q2G.json`
+
+### Blob Record Shape
+```json
+{
+  "messageId": "...",
+  "correlationId": "...",
+  "causationId": "...",
+  "timestamp": "2025-01-15T10:15:00Z",
+  "messageType": "Namespace.Type, Assembly",
+  "headers": { "key": "value" },
+  "payload": "<base64>",
+  "destination": {
+    "address": "orders",
+    "properties": { "PartitionKey": "...", "SessionId": "..." }
+  },
+  "failureAt": "2025-01-15T10:16:03Z",
+  "failureType": "Azure.Messaging.ServiceBus.ServiceBusException",
+  "failureMessage": "..."
+}
+```
+
+### Operations Guidance
+- Set a lifecycle policy on the container if you want automatic cleanup (e.g., delete after 30 days).
+- Replaying is application-specific: list blobs by prefix, deserialize the JSON, republish via `ITransportPublisher`, then delete the blob on success.
+- Sensitive data: payload is stored base64-encoded; apply encryption-at-rest and consider customer-managed keys if needed.
