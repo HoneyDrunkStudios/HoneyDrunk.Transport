@@ -27,10 +27,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         Action<TransportCoreOptions>? configure = null)
     {
-        // Register Kernel defaults (Clock, IdGenerator, Context, Metrics)
         services.AddKernelDefaults();
-
-        // Configure options
         if (configure != null)
         {
             services.Configure(configure);
@@ -40,38 +37,27 @@ public static class ServiceCollectionExtensions
             services.Configure<TransportCoreOptions>(_ => { });
         }
 
-        // Register kernel context factory
         services.TryAddSingleton<IKernelContextFactory, KernelContextFactory>();
-
-        // Register envelope factory
         services.TryAddSingleton<EnvelopeFactory>();
-
-        // Register default serializer
         services.TryAddSingleton<IMessageSerializer, JsonMessageSerializer>();
-
-        // Register pipeline
         services.TryAddSingleton<IMessagePipeline, MessagePipeline>();
-
-        // Register middleware collection
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMessageMiddleware, CorrelationMiddleware>());
 
-        // Conditionally add telemetry and logging middleware
         services.AddSingleton<IMessageMiddleware>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<TransportCoreOptions>>().Value;
-            return options.EnableTelemetry
-                ? new TelemetryMiddleware()
-                : new NoOpMiddleware();
+            return options.EnableTelemetry ? new TelemetryMiddleware() : new NoOpMiddleware();
         });
 
         services.AddSingleton<IMessageMiddleware>(sp =>
         {
             var options = sp.GetRequiredService<IOptions<TransportCoreOptions>>().Value;
             var logger = sp.GetRequiredService<Microsoft.Extensions.Logging.ILogger<LoggingMiddleware>>();
-            return options.EnableLogging
-                ? new LoggingMiddleware(logger)
-                : new NoOpMiddleware();
+            return options.EnableLogging ? new LoggingMiddleware(logger) : new NoOpMiddleware();
         });
+
+        // Register default error handling strategy if none supplied
+        services.TryAddSingleton<IErrorHandlingStrategy, DefaultErrorHandlingStrategy>();
 
         return new TransportBuilder(services);
     }

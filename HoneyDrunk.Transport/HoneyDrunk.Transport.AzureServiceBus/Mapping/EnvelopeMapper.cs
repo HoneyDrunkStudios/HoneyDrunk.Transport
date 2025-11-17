@@ -67,13 +67,14 @@ public static class EnvelopeMapper
                 property => property.Key,
                 property => property.Value?.ToString() ?? string.Empty);
 
-        // Parse timestamp
+        // Parse timestamp - use separate variable to avoid TryParse overwriting fallback
         var timestamp = DateTimeOffset.UtcNow;
         if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue)
             && timestampValue is string timestampStr
-            && DateTimeOffset.TryParse(timestampStr, out timestamp))
+            && DateTimeOffset.TryParse(timestampStr, out var parsedTimestamp))
         {
-            // Successfully parsed timestamp - it's already assigned to 'timestamp' by TryParse
+            // Successfully parsed - use parsed value
+            timestamp = parsedTimestamp;
         }
 
         // If parsing fails or property doesn't exist, timestamp remains DateTimeOffset.UtcNow (fallback)

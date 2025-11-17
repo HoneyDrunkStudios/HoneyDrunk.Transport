@@ -21,6 +21,9 @@ public sealed class CorrelationMiddleware(IKernelContextFactory contextFactory) 
         Func<Task> next,
         CancellationToken cancellationToken = default)
     {
+        // Check for cancellation before processing
+        cancellationToken.ThrowIfCancellationRequested();
+
         // Create kernel context from envelope
         var kernelContext = _contextFactory.CreateFromEnvelope(envelope, cancellationToken);
 

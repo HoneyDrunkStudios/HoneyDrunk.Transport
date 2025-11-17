@@ -46,4 +46,10 @@ public sealed class AzureServiceBusOptions : TransportOptions
     /// Gets or sets the maximum delivery count before moving to dead letter queue.
     /// </summary>
     public int MaxDeliveryCount { get; set; } = 10;
+
+    /// <summary>
+    /// Gets or sets the Blob Storage fallback options. When enabled, messages that fail to publish
+    /// will be persisted to Blob Storage for later replay.
+    /// </summary>
+    public BlobFallbackOptions BlobFallback { get; set; } = new();
 }

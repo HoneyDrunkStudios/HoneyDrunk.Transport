@@ -23,14 +23,27 @@ namespace HoneyDrunk.Transport.AzureServiceBus;
 public sealed class ServiceBusTransportPublisher(
     ServiceBusClient client,
     IOptions<AzureServiceBusOptions> options,
-    ILogger<ServiceBusTransportPublisher> logger) : ITransportPublisher, IAsyncDisposable
+    ILogger<ServiceBusTransportPublisher> logger)
+    : ITransportPublisher, IAsyncDisposable
 {
     private readonly ServiceBusClient _client = client;
     private readonly IOptions<AzureServiceBusOptions> _options = options;
     private readonly ILogger<ServiceBusTransportPublisher> _logger = logger;
+    private readonly Internal.IBlobFallbackStore? _blobFallbackStore;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private ServiceBusSender? _sender;
     private bool _disposed;
+
+    // Internal testing/DI constructor allowing injection of fallback store
+    internal ServiceBusTransportPublisher(
+        ServiceBusClient client,
+        IOptions<AzureServiceBusOptions> options,
+        ILogger<ServiceBusTransportPublisher> logger,
+        Internal.IBlobFallbackStore? blobFallbackStore)
+        : this(client, options, logger)
+    {
+        _blobFallbackStore = blobFallbackStore;
+    }
 
     /// <inheritdoc />
     public async Task PublishAsync(
@@ -91,6 +104,35 @@ public sealed class ServiceBusTransportPublisher(
                     envelope.MessageId);
             }
 
+            // Attempt Blob Storage fallback if configured
+            if (_options.Value.BlobFallback.Enabled)
+            {
+                try
+                {
+                    var blobUri = await SaveToBlobFallbackAsync(envelope, destination, ex, cancellationToken);
+
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning(
+                            "Message {MessageId} persisted to Blob fallback at {BlobUri}",
+                            envelope.MessageId,
+                            blobUri);
+                    }
+
+                    // Swallow the publish exception since the message is durably stored
+                    return;
+                }
+                catch (Exception blobEx)
+                {
+                    if (_logger.IsEnabled(LogLevel.Error))
+                    {
+                        _logger.LogError(blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
+                    }
+
+                    // If fallback fails, rethrow original exception to signal publish failure
+                }
+            }
+
             throw;
         }
     }
@@ -105,7 +147,8 @@ public sealed class ServiceBusTransportPublisher(
 
         await EnsureInitializedAsync(cancellationToken);
 
-        var messages = envelopes
+        var envelopeList = envelopes.ToList();
+        var messages = envelopeList
             .Select(envelope =>
             {
                 var message = EnvelopeMapper.ToServiceBusMessage(envelope);
@@ -148,6 +191,38 @@ public sealed class ServiceBusTransportPublisher(
             if (_logger.IsEnabled(LogLevel.Error))
             {
                 _logger.LogError(ex, "Failed to publish batch");
+            }
+
+            // Best-effort: persist each envelope to Blob fallback when enabled
+            if (_options.Value.BlobFallback.Enabled)
+            {
+                var attempts = new List<Exception>();
+                foreach (var env in envelopeList)
+                {
+                    try
+                    {
+                        await SaveToBlobFallbackAsync(env, destination, ex, cancellationToken);
+                    }
+                    catch (Exception blobEx)
+                    {
+                        attempts.Add(blobEx);
+                    }
+                }
+
+                if (attempts.Count == 0)
+                {
+                    if (_logger.IsEnabled(LogLevel.Warning))
+                    {
+                        _logger.LogWarning("Batch persisted to Blob fallback");
+                    }
+
+                    return; // Suppress publish error since all messages were saved
+                }
+
+                if (_logger.IsEnabled(LogLevel.Error))
+                {
+                    _logger.LogError("One or more blob fallback uploads failed for the batch");
+                }
             }
 
             throw;
@@ -272,5 +347,21 @@ public sealed class ServiceBusTransportPublisher(
         {
             _initLock.Release();
         }
+    }
+
+    private Task<Uri> SaveToBlobFallbackAsync(
+        ITransportEnvelope envelope,
+        IEndpointAddress destination,
+        Exception failure,
+        CancellationToken cancellationToken)
+    {
+        var fallback = _options.Value.BlobFallback;
+        if (!fallback.Enabled)
+        {
+            throw new InvalidOperationException("Blob fallback is not enabled.");
+        }
+
+        var store = _blobFallbackStore ?? new Internal.DefaultBlobFallbackStore();
+        return store.SaveAsync(envelope, destination, failure, fallback, cancellationToken);
     }
 }

@@ -14,12 +14,13 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// </remarks>
 /// <param name="options">The storage queue configuration options.</param>
 /// <param name="logger">The logger instance.</param>
+/// <exception cref="InvalidOperationException">Thrown when neither ConnectionString nor AccountEndpoint is configured.</exception>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by dependency injection")]
 internal sealed class QueueClientFactory(
     IOptions<StorageQueueOptions> options,
     ILogger<QueueClientFactory> logger) : IAsyncDisposable
 {
-    private readonly StorageQueueOptions _options = options.Value;
+    private readonly StorageQueueOptions _options = ValidateOptions(options.Value);
     private readonly ILogger<QueueClientFactory> _logger = logger;
     private readonly SemaphoreSlim _initLock = new(1, 1);
     private QueueClient? _primaryQueueClient;
@@ -149,6 +150,17 @@ internal sealed class QueueClientFactory(
             _initLock.Release();
             _initLock.Dispose();
         }
+    }
+
+    private static StorageQueueOptions ValidateOptions(StorageQueueOptions options)
+    {
+        if (string.IsNullOrEmpty(options.ConnectionString) && options.AccountEndpoint == null)
+        {
+            throw new InvalidOperationException(
+                "Either ConnectionString or AccountEndpoint must be configured");
+        }
+
+        return options;
     }
 
     /// <summary>

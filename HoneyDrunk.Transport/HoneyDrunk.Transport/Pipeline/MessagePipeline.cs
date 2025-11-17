@@ -55,6 +55,11 @@ public sealed class MessagePipeline(
 
             return MessageProcessingResult.Success;
         }
+        catch (OperationCanceledException)
+        {
+            // Cancellation is special - re-throw to allow caller to handle
+            throw;
+        }
         catch (MessageHandlerException ex)
         {
             if (_logger.IsEnabled(LogLevel.Error))
@@ -97,6 +102,8 @@ public sealed class MessagePipeline(
         // The final handler in the pipeline
         Func<Task> handler = async () =>
         {
+            // Check cancellation before invoking handler
+            cancellationToken.ThrowIfCancellationRequested();
             await InvokeMessageHandlerAsync(envelope, context, cancellationToken);
         };
 

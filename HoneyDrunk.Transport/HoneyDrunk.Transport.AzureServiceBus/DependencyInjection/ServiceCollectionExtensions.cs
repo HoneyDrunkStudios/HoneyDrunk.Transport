@@ -77,6 +77,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITransportPublisher, ServiceBusTransportPublisher>();
         services.TryAddSingleton<ITransportConsumer, ServiceBusTransportConsumer>();
 
+        // Register default blob fallback store (internal) for DI resolution
+        services.TryAddSingleton<Internal.IBlobFallbackStore, Internal.DefaultBlobFallbackStore>();
+
         return builder;
     }
 
@@ -131,7 +134,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="builder">The transport builder.</param>
     /// <param name="subscriptionName">The subscription name.</param>
-    /// <returns>The transport builder for additional configuration.</returns>
+    /// <returns>The configured transport builder.</returns>
     public static ITransportBuilder WithTopicSubscription(
         this ITransportBuilder builder,
         string subscriptionName)
@@ -149,7 +152,7 @@ public static class ServiceCollectionExtensions
     /// Enables session support for ordered message processing.
     /// </summary>
     /// <param name="builder">The transport builder.</param>
-    /// <returns>The transport builder for additional configuration.</returns>
+    /// <returns>The configured transport builder.</returns>
     public static ITransportBuilder WithSessions(this ITransportBuilder builder)
     {
         builder.Services.Configure<AzureServiceBusOptions>(options =>
@@ -165,7 +168,7 @@ public static class ServiceCollectionExtensions
     /// </summary>
     /// <param name="builder">The transport builder.</param>
     /// <param name="configure">Configuration action for retry options.</param>
-    /// <returns>The transport builder for additional configuration.</returns>
+    /// <returns>The configured transport builder.</returns>
     public static ITransportBuilder WithRetry(
         this ITransportBuilder builder,
         Action<Configuration.ServiceBusRetryOptions> configure)
@@ -173,6 +176,25 @@ public static class ServiceCollectionExtensions
         builder.Services.Configure<AzureServiceBusOptions>(options =>
         {
             configure(options.ServiceBusRetry);
+        });
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Enables Blob Storage fallback for publish failures and applies configuration.
+    /// </summary>
+    /// <param name="builder">The transport builder to configure.</param>
+    /// <param name="configure">Action that configures Blob fallback options.</param>
+    /// <returns>The configured transport builder.</returns>
+    public static ITransportBuilder WithBlobFallback(
+        this ITransportBuilder builder,
+        Action<BlobFallbackOptions> configure)
+    {
+        builder.Services.Configure<AzureServiceBusOptions>(options =>
+        {
+            configure(options.BlobFallback);
+            options.BlobFallback.Enabled = true;
         });
 
         return builder;

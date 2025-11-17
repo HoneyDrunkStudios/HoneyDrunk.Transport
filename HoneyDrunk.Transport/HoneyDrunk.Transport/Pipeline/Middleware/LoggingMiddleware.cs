@@ -21,6 +21,9 @@ public sealed class LoggingMiddleware(ILogger<LoggingMiddleware> logger) : IMess
         Func<Task> next,
         CancellationToken cancellationToken = default)
     {
+        // Check for cancellation before processing
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (_logger.IsEnabled(LogLevel.Information))
         {
             _logger.LogInformation(

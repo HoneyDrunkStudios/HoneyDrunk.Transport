@@ -25,6 +25,9 @@ public sealed class InMemoryTransportPublisher(
         IEndpointAddress destination,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(envelope);
+        ArgumentNullException.ThrowIfNull(destination);
+
         using var activity = TransportTelemetry.StartPublishActivity(envelope, destination);
 
         try
