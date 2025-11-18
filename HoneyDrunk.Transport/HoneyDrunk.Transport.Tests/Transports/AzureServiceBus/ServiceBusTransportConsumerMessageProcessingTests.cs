@@ -116,9 +116,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         var after = DateTimeOffset.UtcNow.AddSeconds(1);
 
         // Should use current UtcNow when timestamp not provided
-        Assert.True(
-            envelope.Timestamp >= before && envelope.Timestamp <= after,
-            $"Timestamp {envelope.Timestamp} not between {before} and {after}");
+        Assert.InRange(envelope.Timestamp, before, after);
     }
 
     /// <summary>
@@ -385,9 +383,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         var after = DateTimeOffset.UtcNow.AddSeconds(1);
 
         // Should fall back to current time when timestamp parsing fails
-        Assert.True(
-            envelope.Timestamp >= before && envelope.Timestamp <= after,
-            $"Timestamp {envelope.Timestamp} not between {before} and {after}");
+        Assert.InRange(envelope.Timestamp, before, after);
     }
 
     /// <summary>

@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support.</Description>
-    <PackageReleaseNotes>v0.1.0: Initial release with core abstractions (ITransportPublisher, ITransportConsumer, ITransportEnvelope), middleware pipeline architecture, retry and error handling strategies, transactional outbox pattern, and dependency injection extensions.</PackageReleaseNotes>
+    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
     <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <PackageReference Include="HoneyDrunk.Kernel" Version="0.1.2" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.3">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -42,5 +42,6 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="CHANGELOG.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 </Project>
