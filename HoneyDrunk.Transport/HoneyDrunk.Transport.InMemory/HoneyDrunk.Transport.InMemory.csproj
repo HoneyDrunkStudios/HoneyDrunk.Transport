@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.InMemory</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>In-memory transport implementation for HoneyDrunk.Transport. Provides observable queues and pub/sub subscriptions for testing without external dependencies.</Description>
-    <PackageReleaseNotes>v0.1.0: Initial release with InMemoryBroker supporting channel-based queues, pub/sub subscriptions, and in-process message routing for integration tests.</PackageReleaseNotes>
+    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
     <PackageTags>messaging;transport;inmemory;testing;broker;queue;pubsub</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,7 +30,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.3">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -38,7 +38,8 @@
   </ItemGroup>
 
   <ItemGroup>
-  <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="CHANGELOG.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>

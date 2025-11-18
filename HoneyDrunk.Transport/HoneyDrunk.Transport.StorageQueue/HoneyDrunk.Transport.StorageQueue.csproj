@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,10 +9,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
-    <PackageReleaseNotes>v0.1.0: Initial release with Azure Storage Queue support including poison queue pattern, configurable retry policies, batch processing, and thread-safe lifecycle management.</PackageReleaseNotes>
+    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
     <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -35,7 +35,7 @@
 
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Queues" Version="12.24.0" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.3">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
@@ -47,6 +47,7 @@
 
   <ItemGroup>
     <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+    <None Include="CHANGELOG.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
   <ItemGroup>
