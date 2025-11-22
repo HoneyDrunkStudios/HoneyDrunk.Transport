@@ -5,6 +5,20 @@ All notable changes to HoneyDrunk.Transport.InMemory will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-11-22
+
+### ?? BREAKING CHANGES
+- **Kernel Integration**: Requires HoneyDrunk.Kernel to be registered via `AddHoneyDrunkCoreNode` before calling `AddHoneyDrunkInMemoryTransport`
+- **Grid Context**: Envelope now includes `NodeId`, `StudioId`, `Environment` fields for Grid-aware context propagation
+
+### Added
+- ? **Grid Context Support**: Automatic propagation of Kernel Grid context across messages in test scenarios
+- ? **Full Pipeline Testing**: Test Grid context flow end-to-end
+
+### Changed
+- **Dependency Updates**: Now depends on `HoneyDrunk.Kernel.Abstractions` v0.2.1
+- **Test Patterns**: Updated examples to use Grid context
+
 ## [0.1.1] - 2025-11-18
 
 ### Changed

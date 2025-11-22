@@ -8,11 +8,11 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
-    <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support.</Description>
-    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
-    <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed</PackageTags>
+    <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support. Integrated with HoneyDrunk.Kernel for Grid-aware context propagation.</Description>
+    <PackageReleaseNotes>v0.2.0: BREAKING - Full Kernel integration with IGridContext, Node lifecycle, and health contributors. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
+    <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport</RepositoryUrl>
@@ -29,7 +29,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.1.2" />
+    <!-- Core abstractions only - no runtime dependencies -->
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.2.1" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

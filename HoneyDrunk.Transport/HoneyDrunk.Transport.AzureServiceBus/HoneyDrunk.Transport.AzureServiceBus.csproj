@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.1.2</Version>
+    <Version>0.2.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-	<PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
+	<PackageReleaseNotes>v0.2.0: Kernel integration with Grid-aware context propagation. BREAKING: Requires HoneyDrunk.Kernel to be registered first. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,14 +30,15 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Identity" Version="1.17.0" />
+    <PackageReference Include="Azure.Identity" Version="1.17.1" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.26.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.2.1" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.13.0" />
+    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.13.1" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
   </ItemGroup>

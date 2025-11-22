@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-HoneyDrunk.Transport is a **transport-agnostic messaging library** for .NET 10.0 that provides a unified abstraction layer over different message brokers. The architecture follows a **middleware pipeline pattern** similar to ASP.NET Core.
+HoneyDrunk.Transport is a **transport-agnostic messaging library** for .NET 10.0 that provides a unified abstraction layer over different message brokers. The architecture follows a **middleware pipeline pattern** similar to ASP.NET Core and integrates with **HoneyDrunk.Kernel** for Grid-aware distributed context propagation.
 
 ### Core Projects Structure
 
@@ -11,11 +11,15 @@ HoneyDrunk.Transport/           # Core abstractions and middleware pipeline
 ├── Abstractions/               # Publisher/Consumer interfaces, envelope contracts
 ├── Pipeline/                   # Middleware execution engine
 ├── Configuration/              # Retry, backoff, error handling options
+├── Context/                    # Grid context factory and propagation
 ├── DependencyInjection/        # Fluent builder pattern for service registration
+├── Health/                     # Health contributor abstractions
+├── Metrics/                    # Metrics collection abstractions
 ├── Outbox/                     # Transactional outbox pattern abstractions
 └── Primitives/                 # EnvelopeFactory, TransportEnvelope implementations
 
 HoneyDrunk.Transport.AzureServiceBus/   # Azure Service Bus transport implementation
+HoneyDrunk.Transport.StorageQueue/      # Azure Storage Queue transport implementation
 HoneyDrunk.Transport.InMemory/          # In-memory broker for testing
 HoneyDrunk.Transport.Tests/             # xUnit test suite
 ```
@@ -25,74 +29,81 @@ HoneyDrunk.Transport.Tests/             # xUnit test suite
 ### Transport Envelope Pattern
 All messages are wrapped in `ITransportEnvelope` which provides:
 - `MessageId`, `CorrelationId`, `CausationId` for distributed tracing
+- `NodeId`, `StudioId`, `Environment` for Grid topology tracking
 - `MessageType` (full type name string) for deserialization routing
-- `Headers` dictionary for metadata
+- `Headers` dictionary for metadata and Grid baggage
 - `Payload` as `ReadOnlyMemory<byte>` for zero-copy performance
-- Immutable design with `WithHeaders()` and `WithCorrelation()` methods
+- Immutable design with `WithHeaders()` and `WithGridContext()` methods
 
-Example from `Primitives/TransportEnvelope.cs`:
+### Grid Context Integration
+Transport is fully integrated with Kernel's `IGridContext` for distributed context propagation.
+
+Message handlers can access Grid context:
 ```csharp
-public ITransportEnvelope WithHeaders(IDictionary<string, string> additionalHeaders)
+public class OrderCreatedHandler : IMessageHandler<OrderCreated>
 {
-    var combined = new Dictionary<string, string>(Headers);
-    foreach (var kvp in additionalHeaders)
-        combined[kvp.Key] = kvp.Value;
-    
-    return new TransportEnvelope { /* copy all properties */ };
+    public async Task<MessageProcessingResult> HandleAsync(
+        OrderCreated message,
+        MessageContext context,
+        CancellationToken ct)
+    {
+        // Access Grid context directly
+        var gridContext = context.GridContext;
+        
+        _logger.LogInformation(
+            "Processing order in Node {NodeId} with correlation {CorrelationId}",
+            gridContext?.NodeId,
+            gridContext?.CorrelationId);
+        
+        return MessageProcessingResult.Success;
+    }
 }
 ```
 
 ### Middleware Pipeline Architecture
 Message processing follows an **onion-style middleware pattern**:
-1. Built-in middleware (Correlation → Telemetry → Logging) executes first
+1. Built-in middleware (GridContext → Telemetry → Logging) executes first
 2. Custom middleware can be registered via `ITransportBuilder`
 3. Pipeline terminates at message handler invocation
-4. Middleware registered in `ServiceCollectionExtensions.cs` using `IMessageMiddleware`
 
-Key implementation in `Pipeline/MessagePipeline.cs`:
-```csharp
-// Middleware wraps handlers in reverse order (LIFO)
-foreach (var middleware in _middlewares.Reverse())
-{
-    var next = handler;
-    handler = () => middleware.InvokeAsync(envelope, context, next, cancellationToken);
-}
-```
+**Built-in Middleware:**
+- `GridContextPropagationMiddleware` - Extracts IGridContext from envelope and populates MessageContext
+- `TelemetryMiddleware` - Distributed tracing via OpenTelemetry
+- `LoggingMiddleware` - Structured logging of message processing
 
 ### Fluent Registration Pattern
-All transport configuration uses **builder pattern returning `ITransportBuilder`**:
+Transport requires Kernel to be registered first:
 
 ```csharp
-services.AddHoneyDrunkTransportCore()
-    .AddHoneyDrunkServiceBusTransport(options => { /* ... */ })
-    .WithTopicSubscription("my-subscription")
-    .WithSessions()
-    .WithRetry(retry => retry.MaxAttempts = 5);
-```
+// Step 1: Register Kernel first
+builder.Services.AddHoneyDrunkCoreNode(nodeDescriptor);
 
-See `DependencyInjection/ServiceCollectionExtensions.cs` for the pattern.
-
-### Message Handler Registration
-Handlers implement `IMessageHandler<TMessage>`:
-```csharp
-services.AddMessageHandler<MyMessage, MyMessageHandler>();
-// OR delegate-based:
-services.AddMessageHandler<MyMessage>(async (msg, ctx, ct) => { /* ... */ });
+// Step 2: Register Transport (layers on top of Kernel)
+builder.Services.AddHoneyDrunkTransportCore(options =>
+{
+    options.EnableTelemetry = true;
+    options.EnableLogging = true;
+})
+.AddHoneyDrunkServiceBusTransport(options => { /* ... */ });
 ```
 
 ## Critical Dependencies
 
-### HoneyDrunk.Kernel
-Core infrastructure package providing:
-- `IIdGenerator` - Message ID generation
-- `IClock` - Timestamp abstraction for testability
-- `IContextAccessor` - Ambient context propagation
-- Registered via `services.AddKernelDefaults()` in core setup
+### HoneyDrunk.Kernel.Abstractions
+Core abstractions package providing:
+- `IGridContext` - Distributed context with correlation, causation, Node/Studio/Environment
+- `CorrelationId` - ULID-based strongly-typed correlation IDs
+- `TimeProvider` - .NET's built-in time abstraction for testability
 
-**Important**: Always use `EnvelopeFactory` (depends on Kernel) to create envelopes, never construct `TransportEnvelope` directly in production code.
+**Dependency Strategy:**
+- Transport core depends **ONLY** on `HoneyDrunk.Kernel.Abstractions` (zero runtime dependencies)
+- Never reference the full `HoneyDrunk.Kernel` package from Transport libraries
+- Applications must register Kernel via `AddHoneyDrunkCoreNode()` before calling `AddHoneyDrunkTransportCore()`
 
-### Documentation Generation
-All projects have `<GenerateDocumentationFile>true</GenerateDocumentationFile>` enabled. **Always add XML doc comments** to public APIs.
+**Important**: Always use `EnvelopeFactory` to create envelopes. It integrates with:
+- `TimeProvider` for deterministic timestamps
+- `CorrelationId.NewId()` for ULID-based message IDs
+- `IGridContext` for Grid-aware context propagation
 
 ## Implementation Patterns
 
@@ -100,132 +111,102 @@ All projects have `<GenerateDocumentationFile>true</GenerateDocumentationFile>` 
 Each transport provider must implement:
 1. `ITransportPublisher` - Sends envelopes to broker
 2. `ITransportConsumer` - Receives messages and invokes pipeline
-3. Registration extension methods in `DependencyInjection/ServiceCollectionExtensions.cs`
+3. `ITransportHealthContributor` - Health checks for Kubernetes probes
+4. Registration extension methods in `DependencyInjection/ServiceCollectionExtensions.cs`
 
-Example from `AzureServiceBus/ServiceBusTransportPublisher.cs`:
-- Use `TransportTelemetry.StartPublishActivity()` for distributed tracing
-- Call `EnvelopeMapper.ToServiceBusMessage()` for format conversion
-- Always record outcome with `TransportTelemetry.RecordOutcome()`
+Map Grid context fields (NodeId, StudioId, Environment) to broker-specific metadata.
+
+### Health Contributors
+Each transport should provide health monitoring:
+
+```csharp
+public sealed class ServiceBusHealthContributor : ITransportHealthContributor
+{
+    public string Name => "Transport.ServiceBus";
+    
+    public async Task<TransportHealthResult> CheckHealthAsync(CancellationToken ct)
+    {
+        try
+        {
+            // Check connectivity
+            return TransportHealthResult.Healthy("Connected");
+        }
+        catch (Exception ex)
+        {
+            return TransportHealthResult.Unhealthy("Unreachable", ex);
+        }
+    }
+}
+```
 
 ### Retry & Error Handling
 Three-tier error handling:
-1. **Transport-level retries** - `RetryOptions` with `BackoffStrategy` (Fixed/Linear/Exponential)
-2. **Middleware retries** - `RetryMiddleware` (currently in Middleware/ folder)
+1. **Transport-level retries** - `RetryOptions` with `BackoffStrategy`
+2. **Middleware retries** - `RetryMiddleware`
 3. **Message processing results** - Return `MessageProcessingResult` enum:
    - `Success` - Complete successfully
    - `Retry` - Reprocess with backoff
    - `DeadLetter` - Move to DLQ, no retry
-
-Example from `Pipeline/MessagePipeline.cs`:
-```csharp
-catch (MessageHandlerException ex)
-{
-    return ex.Result; // Handler controls retry behavior
-}
-catch (Exception ex)
-{
-    return MessageProcessingResult.Retry; // Default to retry on unexpected errors
-}
-```
 
 ### Transactional Outbox Pattern
 For exactly-once processing with database transactions:
 1. Implement `IOutboxStore` against your database
 2. Save messages via `SaveAsync()` within your unit-of-work transaction
 3. Background `IOutboxDispatcher` polls `LoadPendingAsync()` and publishes
-4. Track state with `OutboxMessageState` (Pending → Dispatched/Failed/Poisoned)
-
-See `Outbox/IOutboxStore.cs` for the contract.
 
 ## Development Workflows
 
-### Building & Testing
-```powershell
-dotnet build HoneyDrunk.Transport.slnx
-dotnet test HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj
-```
-
 ### Adding New Transport Providers
 1. Create project `HoneyDrunk.Transport.{BrokerName}/`
-2. Reference `HoneyDrunk.Transport` core project
-3. Implement `ITransportPublisher` and `ITransportConsumer`
-4. Create `Configuration/{BrokerName}Options.cs` for broker-specific settings
-5. Add extension methods: `AddHoneyDrunk{BrokerName}Transport(this IServiceCollection)`
-6. Follow Azure Service Bus implementation as reference template
-
-### Testing with InMemory Transport
-Use `HoneyDrunk.Transport.InMemory` for integration tests:
-- `InMemoryBroker` provides observable queues via `Channel<T>`
-- Supports both queue-based consumption and pub/sub subscriptions
-- No external dependencies, runs in-process
+2. Reference **ONLY** `HoneyDrunk.Kernel.Abstractions` (not full Kernel)
+3. Reference `HoneyDrunk.Transport` core project
+4. Implement `ITransportPublisher` and `ITransportConsumer`
+5. Implement `ITransportHealthContributor` for health checks
+6. Map Grid context fields (NodeId, StudioId, Environment) to broker metadata
+7. Follow Azure Service Bus implementation as reference template
 
 ## Code Style Conventions
 
-### Nullable Reference Types
-Project uses `<Nullable>enable</Nullable>`. **Always annotate**:
-- Use `?` for nullable parameters and properties
-- Use `!` null-forgiving operator only when justified with comment
-- Prefer `ArgumentNullException.ThrowIfNull()` for guard clauses
-
 ### Primary Constructors
-Modern C# 12 syntax used throughout:
+Modern C# 14 syntax:
 ```csharp
 public sealed class ServiceBusTransportPublisher(
     ServiceBusClient client,
-    IOptions<AzureServiceBusOptions> options,
-    ILogger<ServiceBusTransportPublisher> logger) : ITransportPublisher
+    IOptions<AzureServiceBusOptions> options) : ITransportPublisher
 {
     private readonly ServiceBusClient _client = client;
-    // ...
 }
 ```
 
 ### Service Registration
 - Use `TryAddSingleton/TryAddScoped` for overrideable defaults
-- Use `AddSingleton` when replacement should be explicit
 - Middleware uses `AddEnumerable` to support multiple registrations
-
-### Telemetry Integration
-**Always wrap operations** with telemetry activities:
-```csharp
-using var activity = TransportTelemetry.StartPublishActivity(envelope, destination);
-try 
-{
-    // operation
-    TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
-}
-catch (Exception ex)
-{
-    TransportTelemetry.RecordError(activity, ex);
-    throw;
-}
-```
+- Always register `TimeProvider.System` as default time provider
 
 ## Common Pitfalls
 
-1. **Don't construct `TransportEnvelope` directly** - Use `EnvelopeFactory` which provides `MessageId` and `Timestamp` from Kernel services
-2. **Message type resolution** - `MessageType` must be fully qualified type name resolvable via `Type.GetType()`
-3. **Middleware order matters** - Correlation must run before telemetry to populate trace context
-4. **Async disposal** - Transport implementations like `ServiceBusTransportPublisher` implement `IAsyncDisposable` for cleanup
-5. **Immutable envelopes** - Use `With*()` methods to create modified copies, never mutate
+1. **Don't construct `TransportEnvelope` directly** - Use `EnvelopeFactory`
+2. **Always register Kernel first** - Call `AddHoneyDrunkCoreNode()` before `AddHoneyDrunkTransportCore()`
+3. **Use Abstractions only** - Depend on `HoneyDrunk.Kernel.Abstractions`, not full `HoneyDrunk.Kernel`
+4. **Middleware order matters** - GridContextPropagation must run before telemetry
+5. **Async disposal** - Transport implementations implement `IAsyncDisposable`
+6. **Immutable envelopes** - Use `WithGridContext()` to create modified copies
+7. **Grid context propagation** - Always map NodeId/StudioId/Environment across transports
 
 ## Thread-Safety & Concurrency Patterns
 
 ### Disposal Pattern (Critical)
-All transport implementations MUST use thread-safe disposal to prevent race conditions:
+Use thread-safe disposal:
 
 ```csharp
 public async ValueTask DisposeAsync()
 {
-    // 1. Atomic flag prevents double-disposal
     if (Interlocked.Exchange(ref _disposed, true))
         return;
     
-    // 2. Acquire lock to synchronize with active operations
     await _initLock.WaitAsync();
     try
     {
-        // 3. Dispose resources
         if (_sender != null)
         {
             await _sender.DisposeAsync();
@@ -240,212 +221,26 @@ public async ValueTask DisposeAsync()
 }
 ```
 
-**Why this pattern:**
-- `Interlocked.Exchange` provides atomic test-and-set for disposal flag
-- Lock acquisition ensures no operations in progress during disposal
-- Try-finally guarantees lock cleanup even on exceptions
-- Setting resource to null after disposal prevents use-after-dispose
-
-### Lifecycle Synchronization
-Start/Stop/Dispose operations MUST be synchronized using `SemaphoreSlim`:
-
-```csharp
-private readonly SemaphoreSlim _initLock = new(1, 1);
-private bool _disposed;
-
-public async Task StartAsync(CancellationToken cancellationToken)
-{
-    ObjectDisposedException.ThrowIf(_disposed, this);  // Fast-path check
-    
-    await _initLock.WaitAsync(cancellationToken);
-    try
-    {
-        ObjectDisposedException.ThrowIf(_disposed, this);  // Double-check inside lock
-        
-        if (_processor != null)
-            throw new InvalidOperationException("Already started");
-        
-        // Initialize resources
-        _processor = CreateProcessor();
-    }
-    finally
-    {
-        _initLock.Release();
-    }
-}
-```
-
-**Pattern requirements:**
-- Check disposal flag before AND after acquiring lock (double-check pattern)
-- Validate state inside lock to prevent TOCTOU (Time-Of-Check-Time-Of-Use) races
-- Use try-finally to guarantee lock release
-- Prefer `ObjectDisposedException.ThrowIf()` for consistent error messages
-
-### Resource Management Best Practices
-
-**Guaranteed Cleanup Pattern:**
-```csharp
-// Initialize resource BEFORE try block for guaranteed cleanup
-ServiceBusMessageBatch? currentBatch = await CreateMessageBatchAsync(ct);
-
-try
-{
-    foreach (var message in messages)
-    {
-        if (!currentBatch.TryAddMessage(message))
-        {
-            // Send and dispose old batch
-            if (currentBatch.Count > 0)
-                await SendMessagesAsync(currentBatch, ct);
-            
-            currentBatch.Dispose();
-            currentBatch = await CreateMessageBatchAsync(ct);
-            
-            // Validate message fits
-            if (!currentBatch.TryAddMessage(message))
-                throw new InvalidOperationException("Message too large");
-        }
-    }
-}
-finally
-{
-    currentBatch.Dispose();  // Always non-null, guaranteed cleanup
-}
-```
-
-**Try-Finally for Complex Disposal:**
-```csharp
-private async Task StopAndDisposeProcessorsAsync(CancellationToken ct)
-{
-    if (_processor != null)
-    {
-        try
-        {
-            await _processor.StopProcessingAsync(ct);
-        }
-        finally
-        {
-            await _processor.DisposeAsync();  // Guaranteed even if Stop throws
-            _processor = null;
-        }
-    }
-}
-```
-
 ### Collection Thread-Safety
+Use `ImmutableList` for collections modified during enumeration:
 
-**Immutable Collections for Concurrent Access:**
 ```csharp
-// Use ImmutableList for collections modified during enumeration
 private readonly ConcurrentDictionary<string, ImmutableList<Handler>> _subscribers = new();
 
 public void Subscribe(string address, Handler handler)
 {
     _subscribers.AddOrUpdate(
         address,
-        _ => [handler],  // Create new list
-        (_, existing) => existing.Add(handler));  // Returns new list
-}
-
-// Safe enumeration - no locking needed
-if (_subscribers.TryGetValue(address, out var handlers))
-{
-    foreach (var handler in handlers)  // Iterating immutable snapshot
-        await handler(envelope, ct);
-}
-```
-
-**Why ImmutableList:**
-- Thread-safe for concurrent reads and writes
-- No locking required during enumeration
-- Structural sharing minimizes memory overhead
-- Prevents collection-modified-during-enumeration exceptions
-
-**When to use ConcurrentDictionary:**
-- Frequent lookups with occasional updates
-- Multiple threads accessing different keys
-- Need atomic GetOrAdd/AddOrUpdate operations
-
-### Code Quality Patterns
-
-**Explicit LINQ Filtering:**
-```csharp
-// ❌ BAD: Implicit filtering in foreach
-foreach (var property in message.ApplicationProperties)
-{
-    if (property.Key != "Reserved1" && property.Key != "Reserved2")
-        headers[property.Key] = property.Value;
-}
-
-// ✅ GOOD: Explicit Where clause
-var reservedProperties = new HashSet<string> { "Reserved1", "Reserved2" };
-var headers = message.ApplicationProperties
-    .Where(p => !reservedProperties.Contains(p.Key))
-    .ToDictionary(p => p.Key, p => p.Value);
-```
-
-**Credential Caching:**
-```csharp
-// ✅ Register credential as singleton for reuse
-services.TryAddSingleton<Azure.Core.TokenCredential>(
-    sp => new Azure.Identity.DefaultAzureCredential());
-
-// Use in factory
-services.AddSingleton<ServiceBusClient>(sp =>
-{
-    var credential = sp.GetRequiredService<Azure.Core.TokenCredential>();
-    return new ServiceBusClient(namespace, credential);
-});
-```
-
-**Error Handling for Critical Operations:**
-```csharp
-// ✅ Validate oversized messages explicitly
-if (!currentBatch.TryAddMessage(message))
-{
-    // Create new batch
-    currentBatch.Dispose();
-    currentBatch = await CreateMessageBatchAsync(ct);
-    
-    // Check if message is fundamentally too large
-    if (!currentBatch.TryAddMessage(message))
-    {
-        var error = new InvalidOperationException(
-            $"Message {message.MessageId} exceeds maximum batch size");
-        _logger.LogError(error, "Oversized message");
-        throw error;  // Prevent silent data loss
-    }
-}
-```
-
-### Testing Disposal Safety
-
-**Verify thread-safe disposal:**
-```csharp
-[Fact]
-public async Task DisposeAsync_CalledConcurrently_DisposesOnlyOnce()
-{
-    var publisher = CreatePublisher();
-    var disposeCount = 0;
-    
-    // Simulate concurrent disposal
-    var tasks = Enumerable.Range(0, 10)
-        .Select(_ => Task.Run(async () =>
-        {
-            await publisher.DisposeAsync();
-            Interlocked.Increment(ref disposeCount);
-        }));
-    
-    await Task.WhenAll(tasks);
-    
-    // Only first disposal should proceed
-    Assert.Equal(1, ActualDisposalCount);
+        _ => [handler],
+        (_, existing) => existing.Add(handler));
 }
 ```
 
 ## Extension Points
 
-- **Custom middleware**: Implement `IMessageMiddleware` and register with `services.AddEnumerable()`
-- **Custom serializers**: Implement `IMessageSerializer` and register as singleton
-- **Error handling strategies**: Implement `IErrorHandlingStrategy` for custom retry logic
-- **Outbox stores**: Implement `IOutboxStore` for database-specific transactional outbox
+- **Custom middleware**: Implement `IMessageMiddleware`
+- **Custom serializers**: Implement `IMessageSerializer`
+- **Error handling strategies**: Implement `IErrorHandlingStrategy`
+- **Outbox stores**: Implement `IOutboxStore`
+- **Health contributors**: Implement `ITransportHealthContributor`
+- **Metrics collectors**: Implement `ITransportMetrics`
