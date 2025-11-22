@@ -24,7 +24,7 @@ public sealed class GridContextFactory(TimeProvider timeProvider) : IGridContext
 
         var baggage = envelope.Headers != null
             ? new Dictionary<string, string>(envelope.Headers)
-            : new Dictionary<string, string>();
+            : [];
 
         return new TransportGridContext(
             correlationId,

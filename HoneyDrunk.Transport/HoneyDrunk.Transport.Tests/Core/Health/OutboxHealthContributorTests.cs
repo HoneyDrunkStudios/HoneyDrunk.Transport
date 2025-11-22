@@ -86,8 +86,8 @@ public sealed class OutboxHealthContributorTests
         Assert.True(result.IsHealthy);
         Assert.Contains("1000 pending messages", result.Description);
         Assert.Equal(1000, result.Metadata!["PendingCount"]);
-        Assert.True(result.Metadata.ContainsKey("Warning"));
-        Assert.Contains("1000/1000", result.Metadata["Warning"]?.ToString());
+        Assert.True(result.Metadata.TryGetValue("Warning", out var warning));
+        Assert.Contains("1000/1000", warning?.ToString());
     }
 
     /// <summary>
@@ -258,9 +258,9 @@ public sealed class OutboxHealthContributorTests
 
         // Assert
         Assert.NotNull(result.Metadata);
-        Assert.True(result.Metadata.ContainsKey("WarningThreshold"));
-        Assert.True(result.Metadata.ContainsKey("CriticalThreshold"));
-        Assert.Equal(1000, result.Metadata["WarningThreshold"]);
-        Assert.Equal(10000, result.Metadata["CriticalThreshold"]);
+        Assert.True(result.Metadata.TryGetValue("WarningThreshold", out var warningThreshold));
+        Assert.True(result.Metadata.TryGetValue("CriticalThreshold", out var criticalThreshold));
+        Assert.Equal(1000, warningThreshold);
+        Assert.Equal(10000, criticalThreshold);
     }
 }

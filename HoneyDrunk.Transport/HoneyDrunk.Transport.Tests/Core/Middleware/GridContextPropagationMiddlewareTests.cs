@@ -107,17 +107,17 @@ public sealed class GridContextPropagationMiddlewareTests
 
         // Assert - verify properties dictionary is populated
         Assert.True(context.Properties.ContainsKey("GridContext"));
-        Assert.True(context.Properties.ContainsKey("CorrelationId"));
-        Assert.True(context.Properties.ContainsKey("CausationId"));
-        Assert.True(context.Properties.ContainsKey("NodeId"));
-        Assert.True(context.Properties.ContainsKey("StudioId"));
-        Assert.True(context.Properties.ContainsKey("Environment"));
+        Assert.True(context.Properties.TryGetValue("CorrelationId", out var correlationId));
+        Assert.True(context.Properties.TryGetValue("CausationId", out var causationId));
+        Assert.True(context.Properties.TryGetValue("NodeId", out var nodeId));
+        Assert.True(context.Properties.TryGetValue("StudioId", out var studioId));
+        Assert.True(context.Properties.TryGetValue("Environment", out var environment));
 
-        Assert.Equal("corr-abc", context.Properties["CorrelationId"]);
-        Assert.Equal("cause-xyz", context.Properties["CausationId"]);
-        Assert.Equal("node-2", context.Properties["NodeId"]);
-        Assert.Equal("studio-2", context.Properties["StudioId"]);
-        Assert.Equal("staging", context.Properties["Environment"]);
+        Assert.Equal("corr-abc", correlationId);
+        Assert.Equal("cause-xyz", causationId);
+        Assert.Equal("node-2", nodeId);
+        Assert.Equal("studio-2", studioId);
+        Assert.Equal("staging", environment);
     }
 
     /// <summary>

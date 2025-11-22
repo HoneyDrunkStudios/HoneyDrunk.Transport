@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.DependencyInjection;
+using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -144,6 +145,157 @@ public sealed class MessagePipelineErrorTests
         tcs.SetResult();
     }
 
+    /// <summary>
+    /// Verifies pipeline handles MessageHandlerException with Retry result.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task ProcessAsync_WhenHandlerThrowsMessageHandlerExceptionRetry_ReturnsRetryResult()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+        services.AddMessageHandler<SampleMessage, MessageHandlerExceptionRetryHandler>();
+
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = provider.GetRequiredService<HoneyDrunk.Transport.Pipeline.IMessagePipeline>();
+
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new HoneyDrunk.Transport.Abstractions.MessageContext
+        {
+            Envelope = envelope,
+            Transaction = HoneyDrunk.Transport.Abstractions.NoOpTransportTransaction.Instance,
+            DeliveryCount = 1
+        };
+
+        var result = await pipeline.ProcessAsync(envelope, context);
+
+        Assert.Equal(HoneyDrunk.Transport.Abstractions.MessageProcessingResult.Retry, result);
+    }
+
+    /// <summary>
+    /// Verifies pipeline handles MessageHandlerException with DeadLetter result.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task ProcessAsync_WhenHandlerThrowsMessageHandlerExceptionDeadLetter_ReturnsDeadLetterResult()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+        services.AddMessageHandler<SampleMessage, MessageHandlerExceptionDeadLetterHandler>();
+
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = provider.GetRequiredService<HoneyDrunk.Transport.Pipeline.IMessagePipeline>();
+
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new HoneyDrunk.Transport.Abstractions.MessageContext
+        {
+            Envelope = envelope,
+            Transaction = HoneyDrunk.Transport.Abstractions.NoOpTransportTransaction.Instance,
+            DeliveryCount = 1
+        };
+
+        var result = await pipeline.ProcessAsync(envelope, context);
+
+        Assert.Equal(HoneyDrunk.Transport.Abstractions.MessageProcessingResult.DeadLetter, result);
+    }
+
+    /// <summary>
+    /// Verifies pipeline handles invalid message type that cannot be resolved.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task ProcessAsync_WithInvalidMessageType_ReturnsDeadLetterResult()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = provider.GetRequiredService<HoneyDrunk.Transport.Pipeline.IMessagePipeline>();
+
+        var badEnvelope = new HoneyDrunk.Transport.Primitives.TransportEnvelope
+        {
+            MessageId = Guid.NewGuid().ToString("N"),
+            MessageType = "NonExistent.InvalidType.ThatDoesNotExist, NonExistent.Assembly",
+            Payload = new byte[] { 1, 2, 3 },
+            Headers = new Dictionary<string, string>(),
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        var context = new HoneyDrunk.Transport.Abstractions.MessageContext
+        {
+            Envelope = badEnvelope,
+            Transaction = HoneyDrunk.Transport.Abstractions.NoOpTransportTransaction.Instance,
+            DeliveryCount = 1
+        };
+
+        var result = await pipeline.ProcessAsync(badEnvelope, context);
+
+        Assert.Equal(HoneyDrunk.Transport.Abstractions.MessageProcessingResult.DeadLetter, result);
+    }
+
+    /// <summary>
+    /// Verifies pipeline handles middleware exceptions.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task ProcessAsync_WhenMiddlewareThrows_ReturnsRetryResult()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+        services.AddMessageHandler<SampleMessage, SampleMessageHandler>();
+        services.AddMessageMiddleware<ThrowingMiddleware>();
+
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = provider.GetRequiredService<HoneyDrunk.Transport.Pipeline.IMessagePipeline>();
+
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new HoneyDrunk.Transport.Abstractions.MessageContext
+        {
+            Envelope = envelope,
+            Transaction = HoneyDrunk.Transport.Abstractions.NoOpTransportTransaction.Instance,
+            DeliveryCount = 1
+        };
+
+        var result = await pipeline.ProcessAsync(envelope, context);
+
+        Assert.Equal(HoneyDrunk.Transport.Abstractions.MessageProcessingResult.Retry, result);
+    }
+
+    /// <summary>
+    /// Verifies pipeline handles async exceptions in handlers.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task ProcessAsync_WhenHandlerThrowsAsync_ReturnsRetryResult()
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+        services.AddMessageHandler<SampleMessage>(async (msg, ctx, ct) =>
+        {
+            await Task.Delay(1, ct);
+            throw new InvalidOperationException("Async error");
+        });
+
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = provider.GetRequiredService<HoneyDrunk.Transport.Pipeline.IMessagePipeline>();
+
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new HoneyDrunk.Transport.Abstractions.MessageContext
+        {
+            Envelope = envelope,
+            Transaction = HoneyDrunk.Transport.Abstractions.NoOpTransportTransaction.Instance,
+            DeliveryCount = 1
+        };
+
+        var result = await pipeline.ProcessAsync(envelope, context);
+
+        Assert.Equal(HoneyDrunk.Transport.Abstractions.MessageProcessingResult.Retry, result);
+    }
+
 #pragma warning disable CA1812 // Internal class is instantiated via DI
     private sealed class ThrowingHandler : HoneyDrunk.Transport.Abstractions.IMessageHandler<SampleMessage>
 #pragma warning restore CA1812
@@ -151,6 +303,36 @@ public sealed class MessagePipelineErrorTests
         public Task HandleAsync(SampleMessage message, HoneyDrunk.Transport.Abstractions.MessageContext context, CancellationToken cancellationToken)
         {
             throw new InvalidOperationException("Handler error");
+        }
+    }
+
+#pragma warning disable CA1812
+    private sealed class MessageHandlerExceptionRetryHandler : HoneyDrunk.Transport.Abstractions.IMessageHandler<SampleMessage>
+#pragma warning restore CA1812
+    {
+        public Task HandleAsync(SampleMessage message, HoneyDrunk.Transport.Abstractions.MessageContext context, CancellationToken cancellationToken)
+        {
+            throw new MessageHandlerException("Retry error", HoneyDrunk.Transport.Abstractions.MessageProcessingResult.Retry);
+        }
+    }
+
+#pragma warning disable CA1812
+    private sealed class MessageHandlerExceptionDeadLetterHandler : HoneyDrunk.Transport.Abstractions.IMessageHandler<SampleMessage>
+#pragma warning restore CA1812
+    {
+        public Task HandleAsync(SampleMessage message, HoneyDrunk.Transport.Abstractions.MessageContext context, CancellationToken cancellationToken)
+        {
+            throw new MessageHandlerException("DeadLetter error", HoneyDrunk.Transport.Abstractions.MessageProcessingResult.DeadLetter);
+        }
+    }
+
+#pragma warning disable CA1812
+    private sealed class ThrowingMiddleware : HoneyDrunk.Transport.Pipeline.IMessageMiddleware
+#pragma warning restore CA1812
+    {
+        public Task InvokeAsync(HoneyDrunk.Transport.Abstractions.ITransportEnvelope envelope, HoneyDrunk.Transport.Abstractions.MessageContext context, Func<Task> next, CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Middleware error");
         }
     }
 }

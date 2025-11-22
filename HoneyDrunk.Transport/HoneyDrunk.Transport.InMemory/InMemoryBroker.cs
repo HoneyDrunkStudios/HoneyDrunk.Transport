@@ -1,8 +1,8 @@
+using HoneyDrunk.Transport.Abstractions;
+using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Threading.Channels;
-using HoneyDrunk.Transport.Abstractions;
-using Microsoft.Extensions.Logging;
 
 namespace HoneyDrunk.Transport.InMemory;
 

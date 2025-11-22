@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
 using HoneyDrunk.Transport.Telemetry;
 using HoneyDrunk.Transport.Tests.Support;
+using System.Diagnostics;
 
 namespace HoneyDrunk.Transport.Tests.Core.Envelope;
 

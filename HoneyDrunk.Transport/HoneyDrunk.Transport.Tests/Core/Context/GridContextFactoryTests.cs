@@ -281,6 +281,138 @@ public sealed class GridContextFactoryTests
     }
 
     /// <summary>
+    /// Verifies factory works with empty string Grid fields.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_WithEmptyStringGridFields_PreservesEmptyStrings()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new GridContextFactory(timeProvider);
+
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            NodeId = string.Empty,
+            StudioId = string.Empty,
+            Environment = string.Empty,
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(string.Empty, gridContext.NodeId);
+        Assert.Equal(string.Empty, gridContext.StudioId);
+        Assert.Equal(string.Empty, gridContext.Environment);
+    }
+
+    /// <summary>
+    /// Verifies factory handles both correlation and causation being null.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_WithBothIdsNull_FallsBackToMessageId()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new GridContextFactory(timeProvider);
+
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-fallback",
+            CorrelationId = null,
+            CausationId = null,
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("msg-fallback", gridContext.CorrelationId);
+        Assert.Equal("msg-fallback", gridContext.CausationId);
+    }
+
+    /// <summary>
+    /// Verifies factory creates Grid context that can be used multiple times.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_CalledMultipleTimes_CreatesIndependentContexts()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new GridContextFactory(timeProvider);
+
+        var envelope1 = new TransportEnvelope
+        {
+            MessageId = "msg-1",
+            CorrelationId = "corr-1",
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        var envelope2 = new TransportEnvelope
+        {
+            MessageId = "msg-2",
+            CorrelationId = "corr-2",
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var context1 = factory.CreateFromEnvelope(envelope1, CancellationToken.None);
+        var context2 = factory.CreateFromEnvelope(envelope2, CancellationToken.None);
+
+        // Assert - contexts should be independent
+        Assert.NotSame(context1, context2);
+        Assert.Equal("corr-1", context1.CorrelationId);
+        Assert.Equal("corr-2", context2.CorrelationId);
+    }
+
+    /// <summary>
+    /// Verifies factory handles large headers dictionary.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_WithLargeHeadersDictionary_CopiesAllItems()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new GridContextFactory(timeProvider);
+
+        var headers = new Dictionary<string, string>();
+        for (int i = 0; i < 100; i++)
+        {
+            headers[$"key{i}"] = $"value{i}";
+        }
+
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            Headers = headers,
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+
+        // Assert
+        Assert.Equal(100, gridContext.Baggage.Count);
+        for (int i = 0; i < 100; i++)
+        {
+            Assert.Equal($"value{i}", gridContext.Baggage[$"key{i}"]);
+        }
+    }
+
+    /// <summary>
     /// Test time provider that returns a fixed time.
     /// </summary>
     private sealed class TestTimeProvider(DateTimeOffset fixedTime) : TimeProvider

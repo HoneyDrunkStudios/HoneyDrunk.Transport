@@ -106,8 +106,7 @@ public sealed class CorrelationMiddlewareTests
             CancellationToken.None);
 
         // Assert - verify legacy property exists
-        Assert.True(context.Properties.ContainsKey("KernelContext"));
-        Assert.NotNull(context.Properties["KernelContext"]);
+        Assert.True(context.Properties.TryGetValue("KernelContext", out var kernelContext) && kernelContext != null);
     }
 
     /// <summary>
@@ -149,10 +148,10 @@ public sealed class CorrelationMiddlewareTests
             CancellationToken.None);
 
         // Assert
-        Assert.True(context.Properties.ContainsKey("CorrelationId"));
-        Assert.True(context.Properties.ContainsKey("CausationId"));
-        Assert.Equal("test-corr", context.Properties["CorrelationId"]);
-        Assert.Equal("test-cause", context.Properties["CausationId"]);
+        Assert.True(context.Properties.TryGetValue("CorrelationId", out var correlationId));
+        Assert.True(context.Properties.TryGetValue("CausationId", out var causationId));
+        Assert.Equal("test-corr", correlationId);
+        Assert.Equal("test-cause", causationId);
     }
 
     /// <summary>
@@ -264,8 +263,14 @@ public sealed class CorrelationMiddlewareTests
         // Assert - both should populate GridContext property
         Assert.True(context1.Properties.ContainsKey("GridContext"));
         Assert.True(context2.Properties.ContainsKey("GridContext"));
-        Assert.Equal(context2.Properties["CorrelationId"], context1.Properties["CorrelationId"]);
-        Assert.Equal(context2.Properties["CausationId"], context1.Properties["CausationId"]);
+
+        Assert.True(context1.Properties.TryGetValue("CorrelationId", out var corr1));
+        Assert.True(context2.Properties.TryGetValue("CorrelationId", out var corr2));
+        Assert.Equal(corr2, corr1);
+
+        Assert.True(context1.Properties.TryGetValue("CausationId", out var cause1));
+        Assert.True(context2.Properties.TryGetValue("CausationId", out var cause2));
+        Assert.Equal(cause2, cause1);
     }
 
     /// <summary>
@@ -298,9 +303,9 @@ public sealed class CorrelationMiddlewareTests
             CancellationToken.None);
 
         // Assert - should fallback to messageId
-        Assert.True(context.Properties.ContainsKey("CorrelationId"));
-        Assert.True(context.Properties.ContainsKey("CausationId"));
-        Assert.Equal(envelope.MessageId, context.Properties["CorrelationId"]);
-        Assert.Equal(envelope.MessageId, context.Properties["CausationId"]);
+        Assert.True(context.Properties.TryGetValue("CorrelationId", out var correlationId));
+        Assert.True(context.Properties.TryGetValue("CausationId", out var causationId));
+        Assert.Equal(envelope.MessageId, correlationId);
+        Assert.Equal(envelope.MessageId, causationId);
     }
 }

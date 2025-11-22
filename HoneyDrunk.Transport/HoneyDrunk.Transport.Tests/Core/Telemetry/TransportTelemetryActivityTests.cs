@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Telemetry;
+using System.Diagnostics;
 
 namespace HoneyDrunk.Transport.Tests.Core.Telemetry;
 

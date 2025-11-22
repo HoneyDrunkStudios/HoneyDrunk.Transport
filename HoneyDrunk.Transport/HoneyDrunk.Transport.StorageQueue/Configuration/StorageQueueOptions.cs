@@ -1,5 +1,5 @@
-using System.ComponentModel.DataAnnotations;
 using HoneyDrunk.Transport.Configuration;
+using System.ComponentModel.DataAnnotations;
 
 namespace HoneyDrunk.Transport.StorageQueue.Configuration;
 

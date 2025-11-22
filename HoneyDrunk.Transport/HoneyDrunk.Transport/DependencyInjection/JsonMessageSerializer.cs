@@ -1,6 +1,6 @@
+using HoneyDrunk.Transport.Abstractions;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
-using HoneyDrunk.Transport.Abstractions;
 
 namespace HoneyDrunk.Transport.DependencyInjection;
 

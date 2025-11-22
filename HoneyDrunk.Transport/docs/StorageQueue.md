@@ -188,7 +188,7 @@ services.AddHoneyDrunkTransportStorageQueue(/* ... */)
 ```csharp
 public sealed class PoisonQueueMover(QueueClientFactory factory)
 {
-    public async Task MoveToPoison QuadAsync(
+    public async Task MoveToPoisonQueueAsync(
         QueueMessage message,
         Exception error,
         CancellationToken ct)

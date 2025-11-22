@@ -41,7 +41,7 @@ public class TransportTestFixture : IDisposable
             options.EnableTelemetry = false;
             options.EnableLogging = true;
         })
-        .AddHoneyDrunk InMemoryTransport();
+        .AddHoneyDrunkInMemoryTransport();
         
         // Register test handlers
         services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
