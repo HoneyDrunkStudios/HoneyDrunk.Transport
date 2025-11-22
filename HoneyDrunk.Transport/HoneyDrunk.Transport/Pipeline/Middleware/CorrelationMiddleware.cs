@@ -5,14 +5,17 @@ namespace HoneyDrunk.Transport.Pipeline.Middleware;
 
 /// <summary>
 /// Middleware that enriches the message context with correlation information.
+/// DEPRECATED: Use GridContextPropagationMiddleware for full Grid-aware context propagation.
+/// This middleware remains for backward compatibility.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="CorrelationMiddleware"/> class.
 /// </remarks>
-/// <param name="contextFactory">The kernel context factory.</param>
-public sealed class CorrelationMiddleware(IKernelContextFactory contextFactory) : IMessageMiddleware
+/// <param name="gridContextFactory">The Grid context factory.</param>
+[Obsolete("Use GridContextPropagationMiddleware for full Grid context propagation. This will be removed in v1.0.")]
+public sealed class CorrelationMiddleware(IGridContextFactory gridContextFactory) : IMessageMiddleware
 {
-    private readonly IKernelContextFactory _contextFactory = contextFactory;
+    private readonly IGridContextFactory _gridContextFactory = gridContextFactory;
 
     /// <inheritdoc/>
     public Task InvokeAsync(
@@ -24,13 +27,14 @@ public sealed class CorrelationMiddleware(IKernelContextFactory contextFactory) 
         // Check for cancellation before processing
         cancellationToken.ThrowIfCancellationRequested();
 
-        // Create kernel context from envelope
-        var kernelContext = _contextFactory.CreateFromEnvelope(envelope, cancellationToken);
+        // Create Grid context from envelope (backward compatible behavior)
+        var gridContext = _gridContextFactory.CreateFromEnvelope(envelope, cancellationToken);
 
-        // Store in properties for downstream middleware/handlers
-        context.Properties["KernelContext"] = kernelContext;
-        context.Properties["CorrelationId"] = kernelContext.CorrelationId ?? string.Empty;
-        context.Properties["CausationId"] = kernelContext.CausationId ?? string.Empty;
+        // Store in properties for backward compatibility
+        context.Properties["KernelContext"] = gridContext; // Legacy key
+        context.Properties["GridContext"] = gridContext;
+        context.Properties["CorrelationId"] = gridContext.CorrelationId ?? string.Empty;
+        context.Properties["CausationId"] = gridContext.CausationId ?? string.Empty;
 
         return next();
     }

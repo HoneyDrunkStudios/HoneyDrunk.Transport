@@ -1,7 +1,7 @@
-using HoneyDrunk.Kernel.DI;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Configuration;
 using HoneyDrunk.Transport.Context;
+using HoneyDrunk.Transport.Metrics;
 using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Pipeline.Middleware;
 using HoneyDrunk.Transport.Primitives;
@@ -14,6 +14,7 @@ namespace HoneyDrunk.Transport.DependencyInjection;
 
 /// <summary>
 /// Extension methods for registering transport services.
+/// Transport services assume HoneyDrunk.Kernel has been registered via AddHoneyDrunkCoreNode.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -23,11 +24,15 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action.</param>
     /// <returns>A transport builder for fluent configuration.</returns>
+    /// <remarks>
+    /// This method assumes HoneyDrunk.Kernel has already been registered via AddHoneyDrunkCoreNode.
+    /// Transport layers on top of Kernel for messaging-specific functionality.
+    /// </remarks>
     public static ITransportBuilder AddHoneyDrunkTransportCore(
         this IServiceCollection services,
         Action<TransportCoreOptions>? configure = null)
     {
-        services.AddKernelDefaults();
+        // Configure options
         if (configure != null)
         {
             services.Configure(configure);
@@ -37,11 +42,20 @@ public static class ServiceCollectionExtensions
             services.Configure<TransportCoreOptions>(_ => { });
         }
 
-        services.TryAddSingleton<IKernelContextFactory, KernelContextFactory>();
+        // Register TimeProvider if not already registered (use system time by default)
+        services.TryAddSingleton(TimeProvider.System);
+
+        // Core transport services (these depend on Kernel abstractions only)
+        services.TryAddSingleton<IGridContextFactory, GridContextFactory>();
         services.TryAddSingleton<EnvelopeFactory>();
         services.TryAddSingleton<IMessageSerializer, JsonMessageSerializer>();
         services.TryAddSingleton<IMessagePipeline, MessagePipeline>();
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<IMessageMiddleware, CorrelationMiddleware>());
+
+        // Metrics (no-op by default, can be replaced with Kernel-backed implementation)
+        services.TryAddSingleton<ITransportMetrics, NoOpTransportMetrics>();
+
+        // Register built-in middleware
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<IMessageMiddleware, GridContextPropagationMiddleware>());
 
         services.AddSingleton<IMessageMiddleware>(sp =>
         {
@@ -59,6 +73,7 @@ public static class ServiceCollectionExtensions
         // Register default error handling strategy if none supplied
         services.TryAddSingleton<IErrorHandlingStrategy, DefaultErrorHandlingStrategy>();
 
+        // Individual transport implementations should register their own health contributors
         return new TransportBuilder(services);
     }
 

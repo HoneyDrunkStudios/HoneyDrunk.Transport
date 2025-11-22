@@ -1,7 +1,7 @@
-using System.Diagnostics;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Telemetry;
 using HoneyDrunk.Transport.Tests.Support;
+using System.Diagnostics;
 
 namespace HoneyDrunk.Transport.Tests.Core.Telemetry;
 
@@ -16,6 +16,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void StartPublishActivity_WithEnvelope_CreatesActivityWithTags()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var destination = TestData.Address("test", "queue");
 
@@ -34,6 +35,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void StartProcessActivity_WithEnvelope_CreatesActivityWithTags()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
 
         using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
@@ -51,6 +53,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void RecordOutcome_WithSuccessResult_SetsActivityStatus()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
@@ -70,6 +73,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void RecordError_WithException_SetsActivityStatusToError()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
@@ -90,6 +94,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void RecordOutcome_WithRetryResult_SetsErrorStatus()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
@@ -109,6 +114,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void RecordOutcome_WithDeadLetterResult_SetsErrorStatus()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
@@ -128,6 +134,7 @@ public sealed class TransportTelemetryTests
     [Fact]
     public void RecordDeliveryCount_WithCount_AddsDeliveryCountTag()
     {
+        using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
@@ -135,9 +142,29 @@ public sealed class TransportTelemetryTests
         {
             TransportTelemetry.RecordDeliveryCount(activity, 3);
 
-            Assert.Contains(activity.Tags, t => t.Key == "messaging.delivery.count" && t.Value?.ToString() == "3");
+            // Use GetTagItem to retrieve the tag value directly
+            var deliveryCountTag = activity.GetTagItem(TransportTelemetry.Tags.DeliveryCount);
+            Assert.NotNull(deliveryCountTag);
+            Assert.Equal(3, deliveryCountTag);
 
             activity.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Creates an ActivityListener for testing.
+    /// </summary>
+    /// <returns>A configured ActivityListener.</returns>
+    private static ActivityListener CreateActivityListener()
+    {
+        var listener = new ActivityListener
+        {
+            ShouldListenTo = s => s.Name == TransportTelemetry.ActivitySourceName,
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStarted = _ => { },
+            ActivityStopped = _ => { }
+        };
+        ActivitySource.AddActivityListener(listener);
+        return listener;
     }
 }

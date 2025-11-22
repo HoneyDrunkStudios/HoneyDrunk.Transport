@@ -1,21 +1,20 @@
-using HoneyDrunk.Kernel.Abstractions.Ids;
-using HoneyDrunk.Kernel.Abstractions.Time;
+using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
 
 namespace HoneyDrunk.Transport.Primitives;
 
 /// <summary>
 /// Factory for creating transport envelopes from typed messages.
+/// Uses Kernel primitives for deterministic ID generation, timestamps, and Grid context propagation.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="EnvelopeFactory"/> class.
 /// </remarks>
-/// <param name="idGenerator">The ID generator for creating message identifiers.</param>
-/// <param name="clock">The clock for timestamps.</param>
-public sealed class EnvelopeFactory(IIdGenerator idGenerator, IClock clock)
+/// <param name="timeProvider">The time provider for timestamps.</param>
+public sealed class EnvelopeFactory(TimeProvider timeProvider)
 {
-    private readonly IIdGenerator _idGenerator = idGenerator;
-    private readonly IClock _clock = clock;
+    private readonly TimeProvider _timeProvider = timeProvider;
 
     /// <summary>
     /// Creates an envelope from a typed message and serialized payload.
@@ -35,14 +34,61 @@ public sealed class EnvelopeFactory(IIdGenerator idGenerator, IClock clock)
     {
         return new TransportEnvelope
         {
-            MessageId = _idGenerator.NewString(),
+            MessageId = CorrelationId.NewId().ToString(),
             CorrelationId = correlationId,
             CausationId = causationId,
-            Timestamp = _clock.UtcNow,
+            Timestamp = _timeProvider.GetUtcNow(),
             MessageType = typeof(TMessage).FullName ?? typeof(TMessage).Name,
             Headers = headers != null
                 ? new Dictionary<string, string>(headers)
                 : [],
+            Payload = payload
+        };
+    }
+
+    /// <summary>
+    /// Creates an envelope from a typed message with Grid context.
+    /// </summary>
+    /// <typeparam name="TMessage">The message type.</typeparam>
+    /// <param name="payload">The serialized payload.</param>
+    /// <param name="gridContext">The Grid context to propagate.</param>
+    /// <param name="headers">Optional additional message headers.</param>
+    /// <returns>A new transport envelope with Grid context.</returns>
+    public ITransportEnvelope CreateEnvelopeWithGridContext<TMessage>(
+        ReadOnlyMemory<byte> payload,
+        IGridContext gridContext,
+        IDictionary<string, string>? headers = null)
+        where TMessage : class
+    {
+        // Merge baggage into headers
+        var allHeaders = new Dictionary<string, string>();
+        if (gridContext.Baggage != null)
+        {
+            foreach (var kvp in gridContext.Baggage)
+            {
+                allHeaders[kvp.Key] = kvp.Value;
+            }
+        }
+
+        if (headers != null)
+        {
+            foreach (var kvp in headers)
+            {
+                allHeaders[kvp.Key] = kvp.Value;
+            }
+        }
+
+        return new TransportEnvelope
+        {
+            MessageId = CorrelationId.NewId().ToString(),
+            CorrelationId = gridContext.CorrelationId,
+            CausationId = gridContext.CausationId,
+            NodeId = gridContext.NodeId,
+            StudioId = gridContext.StudioId,
+            Environment = gridContext.Environment,
+            Timestamp = _timeProvider.GetUtcNow(),
+            MessageType = typeof(TMessage).FullName ?? typeof(TMessage).Name,
+            Headers = allHeaders,
             Payload = payload
         };
     }
@@ -70,7 +116,7 @@ public sealed class EnvelopeFactory(IIdGenerator idGenerator, IClock clock)
             MessageId = messageId,
             CorrelationId = correlationId,
             CausationId = causationId,
-            Timestamp = _clock.UtcNow,
+            Timestamp = _timeProvider.GetUtcNow(),
             MessageType = messageType,
             Headers = headers != null
                 ? new Dictionary<string, string>(headers)
@@ -104,10 +150,13 @@ public sealed class EnvelopeFactory(IIdGenerator idGenerator, IClock clock)
 
         return new TransportEnvelope
         {
-            MessageId = _idGenerator.NewString(),
+            MessageId = CorrelationId.NewId().ToString(),
             CorrelationId = original.CorrelationId ?? original.MessageId,
             CausationId = original.MessageId,
-            Timestamp = _clock.UtcNow,
+            NodeId = original.NodeId,
+            StudioId = original.StudioId,
+            Environment = original.Environment,
+            Timestamp = _timeProvider.GetUtcNow(),
             MessageType = replyMessageType,
             Headers = headers,
             Payload = payload

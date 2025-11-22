@@ -3,7 +3,7 @@ using HoneyDrunk.Transport.Abstractions;
 namespace HoneyDrunk.Transport.Primitives;
 
 /// <summary>
-/// Default implementation of a transport envelope.
+/// Default implementation of a transport envelope aligned with Kernel v0.2 IGridContext.
 /// </summary>
 public sealed class TransportEnvelope : ITransportEnvelope
 {
@@ -23,6 +23,15 @@ public sealed class TransportEnvelope : ITransportEnvelope
 
     /// <inheritdoc/>
     public string? CausationId { get; init; }
+
+    /// <inheritdoc/>
+    public string? NodeId { get; init; }
+
+    /// <inheritdoc/>
+    public string? StudioId { get; init; }
+
+    /// <inheritdoc/>
+    public string? Environment { get; init; }
 
     /// <inheritdoc/>
     public DateTimeOffset Timestamp { get; init; }
@@ -50,6 +59,9 @@ public sealed class TransportEnvelope : ITransportEnvelope
             MessageId = MessageId,
             CorrelationId = CorrelationId,
             CausationId = CausationId,
+            NodeId = NodeId,
+            StudioId = StudioId,
+            Environment = Environment,
             Timestamp = Timestamp,
             MessageType = MessageType,
             Headers = combined,
@@ -58,13 +70,21 @@ public sealed class TransportEnvelope : ITransportEnvelope
     }
 
     /// <inheritdoc/>
-    public ITransportEnvelope WithCorrelation(string? correlationId, string? causationId)
+    public ITransportEnvelope WithGridContext(
+        string? correlationId = null,
+        string? causationId = null,
+        string? nodeId = null,
+        string? studioId = null,
+        string? environment = null)
     {
         return new TransportEnvelope
         {
             MessageId = MessageId,
             CorrelationId = correlationId ?? CorrelationId,
             CausationId = causationId ?? CausationId,
+            NodeId = nodeId ?? NodeId,
+            StudioId = studioId ?? StudioId,
+            Environment = environment ?? Environment,
             Timestamp = Timestamp,
             MessageType = MessageType,
             Headers = Headers,

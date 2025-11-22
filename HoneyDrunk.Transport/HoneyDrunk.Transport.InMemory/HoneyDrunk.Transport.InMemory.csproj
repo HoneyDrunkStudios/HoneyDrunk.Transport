@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.InMemory</PackageId>
-    <Version>0.1.1</Version>
+    <Version>0.2.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>In-memory transport implementation for HoneyDrunk.Transport. Provides observable queues and pub/sub subscriptions for testing without external dependencies.</Description>
-    <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)\CHANGELOG.md"))</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.2.0: Kernel integration with Grid-aware context propagation. BREAKING: Requires HoneyDrunk.Kernel to be registered first. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
     <PackageTags>messaging;transport;inmemory;testing;broker;queue;pubsub</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,7 +30,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.5">
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.2.1" />
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

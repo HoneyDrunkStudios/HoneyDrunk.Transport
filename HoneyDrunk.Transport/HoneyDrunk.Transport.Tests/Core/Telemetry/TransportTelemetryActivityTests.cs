@@ -1,6 +1,6 @@
-using System.Diagnostics;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Telemetry;
+using System.Diagnostics;
 
 namespace HoneyDrunk.Transport.Tests.Core.Telemetry;
 
@@ -91,6 +91,12 @@ public sealed class TransportTelemetryActivityTests
 
         public string? CausationId { get; init; } = "cause";
 
+        public string? NodeId { get; init; }
+
+        public string? StudioId { get; init; }
+
+        public string? Environment { get; init; }
+
         public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
 
         public string MessageType { get; init; } = typeof(TestEnvelope).FullName!;
@@ -101,7 +107,12 @@ public sealed class TransportTelemetryActivityTests
 
         public ITransportEnvelope WithHeaders(IDictionary<string, string> additionalHeaders) => this;
 
-        public ITransportEnvelope WithCorrelation(string? correlationId, string? causationId) => this;
+        public ITransportEnvelope WithGridContext(
+            string? correlationId = null,
+            string? causationId = null,
+            string? nodeId = null,
+            string? studioId = null,
+            string? environment = null) => this;
     }
 
     private sealed class TestEndpointAddress(string address) : IEndpointAddress

@@ -1,8 +1,25 @@
 <Solution>
   <Folder Name="/Docs/">
-    <File Path="../.github/copilot-instructions.md" />
     <File Path="../README.md" />
+  </Folder>
+  <Folder Name="/Docs/Copilot/">
+    <File Path="../.github/copilot-instructions.md" />
+  </Folder>
+  <Folder Name="/Docs/FileGuide/">
+    <File Path="docs/Abstractions.md" />
+    <File Path="docs/AzureServiceBus.md" />
+    <File Path="docs/Configuration.md" />
+    <File Path="docs/Context.md" />
+    <File Path="docs/DependencyInjection.md" />
     <File Path="docs/FILE_GUIDE.md" />
+    <File Path="docs/Health.md" />
+    <File Path="docs/InMemory.md" />
+    <File Path="docs/Metrics.md" />
+    <File Path="docs/Outbox.md" />
+    <File Path="docs/Pipeline.md" />
+    <File Path="docs/Primitives.md" />
+    <File Path="docs/StorageQueue.md" />
+    <File Path="docs/Testing.md" />
   </Folder>
   <Folder Name="/Pipelines/">
     <File Path="../.github/workflows/publish.yml" />

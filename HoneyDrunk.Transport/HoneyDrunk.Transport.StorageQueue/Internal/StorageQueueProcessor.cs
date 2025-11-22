@@ -1,5 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
-using System.Text.Json;
 using Azure;
 using Azure.Storage.Queues;
 using Azure.Storage.Queues.Models;
@@ -10,6 +8,8 @@ using HoneyDrunk.Transport.StorageQueue.Configuration;
 using HoneyDrunk.Transport.Telemetry;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.Json;
 
 namespace HoneyDrunk.Transport.StorageQueue.Internal;
 

@@ -1,8 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using Azure.Storage.Queues;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HoneyDrunk.Transport.StorageQueue.Internal;
 
