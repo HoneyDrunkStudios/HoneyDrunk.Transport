@@ -4,8 +4,7 @@ using HoneyDrunk.Transport.Abstractions;
 namespace HoneyDrunk.Transport.Context;
 
 /// <summary>
-/// Default Grid context factory implementation.
-/// Creates Grid context from transport envelope metadata for distributed context propagation.
+/// Factory for creating Grid context instances from transport envelopes.
 /// </summary>
 /// <remarks>
 /// Initializes a new instance of the <see cref="GridContextFactory"/> class.
@@ -15,13 +14,21 @@ public sealed class GridContextFactory(TimeProvider timeProvider) : IGridContext
 {
     private readonly TimeProvider _timeProvider = timeProvider;
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Creates a Grid context from a transport envelope.
+    /// </summary>
+    /// <param name="envelope">The transport envelope.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>A Grid context instance.</returns>
     public IGridContext CreateFromEnvelope(ITransportEnvelope envelope, CancellationToken cancellationToken)
     {
-        // Create Grid context from envelope fields
+        ArgumentNullException.ThrowIfNull(envelope);
+
+        // Use messageId as fallback for correlation and causation if not provided
         var correlationId = envelope.CorrelationId ?? envelope.MessageId;
         var causationId = envelope.CausationId ?? envelope.MessageId;
 
+        // Copy headers as baggage (immutably)
         var baggage = envelope.Headers != null
             ? new Dictionary<string, string>(envelope.Headers)
             : [];
@@ -31,6 +38,8 @@ public sealed class GridContextFactory(TimeProvider timeProvider) : IGridContext
             causationId,
             envelope.NodeId ?? string.Empty,
             envelope.StudioId ?? string.Empty,
+            envelope.TenantId,
+            envelope.ProjectId,
             envelope.Environment ?? string.Empty,
             baggage,
             _timeProvider.GetUtcNow(),

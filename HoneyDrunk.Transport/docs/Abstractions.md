@@ -22,6 +22,8 @@ public interface ITransportEnvelope
     string? CausationId { get; }
     string? NodeId { get; }
     string? StudioId { get; }
+    string? TenantId { get; }      // Kernel v0.3.0+
+    string? ProjectId { get; }     // Kernel v0.3.0+
     string? Environment { get; }
     DateTimeOffset Timestamp { get; }
     string MessageType { get; }
@@ -34,6 +36,8 @@ public interface ITransportEnvelope
         string? causationId = null,
         string? nodeId = null,
         string? studioId = null,
+        string? tenantId = null,      // Kernel v0.3.0+
+        string? projectId = null,     // Kernel v0.3.0+
         string? environment = null);
 }
 ```
@@ -48,10 +52,11 @@ public async Task<MessageProcessingResult> HandleAsync(
 {
     var envelope = context.Envelope;
     _logger.LogInformation(
-        "Processing {MessageType} from Node {NodeId} with correlation {CorrelationId}",
+        "Processing {MessageType} from Node {NodeId} in Tenant {TenantId}, Project {ProjectId}",
         envelope.MessageType,
         envelope.NodeId,
-        envelope.CorrelationId);
+        envelope.TenantId,
+        envelope.ProjectId);
     
     return MessageProcessingResult.Success;
 }

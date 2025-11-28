@@ -1,4 +1,5 @@
 using Azure.Messaging.ServiceBus;
+using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Transport.AzureServiceBus;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
@@ -59,7 +60,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         {
             ["MessageType"] = "Test.Message",
             ["Timestamp"] = timestamp.ToString("o"),
-            ["CausationId"] = "causation-123",
+            [GridHeaderNames.CausationId] = "causation-123",
             ["CustomHeader"] = "custom-value"
         };
 
@@ -80,7 +81,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         Assert.Equal("custom-value", envelope.Headers["CustomHeader"]);
         Assert.DoesNotContain("MessageType", envelope.Headers.Keys); // Reserved property excluded
         Assert.DoesNotContain("Timestamp", envelope.Headers.Keys); // Reserved property excluded
-        Assert.DoesNotContain("CausationId", envelope.Headers.Keys); // Reserved property excluded
+        Assert.DoesNotContain(GridHeaderNames.CausationId, envelope.Headers.Keys); // Reserved property excluded
     }
 
     /// <summary>
@@ -170,7 +171,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         Assert.Equal("Test.Envelope", message.Subject);
         Assert.Equal("application/octet-stream", message.ContentType);
         Assert.Equal("Test.Envelope", message.ApplicationProperties["MessageType"]);
-        Assert.Equal("env-cause-789", message.ApplicationProperties["CausationId"]);
+        Assert.Equal("env-cause-789", message.ApplicationProperties[GridHeaderNames.CausationId]);
         Assert.Equal("Value1", message.ApplicationProperties["Header1"]);
         Assert.Equal("Value2", message.ApplicationProperties["Header2"]);
     }
@@ -193,7 +194,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var message = EnvelopeMapper.ToServiceBusMessage(envelope);
 
-        Assert.DoesNotContain("CausationId", message.ApplicationProperties.Keys);
+        Assert.DoesNotContain(GridHeaderNames.CausationId, message.ApplicationProperties.Keys);
     }
 
     /// <summary>
@@ -483,8 +484,8 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         {
             ["MessageType"] = "Test.Type",
             ["Timestamp"] = DateTimeOffset.UtcNow.ToString("o"),
-            ["CausationId"] = "cause-123",
-            ["CorrelationId"] = "corr-456", // Also reserved
+            [GridHeaderNames.CausationId] = "cause-123",
+            [GridHeaderNames.CorrelationId] = "corr-456", // Also reserved
             ["CustomHeader"] = "custom"
         };
 
@@ -498,7 +499,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         // Reserved properties should not be in headers
         Assert.DoesNotContain("MessageType", envelope.Headers.Keys);
         Assert.DoesNotContain("Timestamp", envelope.Headers.Keys);
-        Assert.DoesNotContain("CausationId", envelope.Headers.Keys);
+        Assert.DoesNotContain(GridHeaderNames.CausationId, envelope.Headers.Keys);
 
         // Custom header should be present
         Assert.Contains("CustomHeader", envelope.Headers.Keys);
@@ -513,7 +514,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
     {
         var properties = new Dictionary<string, object>
         {
-            ["CausationId"] = null!
+            [GridHeaderNames.CausationId] = null!
         };
 
         var message = ServiceBusModelFactory.ServiceBusReceivedMessage(
@@ -534,7 +535,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
     {
         var properties = new Dictionary<string, object>
         {
-            ["CausationId"] = string.Empty
+            [GridHeaderNames.CausationId] = string.Empty
         };
 
         var message = ServiceBusModelFactory.ServiceBusReceivedMessage(
@@ -590,8 +591,8 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var message = EnvelopeMapper.ToServiceBusMessage(envelope);
 
-        Assert.Contains("CausationId", message.ApplicationProperties.Keys);
-        Assert.Equal("cause-123", message.ApplicationProperties["CausationId"]);
+        Assert.Contains(GridHeaderNames.CausationId, message.ApplicationProperties.Keys);
+        Assert.Equal("cause-123", message.ApplicationProperties[GridHeaderNames.CausationId]);
     }
 
     /// <summary>
@@ -612,7 +613,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var message = EnvelopeMapper.ToServiceBusMessage(envelope);
 
-        Assert.DoesNotContain("CausationId", message.ApplicationProperties.Keys);
+        Assert.DoesNotContain(GridHeaderNames.CausationId, message.ApplicationProperties.Keys);
     }
 
     /// <summary>

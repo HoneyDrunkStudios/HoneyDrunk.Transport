@@ -19,6 +19,12 @@ Just like how the postal service lets you send letters without worrying about tr
 
 This guide is organized into focused documents by domain:
 
+### 🏛️ Architecture
+
+| Document | Description |
+|----------|-------------|
+| [Architecture.md](Architecture.md) | **Dependency flow, layer responsibilities, and integration patterns** |
+
 ### 🔷 HoneyDrunk.Transport (Core)
 
 | Domain | Document | Description |

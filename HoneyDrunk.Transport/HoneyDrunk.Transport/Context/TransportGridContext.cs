@@ -12,6 +12,8 @@ internal sealed class TransportGridContext(
     string? causationId,
     string nodeId,
     string studioId,
+    string? tenantId,
+    string? projectId,
     string environment,
     IReadOnlyDictionary<string, string> baggage,
     DateTimeOffset createdAtUtc,
@@ -32,6 +34,12 @@ internal sealed class TransportGridContext(
     public string StudioId { get; } = studioId;
 
     /// <inheritdoc/>
+    public string? TenantId { get; } = tenantId;
+
+    /// <inheritdoc/>
+    public string? ProjectId { get; } = projectId;
+
+    /// <inheritdoc/>
     public string Environment { get; } = environment;
 
     /// <inheritdoc/>
@@ -43,14 +51,18 @@ internal sealed class TransportGridContext(
     /// <inheritdoc/>
     public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Begins a scope for this Grid context.
+    /// </summary>
     public IDisposable BeginScope()
     {
         // No-op scope for lightweight implementation
         return new NoOpScope();
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Creates a child context derived from this context.
+    /// </summary>
     public IGridContext CreateChildContext(string? nodeId = null)
     {
         // Create child context with current correlation as causation
@@ -59,13 +71,17 @@ internal sealed class TransportGridContext(
             CorrelationId, // Current becomes causation
             nodeId ?? NodeId,
             StudioId,
+            TenantId,
+            ProjectId,
             Environment,
             _baggage,
             CreatedAtUtc,
             Cancellation);
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Creates a new context with additional baggage.
+    /// </summary>
     public IGridContext WithBaggage(string key, string value)
     {
         var newBaggage = new Dictionary<string, string>(_baggage)
@@ -78,6 +94,8 @@ internal sealed class TransportGridContext(
             CausationId,
             NodeId,
             StudioId,
+            TenantId,
+            ProjectId,
             Environment,
             newBaggage,
             CreatedAtUtc,

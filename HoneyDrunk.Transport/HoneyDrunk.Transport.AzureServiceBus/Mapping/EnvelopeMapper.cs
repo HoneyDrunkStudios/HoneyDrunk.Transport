@@ -1,4 +1,5 @@
 using Azure.Messaging.ServiceBus;
+using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Primitives;
 
@@ -6,6 +7,7 @@ namespace HoneyDrunk.Transport.AzureServiceBus.Mapping;
 
 /// <summary>
 /// Maps between HoneyDrunk transport envelopes and Azure Service Bus messages.
+/// Uses Kernel GridHeaderNames for consistent header naming across transports.
 /// </summary>
 public static class EnvelopeMapper
 {
@@ -31,12 +33,38 @@ public static class EnvelopeMapper
         message.ApplicationProperties[MessageTypeProperty] = envelope.MessageType;
         message.ApplicationProperties[TimestampProperty] = envelope.Timestamp.ToString("o");
 
+        // Map Grid context using Kernel's canonical header names
         if (!string.IsNullOrEmpty(envelope.CausationId))
         {
-            message.ApplicationProperties["CausationId"] = envelope.CausationId;
+            message.ApplicationProperties[GridHeaderNames.CausationId] = envelope.CausationId;
         }
 
-        // Copy all headers
+        if (!string.IsNullOrEmpty(envelope.NodeId))
+        {
+            message.ApplicationProperties[GridHeaderNames.NodeId] = envelope.NodeId;
+        }
+
+        if (!string.IsNullOrEmpty(envelope.StudioId))
+        {
+            message.ApplicationProperties[GridHeaderNames.StudioId] = envelope.StudioId;
+        }
+
+        if (!string.IsNullOrEmpty(envelope.TenantId))
+        {
+            message.ApplicationProperties[GridHeaderNames.TenantId] = envelope.TenantId;
+        }
+
+        if (!string.IsNullOrEmpty(envelope.ProjectId))
+        {
+            message.ApplicationProperties[GridHeaderNames.ProjectId] = envelope.ProjectId;
+        }
+
+        if (!string.IsNullOrEmpty(envelope.Environment))
+        {
+            message.ApplicationProperties[GridHeaderNames.Environment] = envelope.Environment;
+        }
+
+        // Copy all headers (includes baggage with X-Baggage- prefix)
         foreach (var header in envelope.Headers)
         {
             message.ApplicationProperties[header.Key] = header.Value;
@@ -57,10 +85,15 @@ public static class EnvelopeMapper
         {
             MessageTypeProperty,
             TimestampProperty,
-            "CausationId"
+            GridHeaderNames.CausationId,
+            GridHeaderNames.NodeId,
+            GridHeaderNames.StudioId,
+            GridHeaderNames.TenantId,
+            GridHeaderNames.ProjectId,
+            GridHeaderNames.Environment
         };
 
-        // Extract headers from application properties, excluding reserved properties
+        // Extract headers from application properties, excluding reserved Grid context properties
         var headers = message.ApplicationProperties
             .Where(property => !reservedProperties.Contains(property.Key))
             .ToDictionary(
@@ -86,11 +119,41 @@ public static class EnvelopeMapper
             messageType = messageTypeValue?.ToString() ?? messageType;
         }
 
-        // Get causation ID
+        // Extract Grid context using Kernel's canonical header names
         string? causationId = null;
-        if (message.ApplicationProperties.TryGetValue("CausationId", out var causationValue))
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.CausationId, out var causationValue))
         {
             causationId = causationValue?.ToString();
+        }
+
+        string? nodeId = null;
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.NodeId, out var nodeValue))
+        {
+            nodeId = nodeValue?.ToString();
+        }
+
+        string? studioId = null;
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.StudioId, out var studioValue))
+        {
+            studioId = studioValue?.ToString();
+        }
+
+        string? tenantId = null;
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.TenantId, out var tenantValue))
+        {
+            tenantId = tenantValue?.ToString();
+        }
+
+        string? projectId = null;
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.ProjectId, out var projectValue))
+        {
+            projectId = projectValue?.ToString();
+        }
+
+        string? environment = null;
+        if (message.ApplicationProperties.TryGetValue(GridHeaderNames.Environment, out var envValue))
+        {
+            environment = envValue?.ToString();
         }
 
         return new TransportEnvelope
@@ -98,6 +161,11 @@ public static class EnvelopeMapper
             MessageId = message.MessageId,
             CorrelationId = message.CorrelationId,
             CausationId = causationId,
+            NodeId = nodeId,
+            StudioId = studioId,
+            TenantId = tenantId,
+            ProjectId = projectId,
+            Environment = environment,
             Timestamp = timestamp,
             MessageType = messageType ?? "Unknown",
             Headers = headers,

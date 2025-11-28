@@ -95,6 +95,10 @@ public sealed class TransportTelemetryActivityTests
 
         public string? StudioId { get; init; }
 
+        public string? TenantId { get; init; }
+
+        public string? ProjectId { get; init; }
+
         public string? Environment { get; init; }
 
         public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
@@ -112,6 +116,8 @@ public sealed class TransportTelemetryActivityTests
             string? causationId = null,
             string? nodeId = null,
             string? studioId = null,
+            string? tenantId = null,
+            string? projectId = null,
             string? environment = null) => this;
     }
 

@@ -8,11 +8,11 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.2.0</Version>
+    <Version>0.3.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support. Integrated with HoneyDrunk.Kernel for Grid-aware context propagation.</Description>
-    <PackageReleaseNotes>v0.2.0: BREAKING - Full Kernel integration with IGridContext, Node lifecycle, and health contributors. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
-    <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid</PackageTags>
+    <PackageReleaseNotes>v0.3.0: BREAKING - Kernel v0.3.0 integration with TenantId/ProjectId multi-tenancy, IMessagePublisher high-level API, and GridHeaderNames standardization. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
+    <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport</RepositoryUrl>
@@ -30,7 +30,7 @@
 
   <ItemGroup>
     <!-- Core abstractions only - no runtime dependencies -->
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.2.1" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.3.0" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
