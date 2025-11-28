@@ -4,6 +4,22 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [InMemoryBroker.cs](#inmemorybrokercs)
+- [InMemoryTransportPublisher.cs](#inmemorytransportpublishercs)
+- [InMemoryTransportConsumer.cs](#inmemorytransportconsumercs)
+- [Setup and Configuration](#setup-and-configuration)
+- [Testing Patterns](#testing-patterns)
+  - [End-to-End Message Flow](#end-to-end-message-flow)
+  - [Verify Message Content](#verify-message-content)
+  - [Testing Error Handling](#testing-error-handling)
+  - [Testing Middleware Pipeline](#testing-middleware-pipeline)
+  - [Performance Testing](#performance-testing)
+
+---
+
 ## Overview
 
 In-memory message broker for testing without external dependencies. Provides full pipeline execution with no infrastructure requirements.
@@ -297,4 +313,4 @@ public async Task HandlesHighVolumeMessages()
 
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

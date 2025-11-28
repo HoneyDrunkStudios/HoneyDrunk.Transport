@@ -4,6 +4,19 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [IMessagePipeline.cs](#imessagepipelinecs)
+- [IMessageMiddleware.cs](#imessagemiddlewarecs)
+- [Built-in Middleware](#built-in-middleware)
+  - [GridContextPropagationMiddleware.cs](#gridcontextpropagationmiddlewarecs)
+  - [LoggingMiddleware.cs](#loggingmiddlewarecs)
+  - [TelemetryMiddleware.cs](#telemetrymiddlewarecs)
+- [MessageHandlerException.cs](#messagehandlerexceptioncs)
+
+---
+
 ## Overview
 
 The middleware pipeline system that processes messages in an onion-style pattern. Each middleware layer wraps the next, enabling cross-cutting concerns like logging, telemetry, and validation.
@@ -29,6 +42,8 @@ public interface IMessagePipeline
 // Used internally by consumers - not typically called directly
 // Pipeline automatically invoked when messages arrive
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -72,6 +87,8 @@ public class TenantResolutionMiddleware(ITenantResolver resolver)
 services.AddMessageMiddleware<TenantResolutionMiddleware>();
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## Built-in Middleware
@@ -107,6 +124,8 @@ services.AddHoneyDrunkTransportCore(options =>
     options.EnableCorrelation = true; // Enables GridContextPropagationMiddleware
 });
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -161,6 +180,8 @@ services.AddHoneyDrunkTransportCore(options =>
 });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ### TelemetryMiddleware.cs
@@ -202,6 +223,8 @@ services.AddHoneyDrunkTransportCore(options =>
 });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## MessageHandlerException.cs
@@ -240,6 +263,8 @@ public async Task<MessageProcessingResult> HandleAsync(
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

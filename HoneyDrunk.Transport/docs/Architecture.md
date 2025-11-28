@@ -4,6 +4,23 @@
 
 ---
 
+## Table of Contents
+
+- [Dependency Flow](#dependency-flow)
+- [What Each Layer Provides](#what-each-layer-provides)
+  - [HoneyDrunk.Kernel](#-honeydrunkkernel)
+  - [HoneyDrunk.Data](#-honeydrunkdata)
+  - [HoneyDrunk.Transport](#-honeydrunktransport)
+  - [Application Nodes](#-application-nodes)
+- [Outbox Pattern: The Right Way](#outbox-pattern-the-right-way)
+  - [Wrong Approach (Data → Transport)](#-wrong-approach-data--transport)
+  - [Correct Approach (Transport → Data)](#-correct-approach-transport--data)
+- [What Data Should Expose](#what-data-should-expose)
+- [What Data Should NOT Expose](#what-data-should-not-expose)
+- [Summary](#summary)
+
+---
+
 ## Dependency Flow
 
 The HoneyDrunk architecture follows a strict layered approach:
@@ -35,15 +52,22 @@ The HoneyDrunk architecture follows a strict layered approach:
 - **Transport → Data**: Transport uses Data's storage primitives for outbox
 - **Transport → Kernel**: Transport uses IGridContext, correlation IDs
 - **Data → Kernel**: Data uses base primitives
+- **Data → Transport.Abstractions**: Data can use `IMessagePublisher` (high-level messaging API)
 - **Application → Transport**: Apps publish/consume messages
 - **Application → Data**: Apps persist domain entities
 - **Application → Kernel**: Apps use Grid context
 
 ### ❌ Forbidden Dependencies
 
-- **Data → Transport**: Data MUST NOT know Transport exists
+- **Data → Transport Implementation**: Data MUST NOT depend on transport implementations (Azure Service Bus, Storage Queue, etc.)
+- **Data defining messaging abstractions**: Data MUST NOT define `IMessagePublisher`, `ITransportPublisher`, etc.
 - **Kernel → Data**: Kernel has no storage knowledge
 - **Kernel → Transport**: Kernel has no messaging knowledge
+
+**Clarification**: The key distinction is:
+- ✅ **Data using Transport abstractions** (`IMessagePublisher`) = **Allowed**
+- ❌ **Data defining messaging abstractions** = **Forbidden**
+- ❌ **Data depending on transport implementations** = **Forbidden**
 
 ---
 
@@ -300,8 +324,8 @@ public interface ISqlConnectionFactory
 public interface IDbSession : IAsyncDisposable
 {
     Task<IDbTransaction> BeginTransactionAsync(CancellationToken ct);
-    Task<int> ExecuteAsync(string sql, object? parameters = null);
-    Task<T?> QuerySingleOrDefaultAsync<T>(string sql, object? parameters = null);
+    Task<int> ExecuteAsync(String sql, Object? parameters = null);
+    Task<T?> QuerySingleOrDefaultAsync<T>(String sql, Object? parameters = null);
 }
 ```
 
@@ -361,15 +385,52 @@ public class OutboxMigrationContributor : IMigrationContributor
 
 ## What Data Should NOT Expose
 
-### ❌ Messaging Abstractions
+### ❌ Messaging Abstractions - Definition vs Usage
+
+**Important Distinction**: Data should **NOT define** messaging abstractions, but it **CAN use** Transport's abstractions.
 
 ```csharp
-// WRONG - These belong in Transport, not Data
-public interface IMessagePublisher { }      // ❌
-public interface ITransportPublisher { }    // ❌
-public interface IMessageHandler<T> { }     // ❌
-public interface ITransportConsumer { }     // ❌
+// ❌ WRONG - Data defining its own messaging abstractions
+namespace HoneyDrunk.Data
+{
+    public interface IMessagePublisher { }      // ❌ Don't define in Data
+    public interface ITransportPublisher { }    // ❌ Don't define in Data
+    public interface IMessageHandler<T> { }     // ❌ Don't define in Data
+    public interface ITransportConsumer { }     // ❌ Don't define in Data
+}
+
+// ✅ CORRECT - Data using Transport's abstractions
+namespace HoneyDrunk.Data.Repositories
+{
+    using HoneyDrunk.Transport.Abstractions; // ✅ OK to depend on Transport
+    
+    public class OrderRepository(
+        IDbSession session,
+        IMessagePublisher publisher) // ✅ OK - using Transport's abstraction
+    {
+        public async Task SaveOrderAsync(Order order, IGridContext context, CancellationToken ct)
+        {
+            // 1. Save to database
+            await session.ExecuteAsync("INSERT INTO Orders ...", order);
+            
+            // 2. Publish domain event using Transport's high-level API
+            await publisher.PublishAsync(
+                "orders.created",
+                new OrderCreated(order.Id),
+                context,
+                ct);
+        }
+    }
+}
 ```
+
+**Design Rationale**:
+- `IMessagePublisher` is Transport's **high-level abstraction** for Grid-context-aware publishing
+- Data and Application layers **should use** `IMessagePublisher` (not `ITransportPublisher`)
+- `ITransportPublisher` is Transport's **low-level implementation detail** for envelope-based messaging
+- Data should **never define** its own competing messaging abstractions
+
+---
 
 ### ❌ Messaging Behavior
 
@@ -396,14 +457,18 @@ public class EnvelopeFactory { }            // ❌
 | Layer | Provides | Depends On | Does NOT Provide |
 |-------|----------|------------|------------------|
 | **Kernel** | Base primitives (IGridContext, CorrelationId) | Nothing | Storage, Messaging |
-| **Data** | Storage primitives, conventions | Kernel | Messaging, Outbox behavior |
-| **Transport** | Messaging, Outbox implementation | Kernel, Data | Domain logic |
+| **Data** | Storage primitives, conventions | Kernel, **Transport (via IMessagePublisher)** | Messaging **abstractions** (but can use Transport's) |
+| **Transport** | Messaging abstractions (IMessagePublisher, ITransportPublisher), Outbox implementation | Kernel, Data | Domain logic |
 | **Application** | Business logic | Kernel, Data, Transport | Infrastructure |
 
 **Golden Rule**: Data is the "database muscle", Transport is the "messaging brain" that uses that muscle.
 
-**Key Insight**: Transport depends on Data for persistence, but Data never knows Transport exists.
+**Key Insights**:
+1. Transport depends on Data for persistence, but Data never knows Transport's **implementation details**
+2. Data **can use** Transport's high-level abstractions (`IMessagePublisher`) for publishing domain events
+3. `IMessagePublisher` is designed for Data/Application layers; `ITransportPublisher` is Transport's internal detail
+4. Data should **never define** its own messaging abstractions - always use Transport's
 
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

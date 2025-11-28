@@ -37,7 +37,7 @@ public interface ITransportEnvelope
 
     /// <summary>
     /// Gets the Tenant identifier for multi-tenancy support.
-    /// Maps to IGridContext.TenantId. Distinct from StudioId in Kernel.
+    /// Maps to IGridContext.TenantId. Used for tenant-level isolation. Complements StudioId for hierarchical multi-tenancy in Kernel.
     /// </summary>
     string? TenantId { get; }
 

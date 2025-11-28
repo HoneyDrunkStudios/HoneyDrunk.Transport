@@ -4,6 +4,20 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [ServiceCollectionExtensions.cs](#servicecollectionextensionscs)
+- [ITransportBuilder.cs](#itransportbuildercs)
+- [DelegateMessageHandler.cs](#delegatemessagehandlercs)
+- [DelegateMessageMiddleware.cs](#delegatemessagemiddlewarecs)
+- [Registration Patterns](#registration-patterns)
+  - [Complete Setup Example](#complete-setup-example)
+  - [Testing Configuration](#testing-configuration)
+  - [Multiple Transports](#multiple-transports)
+
+---
+
 ## Overview
 
 Fluent service registration extensions for configuring transport services. Provides builder pattern for composable transport setup.
@@ -65,6 +79,8 @@ services.AddMessageHandler<OrderCancelled>(async (message, context, ct) =>
 services.AddMessageMiddleware<ValidationMiddleware>();
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## ITransportBuilder.cs
@@ -99,6 +115,8 @@ services.AddHoneyDrunkTransportCore()
     });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## DelegateMessageHandler.cs
@@ -130,6 +148,8 @@ services.AddMessageHandler<PaymentCompleted>(
         return MessageProcessingResult.Success;
     });
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -163,6 +183,8 @@ services.AddMessageMiddleware(async (envelope, context, next, ct) =>
         sw.ElapsedMilliseconds);
 });
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -206,7 +228,7 @@ builder.Services
         retry.BackoffStrategy = BackoffStrategy.Exponential;
     });
 
-// 4. Register message handlers
+/// 4. Register message handlers
 builder.Services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
 builder.Services.AddMessageHandler<OrderUpdated, OrderUpdatedHandler>();
 builder.Services.AddMessageHandler<OrderCancelled, OrderCancelledHandler>();
@@ -218,6 +240,8 @@ builder.Services.AddMessageMiddleware<ValidationMiddleware>();
 var app = builder.Build();
 app.Run();
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -242,6 +266,8 @@ public class TestStartup
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ### Multiple Transports
@@ -263,6 +289,8 @@ builder.Services
     .WithConcurrency(10);
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

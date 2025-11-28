@@ -1,4 +1,7 @@
+﻿using Azure.Messaging.ServiceBus;
+using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
+using HoneyDrunk.Transport.Primitives;
 using HoneyDrunk.Transport.Telemetry;
 using HoneyDrunk.Transport.Tests.Support;
 using System.Diagnostics;
@@ -112,5 +115,287 @@ public sealed class EnvelopeMapperAdditionalTests
         Assert.True(
             activity.Tags.Any(t => t.Key == "custom.key2" && t.Value == "value2"),
             $"Expected tag 'custom.key2' with value 'value2' not found. Actual tags: {string.Join(", ", activity.Tags.Select(t => $"{t.Key}={t.Value}"))}");
+    }
+
+    /// <summary>
+    /// Verifies ToServiceBusMessage maps TenantId and ProjectId to ApplicationProperties.
+    /// </summary>
+    [Fact]
+    public void ToServiceBusMessage_WithTenantIdAndProjectId_MapsToApplicationProperties()
+    {
+        // Arrange
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            CorrelationId = "corr-456",
+            CausationId = "cause-789",
+            NodeId = "node-abc",
+            StudioId = "studio-def",
+            TenantId = "tenant-xyz",
+            ProjectId = "project-123",
+            Environment = "production",
+            Timestamp = DateTimeOffset.UtcNow,
+            MessageType = typeof(SampleMessage).FullName!,
+            Headers = new Dictionary<string, string>(),
+            Payload = new byte[] { 1, 2, 3 }
+        };
+
+        // Act
+        var sbMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
+
+        // Assert
+        Assert.Equal("tenant-xyz", sbMessage.ApplicationProperties[GridHeaderNames.TenantId]);
+        Assert.Equal("project-123", sbMessage.ApplicationProperties[GridHeaderNames.ProjectId]);
+    }
+
+    /// <summary>
+    /// Verifies ToServiceBusMessage does NOT add TenantId/ProjectId properties when null.
+    /// </summary>
+    [Fact]
+    public void ToServiceBusMessage_WithNullTenantIdAndProjectId_DoesNotAddToApplicationProperties()
+    {
+        // Arrange
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            CorrelationId = "corr-456",
+            NodeId = "node-abc",
+            StudioId = "studio-def",
+            TenantId = null,  // Explicitly null
+            ProjectId = null, // Explicitly null
+            Environment = "test",
+            Timestamp = DateTimeOffset.UtcNow,
+            MessageType = typeof(SampleMessage).FullName!,
+            Headers = new Dictionary<string, string>(),
+            Payload = new byte[] { 1, 2, 3 }
+        };
+
+        // Act
+        var sbMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
+
+        // Assert
+        Assert.False(sbMessage.ApplicationProperties.ContainsKey(GridHeaderNames.TenantId));
+        Assert.False(sbMessage.ApplicationProperties.ContainsKey(GridHeaderNames.ProjectId));
+    }
+
+    /// <summary>
+    /// Verifies ToServiceBusMessage does NOT add TenantId/ProjectId properties when empty string.
+    /// </summary>
+    [Fact]
+    public void ToServiceBusMessage_WithEmptyTenantIdAndProjectId_DoesNotAddToApplicationProperties()
+    {
+        // Arrange
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            CorrelationId = "corr-456",
+            NodeId = "node-abc",
+            StudioId = "studio-def",
+            TenantId = string.Empty,  // Empty string
+            ProjectId = string.Empty, // Empty string
+            Environment = "test",
+            Timestamp = DateTimeOffset.UtcNow,
+            MessageType = typeof(SampleMessage).FullName!,
+            Headers = new Dictionary<string, string>(),
+            Payload = new byte[] { 1, 2, 3 }
+        };
+
+        // Act
+        var sbMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
+
+        // Assert
+        Assert.False(sbMessage.ApplicationProperties.ContainsKey(GridHeaderNames.TenantId));
+        Assert.False(sbMessage.ApplicationProperties.ContainsKey(GridHeaderNames.ProjectId));
+    }
+
+    /// <summary>
+    /// Verifies FromServiceBusMessage extracts TenantId and ProjectId from ApplicationProperties.
+    /// </summary>
+    [Fact]
+    public void FromServiceBusMessage_WithTenantIdAndProjectId_ExtractsFromApplicationProperties()
+    {
+        // Arrange
+        var applicationProperties = new Dictionary<string, object>
+        {
+            [GridHeaderNames.TenantId] = "tenant-abc",
+            [GridHeaderNames.ProjectId] = "project-xyz",
+            [GridHeaderNames.CausationId] = "cause-123",
+            [GridHeaderNames.NodeId] = "node-456",
+            [GridHeaderNames.StudioId] = "studio-789",
+            [GridHeaderNames.Environment] = "production",
+            ["MessageType"] = typeof(SampleMessage).FullName!,
+            ["Timestamp"] = DateTimeOffset.UtcNow.ToString("o")
+        };
+
+        var sbMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
+            messageId: "msg-123",
+            correlationId: "corr-456",
+            subject: typeof(SampleMessage).FullName,
+            properties: applicationProperties);
+
+        // Act
+        var envelope = EnvelopeMapper.FromServiceBusMessage(sbMessage);
+
+        // Assert
+        Assert.Equal("tenant-abc", envelope.TenantId);
+        Assert.Equal("project-xyz", envelope.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies FromServiceBusMessage handles missing TenantId and ProjectId gracefully.
+    /// </summary>
+    [Fact]
+    public void FromServiceBusMessage_WithoutTenantIdAndProjectId_ReturnsNullValues()
+    {
+        // Arrange
+        var applicationProperties = new Dictionary<string, object>
+        {
+            [GridHeaderNames.NodeId] = "node-456",
+            [GridHeaderNames.StudioId] = "studio-789",
+            ["MessageType"] = typeof(SampleMessage).FullName!,
+            ["Timestamp"] = DateTimeOffset.UtcNow.ToString("o")
+        };
+
+        var sbMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
+            messageId: "msg-123",
+            correlationId: "corr-456",
+            subject: typeof(SampleMessage).FullName,
+            properties: applicationProperties);
+
+        // Act
+        var envelope = EnvelopeMapper.FromServiceBusMessage(sbMessage);
+
+        // Assert
+        Assert.Null(envelope.TenantId);
+        Assert.Null(envelope.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies round-trip mapping preserves TenantId and ProjectId.
+    /// </summary>
+    [Fact]
+    public void RoundTripMapping_PreservesTenantIdAndProjectId()
+    {
+        // Arrange
+        var originalEnvelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            CorrelationId = "corr-456",
+            CausationId = "cause-789",
+            NodeId = "node-abc",
+            StudioId = "studio-def",
+            TenantId = "tenant-original",
+            ProjectId = "project-original",
+            Environment = "staging",
+            Timestamp = DateTimeOffset.UtcNow,
+            MessageType = typeof(SampleMessage).FullName!,
+            Headers = new Dictionary<string, string> { ["custom"] = "header" },
+            Payload = new byte[] { 1, 2, 3, 4, 5 }
+        };
+
+        // Act - Round trip: envelope → ServiceBusMessage → envelope
+        var sbMessage = EnvelopeMapper.ToServiceBusMessage(originalEnvelope);
+
+        // Convert ServiceBusMessage to ServiceBusReceivedMessage for deserialization
+        var receivedMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
+            body: sbMessage.Body,
+            messageId: sbMessage.MessageId,
+            correlationId: sbMessage.CorrelationId,
+            subject: sbMessage.Subject,
+            properties: sbMessage.ApplicationProperties);
+
+        var roundTrippedEnvelope = EnvelopeMapper.FromServiceBusMessage(receivedMessage);
+
+        // Assert - All Grid context fields preserved
+        Assert.Equal(originalEnvelope.MessageId, roundTrippedEnvelope.MessageId);
+        Assert.Equal(originalEnvelope.CorrelationId, roundTrippedEnvelope.CorrelationId);
+        Assert.Equal(originalEnvelope.CausationId, roundTrippedEnvelope.CausationId);
+        Assert.Equal(originalEnvelope.NodeId, roundTrippedEnvelope.NodeId);
+        Assert.Equal(originalEnvelope.StudioId, roundTrippedEnvelope.StudioId);
+        Assert.Equal(originalEnvelope.TenantId, roundTrippedEnvelope.TenantId);
+        Assert.Equal(originalEnvelope.ProjectId, roundTrippedEnvelope.ProjectId);
+        Assert.Equal(originalEnvelope.Environment, roundTrippedEnvelope.Environment);
+        Assert.Equal(originalEnvelope.MessageType, roundTrippedEnvelope.MessageType);
+        Assert.Equal(originalEnvelope.Payload.ToArray(), roundTrippedEnvelope.Payload.ToArray());
+    }
+
+    /// <summary>
+    /// Verifies round-trip mapping with null TenantId/ProjectId preserves null values.
+    /// </summary>
+    [Fact]
+    public void RoundTripMapping_WithNullTenantIdAndProjectId_PreservesNullValues()
+    {
+        // Arrange
+        var originalEnvelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            CorrelationId = "corr-456",
+            NodeId = "node-abc",
+            StudioId = "studio-def",
+            TenantId = null,  // Explicitly null
+            ProjectId = null, // Explicitly null
+            Environment = "test",
+            Timestamp = DateTimeOffset.UtcNow,
+            MessageType = typeof(SampleMessage).FullName!,
+            Headers = new Dictionary<string, string>(),
+            Payload = new byte[] { 1, 2, 3 }
+        };
+
+        // Act - Round trip: envelope → ServiceBusMessage → envelope
+        var sbMessage = EnvelopeMapper.ToServiceBusMessage(originalEnvelope);
+
+        var receivedMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
+            body: sbMessage.Body,
+            messageId: sbMessage.MessageId,
+            correlationId: sbMessage.CorrelationId,
+            subject: sbMessage.Subject,
+            properties: sbMessage.ApplicationProperties);
+
+        var roundTrippedEnvelope = EnvelopeMapper.FromServiceBusMessage(receivedMessage);
+
+        // Assert - Null values preserved
+        Assert.Null(roundTrippedEnvelope.TenantId);
+        Assert.Null(roundTrippedEnvelope.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies TenantId and ProjectId are NOT included in the Headers collection (reserved fields).
+    /// </summary>
+    [Fact]
+    public void FromServiceBusMessage_ExcludesTenantIdAndProjectIdFromHeaders()
+    {
+        // Arrange
+        var applicationProperties = new Dictionary<string, object>
+        {
+            [GridHeaderNames.TenantId] = "tenant-abc",
+            [GridHeaderNames.ProjectId] = "project-xyz",
+            [GridHeaderNames.CausationId] = "cause-123",
+            ["CustomHeader"] = "custom-value",
+            ["MessageType"] = typeof(SampleMessage).FullName!,
+            ["Timestamp"] = DateTimeOffset.UtcNow.ToString("o")
+        };
+
+        var sbMessage = ServiceBusModelFactory.ServiceBusReceivedMessage(
+            messageId: "msg-123",
+            correlationId: "corr-456",
+            subject: typeof(SampleMessage).FullName,
+            properties: applicationProperties);
+
+        // Act
+        var envelope = EnvelopeMapper.FromServiceBusMessage(sbMessage);
+
+        // Assert - Reserved Grid context fields NOT in headers
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.TenantId));
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.ProjectId));
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.CausationId));
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.NodeId));
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.StudioId));
+        Assert.False(envelope.Headers.ContainsKey(GridHeaderNames.Environment));
+        Assert.False(envelope.Headers.ContainsKey("MessageType"));
+        Assert.False(envelope.Headers.ContainsKey("Timestamp"));
+
+        // But custom headers ARE included
+        Assert.True(envelope.Headers.ContainsKey("CustomHeader"));
+        Assert.Equal("custom-value", envelope.Headers["CustomHeader"]);
     }
 }

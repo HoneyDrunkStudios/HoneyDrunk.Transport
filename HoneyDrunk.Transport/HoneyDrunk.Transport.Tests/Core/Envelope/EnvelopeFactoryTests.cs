@@ -1,4 +1,6 @@
+using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Transport.Primitives;
+using NSubstitute;
 
 namespace HoneyDrunk.Transport.Tests.Core.Envelope;
 
@@ -105,6 +107,264 @@ public sealed class EnvelopeFactoryTests
 
         Assert.Equal(original.MessageId, reply.CorrelationId); // fallback
         Assert.Equal(original.MessageId, reply.CausationId);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext maps TenantId and ProjectId from IGridContext.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_MapsTenantIdAndProjectId()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            tenantId: "tenant-abc-123",
+            projectId: "project-xyz-789");
+
+        // Act
+        var envelope = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Assert
+        Assert.Equal("tenant-abc-123", envelope.TenantId);
+        Assert.Equal("project-xyz-789", envelope.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext handles null TenantId and ProjectId correctly.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_HandlesNullTenantIdAndProjectId()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            tenantId: null,
+            projectId: null);
+
+        // Act
+        var envelope = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Assert
+        Assert.Null(envelope.TenantId);
+        Assert.Null(envelope.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext maps all Grid context fields correctly.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_MapsAllGridContextFields()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            correlationId: "corr-123",
+            causationId: "cause-456",
+            nodeId: "node-789",
+            studioId: "studio-abc",
+            tenantId: "tenant-def",
+            projectId: "project-ghi",
+            environment: "production");
+
+        // Act
+        var envelope = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Assert
+        Assert.Equal("corr-123", envelope.CorrelationId);
+        Assert.Equal("cause-456", envelope.CausationId);
+        Assert.Equal("node-789", envelope.NodeId);
+        Assert.Equal("studio-abc", envelope.StudioId);
+        Assert.Equal("tenant-def", envelope.TenantId);
+        Assert.Equal("project-ghi", envelope.ProjectId);
+        Assert.Equal("production", envelope.Environment);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext merges Grid baggage into envelope headers.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_MergesBaggageIntoHeaders()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var baggage = new Dictionary<string, string>
+        {
+            ["baggage-key-1"] = "baggage-value-1",
+            ["baggage-key-2"] = "baggage-value-2"
+        };
+        var gridContext = CreateTestGridContext(baggage: baggage);
+
+        // Act
+        var envelope = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Assert
+        Assert.Equal("baggage-value-1", envelope.Headers["baggage-key-1"]);
+        Assert.Equal("baggage-value-2", envelope.Headers["baggage-key-2"]);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext merges additional headers with Grid baggage,
+    /// with additional headers taking precedence.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_MergesAdditionalHeadersWithBaggage()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var baggage = new Dictionary<string, string>
+        {
+            ["key1"] = "from-baggage",
+            ["key2"] = "also-from-baggage"
+        };
+        var gridContext = CreateTestGridContext(baggage: baggage);
+        var additionalHeaders = new Dictionary<string, string>
+        {
+            ["key1"] = "overridden",  // Should override baggage
+            ["key3"] = "from-headers"
+        };
+
+        // Act
+        var envelope = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext,
+            additionalHeaders);
+
+        // Assert
+        Assert.Equal("overridden", envelope.Headers["key1"]);       // Header overrides baggage
+        Assert.Equal("also-from-baggage", envelope.Headers["key2"]); // From baggage only
+        Assert.Equal("from-headers", envelope.Headers["key3"]);      // From headers only
+    }
+
+    /// <summary>
+    /// Verifies CreateReply propagates TenantId and ProjectId from original envelope.
+    /// </summary>
+    [Fact]
+    public void CreateReply_PropagatesTenantIdAndProjectId()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            tenantId: "original-tenant",
+            projectId: "original-project");
+
+        var original = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Act
+        var reply = factory.CreateReply(
+            original,
+            "ReplyType",
+            new ReadOnlyMemory<byte>([4, 5, 6]));
+
+        // Assert
+        Assert.Equal("original-tenant", reply.TenantId);
+        Assert.Equal("original-project", reply.ProjectId);
+    }
+
+    /// <summary>
+    /// Verifies CreateReply propagates all Grid context fields from original envelope.
+    /// </summary>
+    [Fact]
+    public void CreateReply_PropagatesAllGridContextFields()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            correlationId: "corr-123",
+            nodeId: "node-789",
+            studioId: "studio-abc",
+            tenantId: "tenant-def",
+            projectId: "project-ghi",
+            environment: "production");
+
+        var original = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Act
+        var reply = factory.CreateReply(
+            original,
+            "ReplyType",
+            new ReadOnlyMemory<byte>([4, 5, 6]));
+
+        // Assert
+        Assert.Equal(original.CorrelationId, reply.CorrelationId);
+        Assert.Equal(original.MessageId, reply.CausationId); // Causation links to original
+        Assert.Equal(original.NodeId, reply.NodeId);
+        Assert.Equal(original.StudioId, reply.StudioId);
+        Assert.Equal(original.TenantId, reply.TenantId);
+        Assert.Equal(original.ProjectId, reply.ProjectId);
+        Assert.Equal(original.Environment, reply.Environment);
+    }
+
+    /// <summary>
+    /// Verifies CreateReply handles null TenantId and ProjectId in original envelope.
+    /// </summary>
+    [Fact]
+    public void CreateReply_HandlesNullTenantIdAndProjectIdInOriginal()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = CreateTestGridContext(
+            tenantId: null,
+            projectId: null);
+
+        var original = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            gridContext);
+
+        // Act
+        var reply = factory.CreateReply(
+            original,
+            "ReplyType",
+            new ReadOnlyMemory<byte>([4, 5, 6]));
+
+        // Assert
+        Assert.Null(reply.TenantId);
+        Assert.Null(reply.ProjectId);
+    }
+
+    /// <summary>
+    /// Creates a test Grid context with customizable field values.
+    /// </summary>
+    private static IGridContext CreateTestGridContext(
+        string correlationId = "test-correlation",
+        string? causationId = null,
+        string nodeId = "test-node",
+        string studioId = "test-studio",
+        string? tenantId = null,
+        string? projectId = null,
+        string environment = "test",
+        Dictionary<string, string>? baggage = null)
+    {
+        var context = Substitute.For<IGridContext>();
+        context.CorrelationId.Returns(correlationId);
+        context.CausationId.Returns(causationId);
+        context.NodeId.Returns(nodeId);
+        context.StudioId.Returns(studioId);
+        context.TenantId.Returns(tenantId);
+        context.ProjectId.Returns(projectId);
+        context.Environment.Returns(environment);
+        context.Baggage.Returns(baggage ?? []);
+        context.CreatedAtUtc.Returns(FixedTime);
+        return context;
     }
 
     /// <summary>

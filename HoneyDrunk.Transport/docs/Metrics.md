@@ -4,6 +4,16 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [ITransportMetrics.cs](#itransportmetricscs)
+- [NoOpTransportMetrics.cs](#nooptransportmetricscs)
+- [TransportTelemetry.cs](#transporttelemetrycs)
+- [Metrics Dashboard Example](#metrics-dashboard-example)
+
+---
+
 ## Overview
 
 Metrics collection abstractions for recording transport operations. Integrates with Kernel IMetricsCollector for centralized metrics aggregation.
@@ -69,6 +79,8 @@ public class MetricsCollectingPublisher(
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## NoOpTransportMetrics.cs
@@ -98,6 +110,8 @@ services.AddHoneyDrunkTransportCore();  // Uses NoOpTransportMetrics
 // Replace with Kernel-backed implementation
 services.AddSingleton<ITransportMetrics, KernelTransportMetrics>();
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -155,6 +169,8 @@ catch (Exception ex)
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## Metrics Dashboard Example
@@ -211,6 +227,8 @@ public class TransportMetricsDashboard
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

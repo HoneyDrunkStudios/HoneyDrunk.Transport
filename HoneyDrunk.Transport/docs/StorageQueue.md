@@ -4,6 +4,20 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [StorageQueueOptions.cs](#storagequeueoptionscs)
+- [StorageQueueSender.cs](#storagequeuesendercs)
+- [StorageQueueProcessor.cs](#storagequeueprocessorcs)
+- [Concurrency Model](#concurrency-model)
+- [Poison Queue Pattern](#poison-queue-pattern)
+- [Message Size Handling](#message-size-handling)
+- [Complete Setup Example](#complete-setup-example)
+- [When to Use Storage Queue](#when-to-use-storage-queue)
+
+---
+
 ## Overview
 
 Azure Storage Queue transport for cost-effective, high-volume messaging. Ideal for simple queue-based scenarios without advanced features like topics or sessions.

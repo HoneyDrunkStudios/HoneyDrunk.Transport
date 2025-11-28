@@ -4,7 +4,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 
 /// <summary>
 /// Serializable envelope for Azure Storage Queue messages.
-/// Grid-aware with NodeId, StudioId, and Environment for distributed context propagation.
+/// Grid-aware with NodeId, StudioId, TenantId, ProjectId, and Environment for distributed context propagation.
 /// </summary>
 /// <remarks>
 /// This class represents the serialized form of a transport envelope that can be

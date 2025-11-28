@@ -4,11 +4,27 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [ITransportEnvelope.cs](#itransportenvelopecs)
+- [ITransportPublisher.cs](#itransportpublishercs)
+- [ITransportConsumer.cs](#itransportconsumercs)
+- [IMessageHandler\<TMessage\>.cs](#imessagehandlertmessagecs)
+- [MessageContext.cs](#messagecontextcs)
+- [MessageProcessingResult.cs](#messageprocessingresultcs)
+- [IEndpointAddress.cs](#iendpointaddresscs)
+- [IMessageSerializer.cs](#imessageserializercs)
+
+---
+
 ## Overview
 
 Core interfaces that define the transport abstraction layer. These contracts enable transport-agnostic messaging where applications depend on interfaces rather than specific broker implementations.
 
 **Location:** `HoneyDrunk.Transport/Abstractions/`
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -62,6 +78,8 @@ public async Task<MessageProcessingResult> HandleAsync(
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## ITransportPublisher.cs
@@ -101,6 +119,8 @@ public class OrderService(
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## ITransportConsumer.cs
@@ -120,6 +140,8 @@ public interface ITransportConsumer
 services.AddHoneyDrunkTransportCore()
     .AddHoneyDrunkServiceBusTransport(options => { /* ... */ });
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -152,6 +174,8 @@ public class OrderCreatedHandler : IMessageHandler<OrderCreated>
 
 services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -186,6 +210,8 @@ public async Task<MessageProcessingResult> HandleAsync(
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## MessageProcessingResult.cs
@@ -217,6 +243,8 @@ catch (ValidationException)
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## IEndpointAddress.cs
@@ -236,6 +264,8 @@ public interface IEndpointAddress
 var destination = new EndpointAddress("orders.created");
 await publisher.PublishAsync(envelope, destination, ct);
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -261,4 +291,4 @@ services.AddSingleton<IMessageSerializer, ProtobufSerializer>();
 
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)
