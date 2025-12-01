@@ -395,7 +395,7 @@ public sealed class EnvelopeMapperAdditionalTests
         Assert.False(envelope.Headers.ContainsKey("Timestamp"));
 
         // But custom headers ARE included
-        Assert.True(envelope.Headers.ContainsKey("CustomHeader"));
-        Assert.Equal("custom-value", envelope.Headers["CustomHeader"]);
+        Assert.True(envelope.Headers.TryGetValue("CustomHeader", out var customHeaderValue));
+        Assert.Equal("custom-value", customHeaderValue);
     }
 }
