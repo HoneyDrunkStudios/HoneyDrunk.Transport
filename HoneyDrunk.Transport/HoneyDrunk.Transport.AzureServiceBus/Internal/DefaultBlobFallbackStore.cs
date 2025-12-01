@@ -43,7 +43,7 @@ internal sealed class DefaultBlobFallbackStore : IBlobFallbackStore
             Destination = new BlobFallbackDestination
             {
                 Address = destination.Address,
-                Properties = new Dictionary<string, string>(destination.Properties)
+                Properties = new Dictionary<string, string>(destination.AdditionalProperties)
             },
             FailureTimestamp = now,
             FailureExceptionType = failure.GetType().FullName ?? failure.GetType().Name,

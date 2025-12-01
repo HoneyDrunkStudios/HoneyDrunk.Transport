@@ -78,11 +78,14 @@ public sealed class ServiceBusTransportPublisherAdditionalTests
         await using var publisher = new ServiceBusTransportPublisher(client, iopts, logger);
 
         var env = TestData.CreateEnvelope(new SampleMessage { Value = "x" });
-        var dest = EndpointAddress.Create("q", "q", new Dictionary<string, string>
-        {
-            ["PartitionKey"] = "pk-1",
-            ["SessionId"] = "s-1",
-        });
+        var dest = EndpointAddress.Create(
+            name: "q",
+            address: "q",
+            additionalProperties: new Dictionary<string, string>
+            {
+                ["PartitionKey"] = "pk-1",
+                ["SessionId"] = "s-1",
+            });
 
         await publisher.PublishAsync(env, dest);
 

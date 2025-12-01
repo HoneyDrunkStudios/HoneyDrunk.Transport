@@ -127,6 +127,14 @@ public sealed class TransportTelemetryActivityTests
 
         public string Address { get; } = address;
 
-        public IReadOnlyDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
+        public string? SessionId => null;
+
+        public string? PartitionKey => null;
+
+        public DateTimeOffset? ScheduledEnqueueTime => null;
+
+        public TimeSpan? TimeToLive => null;
+
+        public IReadOnlyDictionary<string, string> AdditionalProperties { get; } = new Dictionary<string, string>();
     }
 }

@@ -31,6 +31,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITransportPublisher, InMemoryTransportPublisher>();
         services.TryAddSingleton<ITransportConsumer, InMemoryTransportConsumer>();
 
+        // Register topology
+        services.TryAddSingleton<ITransportTopology, InMemoryTopology>();
+
         // Configure transport options
         if (configure != null)
         {
