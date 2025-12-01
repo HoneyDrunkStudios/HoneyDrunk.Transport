@@ -95,6 +95,10 @@ public sealed class TransportTelemetryActivityTests
 
         public string? StudioId { get; init; }
 
+        public string? TenantId { get; init; }
+
+        public string? ProjectId { get; init; }
+
         public string? Environment { get; init; }
 
         public DateTimeOffset Timestamp { get; init; } = DateTimeOffset.UtcNow;
@@ -112,6 +116,8 @@ public sealed class TransportTelemetryActivityTests
             string? causationId = null,
             string? nodeId = null,
             string? studioId = null,
+            string? tenantId = null,
+            string? projectId = null,
             string? environment = null) => this;
     }
 
@@ -121,6 +127,14 @@ public sealed class TransportTelemetryActivityTests
 
         public string Address { get; } = address;
 
-        public IReadOnlyDictionary<string, string> Properties { get; } = new Dictionary<string, string>();
+        public string? SessionId => null;
+
+        public string? PartitionKey => null;
+
+        public DateTimeOffset? ScheduledEnqueueTime => null;
+
+        public TimeSpan? TimeToLive => null;
+
+        public IReadOnlyDictionary<string, string> AdditionalProperties { get; } = new Dictionary<string, string>();
     }
 }

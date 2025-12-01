@@ -4,6 +4,17 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [IOutboxStore.cs](#ioutboxstorecs)
+- [IOutboxDispatcher.cs](#ioutboxdispatchercs)
+- [IOutboxMessage.cs](#ioutboxmessagecs)
+- [OutboxMessageState.cs](#outboxmessagestatecs)
+- [Complete Outbox Pattern Example](#complete-outbox-pattern-example)
+
+---
+
 ## Overview
 
 The transactional outbox pattern ensures exactly-once message delivery by storing messages in the database within the same transaction as business logic. A background dispatcher then publishes these messages reliably.
@@ -287,4 +298,4 @@ services.AddSingleton<ITransportHealthContributor, OutboxHealthContributor>();
 
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

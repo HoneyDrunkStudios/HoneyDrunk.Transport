@@ -4,6 +4,18 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [TransportCoreOptions.cs](#transportcoreoptionscs)
+- [RetryOptions.cs](#retryoptionscs)
+- [BackoffStrategy.cs](#backoffstrategycs)
+- [IErrorHandlingStrategy.cs](#ierrorhandlingstrategycs)
+- [ErrorHandlingAction.cs](#errorhandlingactioncs)
+- [ErrorHandlingDecision.cs](#errorhandlingdecisioncs)
+
+---
+
 ## Overview
 
 Configuration classes for controlling transport behavior including retry policies, backoff strategies, and error handling.
@@ -34,6 +46,8 @@ services.AddHoneyDrunkTransportCore(options =>
 });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## RetryOptions.cs
@@ -62,6 +76,8 @@ services.AddHoneyDrunkTransportCore()
     });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## BackoffStrategy.cs
@@ -87,6 +103,8 @@ retry.BackoffStrategy = BackoffStrategy.Linear;
 // Exponential: 1s, 2s, 4s, 8s (best for production)
 retry.BackoffStrategy = BackoffStrategy.Exponential;
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -134,6 +152,8 @@ public class CustomErrorStrategy : IErrorHandlingStrategy
 services.AddSingleton<IErrorHandlingStrategy, CustomErrorStrategy>();
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## ErrorHandlingAction.cs
@@ -146,6 +166,8 @@ public enum ErrorHandlingAction
     Ignore        // Discard message
 }
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -165,6 +187,8 @@ public sealed class ErrorHandlingDecision
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

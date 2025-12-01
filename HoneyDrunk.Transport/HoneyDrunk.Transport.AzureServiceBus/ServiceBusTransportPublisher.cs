@@ -69,16 +69,36 @@ public sealed class ServiceBusTransportPublisher(
 
             var serviceBusMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
 
-            // Apply partition key if provided
-            if (destination.Properties.TryGetValue("PartitionKey", out var partitionKey))
+            // Apply typed properties from endpoint address
+            if (!string.IsNullOrEmpty(destination.PartitionKey))
             {
-                serviceBusMessage.PartitionKey = partitionKey;
+                serviceBusMessage.PartitionKey = destination.PartitionKey;
             }
 
-            // Apply session ID if provided
-            if (destination.Properties.TryGetValue("SessionId", out var sessionId))
+            if (!string.IsNullOrEmpty(destination.SessionId))
             {
-                serviceBusMessage.SessionId = sessionId;
+                serviceBusMessage.SessionId = destination.SessionId;
+            }
+
+            if (destination.ScheduledEnqueueTime.HasValue)
+            {
+                serviceBusMessage.ScheduledEnqueueTime = destination.ScheduledEnqueueTime.Value;
+            }
+
+            if (destination.TimeToLive.HasValue)
+            {
+                serviceBusMessage.TimeToLive = destination.TimeToLive.Value;
+            }
+
+            // Fallback to additional properties for backward compatibility
+            if (destination.AdditionalProperties.TryGetValue("PartitionKey", out var partitionKey))
+            {
+                serviceBusMessage.PartitionKey ??= partitionKey;
+            }
+
+            if (destination.AdditionalProperties.TryGetValue("SessionId", out var sessionId))
+            {
+                serviceBusMessage.SessionId ??= sessionId;
             }
 
             await _sender!.SendMessageAsync(serviceBusMessage, cancellationToken);
@@ -153,16 +173,36 @@ public sealed class ServiceBusTransportPublisher(
             {
                 var message = EnvelopeMapper.ToServiceBusMessage(envelope);
 
-                // Apply partition key if provided
-                if (destination.Properties.TryGetValue("PartitionKey", out var partitionKey))
+                // Apply typed properties from endpoint address
+                if (!string.IsNullOrEmpty(destination.PartitionKey))
                 {
-                    message.PartitionKey = partitionKey;
+                    message.PartitionKey = destination.PartitionKey;
                 }
 
-                // Apply session ID if provided
-                if (destination.Properties.TryGetValue("SessionId", out var sessionId))
+                if (!string.IsNullOrEmpty(destination.SessionId))
                 {
-                    message.SessionId = sessionId;
+                    message.SessionId = destination.SessionId;
+                }
+
+                if (destination.ScheduledEnqueueTime.HasValue)
+                {
+                    message.ScheduledEnqueueTime = destination.ScheduledEnqueueTime.Value;
+                }
+
+                if (destination.TimeToLive.HasValue)
+                {
+                    message.TimeToLive = destination.TimeToLive.Value;
+                }
+
+                // Fallback to additional properties for backward compatibility
+                if (destination.AdditionalProperties.TryGetValue("PartitionKey", out var partitionKey))
+                {
+                    message.PartitionKey ??= partitionKey;
+                }
+
+                if (destination.AdditionalProperties.TryGetValue("SessionId", out var sessionId))
+                {
+                    message.SessionId ??= sessionId;
                 }
 
                 return message;

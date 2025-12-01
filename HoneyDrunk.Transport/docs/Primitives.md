@@ -4,6 +4,17 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [TransportEnvelope.cs](#transportenvelopecs)
+- [EnvelopeFactory.cs](#envelopefactorycs)
+- [JsonMessageSerializer.cs](#jsonmessageserializercs)
+- [EndpointAddress.cs](#endpointaddresscs)
+- [NoOpTransportTransaction.cs](#nooptransporttransactioncs)
+
+---
+
 ## Overview
 
 Core implementation classes that provide the foundational building blocks for the transport system. These are the concrete types that implement the abstractions.
@@ -50,6 +61,8 @@ var enriched = envelope.WithHeaders(new Dictionary<string, string>
 });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## EnvelopeFactory.cs
@@ -90,6 +103,8 @@ public class OrderService(EnvelopeFactory factory, IGridContext gridContext)
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## JsonMessageSerializer.cs
@@ -122,6 +137,8 @@ services.AddSingleton<IMessageSerializer>(
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     }));
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -161,6 +178,8 @@ var destination = new EndpointAddress(
     });
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## NoOpTransportTransaction.cs
@@ -183,6 +202,8 @@ public sealed class NoOpTransportTransaction : ITransportTransaction
 // No direct usage - accessed via MessageContext.Transaction
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

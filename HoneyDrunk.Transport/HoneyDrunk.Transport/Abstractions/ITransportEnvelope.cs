@@ -36,6 +36,18 @@ public interface ITransportEnvelope
     string? StudioId { get; }
 
     /// <summary>
+    /// Gets the Tenant identifier for multi-tenancy support.
+    /// Maps to IGridContext.TenantId. Used for tenant-level isolation. Complements StudioId for hierarchical multi-tenancy in Kernel.
+    /// </summary>
+    string? TenantId { get; }
+
+    /// <summary>
+    /// Gets the Project identifier for multi-project tenancy support.
+    /// Maps to IGridContext.ProjectId for project-level isolation within tenants.
+    /// </summary>
+    string? ProjectId { get; }
+
+    /// <summary>
     /// Gets the environment identifier (dev, staging, prod).
     /// Maps to IGridContext.Environment for environment-aware routing.
     /// </summary>
@@ -76,6 +88,8 @@ public interface ITransportEnvelope
     /// <param name="causationId">The causation identifier.</param>
     /// <param name="nodeId">The node identifier.</param>
     /// <param name="studioId">The studio identifier.</param>
+    /// <param name="tenantId">The tenant identifier.</param>
+    /// <param name="projectId">The project identifier.</param>
     /// <param name="environment">The environment identifier.</param>
     /// <returns>A new envelope instance with the updated Grid context.</returns>
     ITransportEnvelope WithGridContext(
@@ -83,5 +97,7 @@ public interface ITransportEnvelope
         string? causationId = null,
         string? nodeId = null,
         string? studioId = null,
+        string? tenantId = null,
+        string? projectId = null,
         string? environment = null);
 }

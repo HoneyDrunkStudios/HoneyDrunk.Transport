@@ -7,6 +7,7 @@
   </Folder>
   <Folder Name="/Docs/FileGuide/">
     <File Path="docs/Abstractions.md" />
+    <File Path="docs/Architecture.md" />
     <File Path="docs/AzureServiceBus.md" />
     <File Path="docs/Configuration.md" />
     <File Path="docs/Context.md" />

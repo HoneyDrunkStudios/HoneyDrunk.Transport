@@ -4,6 +4,16 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [ITransportHealthContributor.cs](#itransporthealthcontributorcs)
+- [TransportHealthResult.cs](#transporthealthresultcs)
+- [PublisherHealthContributor.cs](#publisherhealthcontributorcs)
+- [OutboxHealthContributor.cs](#outboxhealthcontributorcs)
+
+---
+
 ## Overview
 
 Health monitoring abstractions for transport components. Integrates with Kernel health aggregation for Kubernetes readiness/liveness probes.
@@ -51,6 +61,8 @@ public sealed class ServiceBusHealthContributor(ServiceBusClient client)
 // Register
 services.AddSingleton<ITransportHealthContributor, ServiceBusHealthContributor>();
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -100,6 +112,8 @@ return TransportHealthResult.Unhealthy(
     connectionException);
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## PublisherHealthContributor.cs
@@ -127,6 +141,8 @@ public sealed class PublisherHealthContributor(ITransportPublisher publisher)
     }
 }
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -207,6 +223,8 @@ public class OutboxMonitor(IEnumerable<ITransportHealthContributor> contributors
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

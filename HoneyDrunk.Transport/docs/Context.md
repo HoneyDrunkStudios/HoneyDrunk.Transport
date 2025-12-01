@@ -4,6 +4,16 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [IGridContextFactory.cs](#igridcontextfactorycs)
+- [GridContextFactory.cs](#gridcontextfactorycs)
+- [TransportGridContext.cs](#transportgridcontextcs)
+- [Grid Context Propagation Flow](#grid-context-propagation-flow)
+
+---
+
 ## Overview
 
 Grid context integration for distributed context propagation across Node boundaries. Bridges Transport envelopes to Kernel's IGridContext.
@@ -157,4 +167,4 @@ public async Task<MessageProcessingResult> HandleAsync(
 
 ---
 
-[← Back to File Guide](FILE_GUIDE.md)
+[← Back to File Guide](FILE_GUIDE.md) | [↑ Back to top](#table-of-contents)

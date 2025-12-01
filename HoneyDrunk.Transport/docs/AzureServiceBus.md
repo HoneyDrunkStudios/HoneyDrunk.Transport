@@ -4,6 +4,21 @@
 
 ---
 
+## Table of Contents
+
+- [Overview](#overview)
+- [AzureServiceBusOptions.cs](#azureservicebusoptionscs)
+- [ServiceBusTransportPublisher.cs](#servicebustransportpublishercs)
+- [ServiceBusTransportConsumer.cs](#servicebustransportconsumercs)
+- [Sessions Support](#sessions-support)
+- [Topics and Subscriptions](#topics-and-subscriptions)
+- [Blob Fallback Pattern](#blob-fallback-pattern)
+- [Dead-Letter Queue](#dead-letter-queue)
+- [Scheduled Messages](#scheduled-messages)
+- [Complete Setup Example](#complete-setup-example)
+
+---
+
 ## Overview
 
 Azure Service Bus transport for enterprise messaging with advanced features like topics, sessions, transactions, and duplicate detection.
@@ -300,6 +315,8 @@ public class FailedMessageReplayer(
     }
 }
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 

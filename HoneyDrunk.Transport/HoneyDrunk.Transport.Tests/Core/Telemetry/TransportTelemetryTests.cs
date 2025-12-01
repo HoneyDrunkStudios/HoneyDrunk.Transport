@@ -160,7 +160,7 @@ public sealed class TransportTelemetryTests
         var listener = new ActivityListener
         {
             ShouldListenTo = s => s.Name == TransportTelemetry.ActivitySourceName,
-            Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllDataAndRecorded,
+            Sample = (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStarted = _ => { },
             ActivityStopped = _ => { }
         };

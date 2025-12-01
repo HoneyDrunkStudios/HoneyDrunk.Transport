@@ -5,6 +5,8 @@ using HoneyDrunk.Transport.Metrics;
 using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Pipeline.Middleware;
 using HoneyDrunk.Transport.Primitives;
+using HoneyDrunk.Transport.Publishers;
+using HoneyDrunk.Transport.Runtime;
 using HoneyDrunk.Transport.Telemetry;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
@@ -51,8 +53,16 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IMessageSerializer, JsonMessageSerializer>();
         services.TryAddSingleton<IMessagePipeline, MessagePipeline>();
 
+        // High-level message publisher (for Data and other layers)
+        // This wraps the low-level ITransportPublisher in a Grid-context-aware API
+        services.TryAddSingleton<IMessagePublisher, MessagePublisher>();
+
         // Metrics (no-op by default, can be replaced with Kernel-backed implementation)
         services.TryAddSingleton<ITransportMetrics, NoOpTransportMetrics>();
+
+        // Register transport runtime host (coordinates consumer lifecycle)
+        services.TryAddSingleton<ITransportRuntime, TransportRuntimeHost>();
+        services.AddHostedService<TransportRuntimeHost>();
 
         // Register built-in middleware
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMessageMiddleware, GridContextPropagationMiddleware>());

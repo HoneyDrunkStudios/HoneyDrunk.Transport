@@ -18,6 +18,8 @@ public sealed class TransportGridContextTests
         var causationId = "cause-456";
         var nodeId = "node-1";
         var studioId = "studio-1";
+        var tenantId = "tenant-1";
+        var projectId = "project-1";
         var environment = "production";
         var baggage = new Dictionary<string, string> { ["key"] = "value" };
         var createdAt = DateTimeOffset.UtcNow;
@@ -29,6 +31,8 @@ public sealed class TransportGridContextTests
             causationId,
             nodeId,
             studioId,
+            tenantId,
+            projectId,
             environment,
             baggage,
             createdAt,
@@ -39,6 +43,8 @@ public sealed class TransportGridContextTests
         Assert.Equal(causationId, context.CausationId);
         Assert.Equal(nodeId, context.NodeId);
         Assert.Equal(studioId, context.StudioId);
+        Assert.Equal(tenantId, context.TenantId);
+        Assert.Equal(projectId, context.ProjectId);
         Assert.Equal(environment, context.Environment);
         Assert.Equal(createdAt, context.CreatedAtUtc);
         Assert.Equal(cts.Token, context.Cancellation);
@@ -60,6 +66,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            "tenant",
+            "project",
             "env",
             originalBaggage,
             DateTimeOffset.UtcNow,
@@ -87,6 +95,8 @@ public sealed class TransportGridContextTests
             null,
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string>(),
             DateTimeOffset.UtcNow,
@@ -112,6 +122,8 @@ public sealed class TransportGridContextTests
             null,
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string>(),
             DateTimeOffset.UtcNow,
@@ -137,6 +149,8 @@ public sealed class TransportGridContextTests
             "parent-cause",
             "node-1",
             "studio-1",
+            "tenant-1",
+            "project-1",
             "production",
             new Dictionary<string, string> { ["key"] = "value" },
             DateTimeOffset.UtcNow,
@@ -150,6 +164,8 @@ public sealed class TransportGridContextTests
         Assert.Equal("parent-corr", childContext.CausationId); // Parent correlation becomes causation
         Assert.Equal("node-1", childContext.NodeId); // Inherited
         Assert.Equal("studio-1", childContext.StudioId);
+        Assert.Equal("tenant-1", childContext.TenantId);
+        Assert.Equal("project-1", childContext.ProjectId);
         Assert.Equal("production", childContext.Environment);
         Assert.Single(childContext.Baggage);
         Assert.Equal("value", childContext.Baggage["key"]);
@@ -167,6 +183,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node-1",
             "studio-1",
+            "tenant-1",
+            "project-1",
             "production",
             new Dictionary<string, string>(),
             DateTimeOffset.UtcNow,
@@ -178,6 +196,8 @@ public sealed class TransportGridContextTests
         // Assert
         Assert.Equal("node-2", childContext.NodeId);
         Assert.Equal("studio-1", childContext.StudioId); // Other fields unchanged
+        Assert.Equal("tenant-1", childContext.TenantId);
+        Assert.Equal("project-1", childContext.ProjectId);
         Assert.Equal("production", childContext.Environment);
     }
 
@@ -193,6 +213,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string> { ["key1"] = "value1" },
             DateTimeOffset.UtcNow,
@@ -220,6 +242,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string> { ["key1"] = "value1" },
             DateTimeOffset.UtcNow,
@@ -251,6 +275,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string> { ["key1"] = "original" },
             DateTimeOffset.UtcNow,
@@ -282,6 +308,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            "tenant",
+            "project",
             "env",
             new Dictionary<string, string>(),
             createdAt,
@@ -295,6 +323,8 @@ public sealed class TransportGridContextTests
         Assert.Equal(originalContext.CausationId, newContext.CausationId);
         Assert.Equal(originalContext.NodeId, newContext.NodeId);
         Assert.Equal(originalContext.StudioId, newContext.StudioId);
+        Assert.Equal(originalContext.TenantId, newContext.TenantId);
+        Assert.Equal(originalContext.ProjectId, newContext.ProjectId);
         Assert.Equal(originalContext.Environment, newContext.Environment);
         Assert.Equal(originalContext.CreatedAtUtc, newContext.CreatedAtUtc);
         Assert.Equal(originalContext.Cancellation, newContext.Cancellation);
@@ -312,6 +342,8 @@ public sealed class TransportGridContextTests
             null, // Null causation
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string>(),
             DateTimeOffset.UtcNow,
@@ -337,6 +369,8 @@ public sealed class TransportGridContextTests
             "cause",
             "node",
             "studio",
+            null,
+            null,
             "env",
             new Dictionary<string, string>(),
             createdAt,

@@ -32,7 +32,7 @@ internal static class TestData
         {
             Name = name,
             Address = address,
-            Properties = new Dictionary<string, string>()
+            AdditionalProperties = new Dictionary<string, string>()
         };
     }
 }

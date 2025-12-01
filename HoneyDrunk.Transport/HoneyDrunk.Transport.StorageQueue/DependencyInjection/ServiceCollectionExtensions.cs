@@ -80,6 +80,9 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<ITransportPublisher, StorageQueueSender>();
         services.TryAddSingleton<ITransportConsumer, StorageQueueProcessor>();
 
+        // Register topology
+        services.TryAddSingleton<ITransportTopology, StorageQueueTopology>();
+
         return builder;
     }
 

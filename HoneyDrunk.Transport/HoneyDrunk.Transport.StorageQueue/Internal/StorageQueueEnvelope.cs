@@ -4,6 +4,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 
 /// <summary>
 /// Serializable envelope for Azure Storage Queue messages.
+/// Grid-aware with NodeId, StudioId, TenantId, ProjectId, and Environment for distributed context propagation.
 /// </summary>
 /// <remarks>
 /// This class represents the serialized form of a transport envelope that can be
@@ -31,10 +32,40 @@ internal sealed class StorageQueueEnvelope
     public string? CausationId { get; set; }
 
     /// <summary>
+    /// Gets or sets the Node identifier for Grid topology tracking.
+    /// </summary>
+    [JsonPropertyName("nodeId")]
+    public string? NodeId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Studio identifier for multi-tenancy.
+    /// </summary>
+    [JsonPropertyName("studioId")]
+    public string? StudioId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Tenant identifier.
+    /// </summary>
+    [JsonPropertyName("tenantId")]
+    public string? TenantId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the Project identifier.
+    /// </summary>
+    [JsonPropertyName("projectId")]
+    public string? ProjectId { get; set; }
+
+    /// <summary>
+    /// Gets or sets the environment identifier (dev, staging, prod).
+    /// </summary>
+    [JsonPropertyName("environment")]
+    public string? Environment { get; set; }
+
+    /// <summary>
     /// Gets or sets the message timestamp (UTC).
     /// </summary>
     [JsonPropertyName("timestamp")]
-    public DateTimeOffset Timestamp { get; set; }
+    public required DateTimeOffset Timestamp { get; set; }
 
     /// <summary>
     /// Gets or sets the fully qualified message type name.
@@ -43,7 +74,7 @@ internal sealed class StorageQueueEnvelope
     public required string MessageType { get; set; }
 
     /// <summary>
-    /// Gets or sets the message headers.
+    /// Gets or sets the message headers (includes Grid baggage).
     /// </summary>
     [JsonPropertyName("headers")]
     public Dictionary<string, string> Headers { get; set; } = [];

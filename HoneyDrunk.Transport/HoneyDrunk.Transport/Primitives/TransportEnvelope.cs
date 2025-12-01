@@ -3,7 +3,7 @@ using HoneyDrunk.Transport.Abstractions;
 namespace HoneyDrunk.Transport.Primitives;
 
 /// <summary>
-/// Default implementation of a transport envelope aligned with Kernel v0.2 IGridContext.
+/// Default implementation of a transport envelope aligned with Kernel IGridContext.
 /// </summary>
 public sealed class TransportEnvelope : ITransportEnvelope
 {
@@ -29,6 +29,12 @@ public sealed class TransportEnvelope : ITransportEnvelope
 
     /// <inheritdoc/>
     public string? StudioId { get; init; }
+
+    /// <inheritdoc/>
+    public string? TenantId { get; init; }
+
+    /// <inheritdoc/>
+    public string? ProjectId { get; init; }
 
     /// <inheritdoc/>
     public string? Environment { get; init; }
@@ -61,6 +67,8 @@ public sealed class TransportEnvelope : ITransportEnvelope
             CausationId = CausationId,
             NodeId = NodeId,
             StudioId = StudioId,
+            TenantId = TenantId,
+            ProjectId = ProjectId,
             Environment = Environment,
             Timestamp = Timestamp,
             MessageType = MessageType,
@@ -75,6 +83,8 @@ public sealed class TransportEnvelope : ITransportEnvelope
         string? causationId = null,
         string? nodeId = null,
         string? studioId = null,
+        string? tenantId = null,
+        string? projectId = null,
         string? environment = null)
     {
         return new TransportEnvelope
@@ -84,6 +94,8 @@ public sealed class TransportEnvelope : ITransportEnvelope
             CausationId = causationId ?? CausationId,
             NodeId = nodeId ?? NodeId,
             StudioId = studioId ?? StudioId,
+            TenantId = tenantId ?? TenantId,
+            ProjectId = projectId ?? ProjectId,
             Environment = environment ?? Environment,
             Timestamp = Timestamp,
             MessageType = MessageType,
