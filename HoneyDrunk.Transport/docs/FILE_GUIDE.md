@@ -31,7 +31,7 @@ This guide is organized into focused documents by domain:
 
 | Domain | Document | Description |
 |--------|----------|-------------|
-| 📋 **Abstractions** | [Abstractions.md](Abstractions.md) | Core contracts (ITransportEnvelope, ITransportPublisher, ITransportConsumer, IMessageHandler, ITransportTopology) |
+| 📋 **Abstractions** | [Abstractions.md](Abstractions.md) | Core contracts and transport-agnostic types (interfaces, context objects, result types, base handler, endpoint primitives) |
 | 🔧 **Primitives** | [Primitives.md](Primitives.md) | Building blocks (TransportEnvelope, EnvelopeFactory, message serialization) |
 | ⚙️ **Configuration** | [Configuration.md](Configuration.md) | Settings (RetryOptions, BackoffStrategy, error handling strategies) |
 | 🔄 **Pipeline** | [Pipeline.md](Pipeline.md) | Message processing chain (middleware, handlers, execution flow, TransportExecutionContext) |
@@ -265,6 +265,11 @@ builder.Services.Configure<OutboxDispatcherOptions>(options =>
 - Extensible via custom middleware
 - TransportExecutionContext for middleware-specific metadata
 
+**Handler Contract And Errors:**
+- Handlers currently return `MessageProcessingResult` (Success, Retry, DeadLetter).
+- `MessageProcessingFailure` provides structured error metadata (reason, category, exception, metadata) used by error handling strategies and telemetry.
+- Future versions may promote `MessageProcessingFailure` to the primary handler return type, but the current stable contract remains `MessageProcessingResult`.
+
 **Grid Context Integration:**
 - Automatic context propagation across Node boundaries
 - Correlation tracking for distributed operations
@@ -322,66 +327,162 @@ See [ROADMAP.md](ROADMAP.md) for complete implementation details and [ARCHITECTU
 
 ## 📦 Project Structure
 
+The Abstractions folder contains both pure interfaces and the shared contract types that all transports and handlers rely on, such as `MessageContext`, `PublishOptions`, `MessageProcessingResult`, and `EndpointAddress`.
+
 ```
 HoneyDrunk.Transport/
 ├── HoneyDrunk.Transport/              # Core abstractions and pipeline
 │   ├── Abstractions/                  # Contracts and interfaces
-│   │   ├── ITransportEnvelope.cs
-│   │   ├── ITransportPublisher.cs
-│   │   ├── ITransportConsumer.cs
-│   │   ├── ITransportRuntime.cs
-│   │   ├── ITransportTopology.cs
-│   │   ├── IEndpointAddress.cs
-│   │   ├── PublishOptions.cs
-│   │   ├── MessagePriority.cs
-│   │   └── MessageProcessingFailure.cs
+│   │   ├── EndpointAddress.cs         # Transport-agnostic endpoint address implementation
+│   │   ├── IEndpointAddress.cs        # Endpoint address contract
+│   │   ├── IMessageHandler.cs         # Message handler contract
+│   │   ├── IMessagePublisher.cs       # High-level message publisher
+│   │   ├── IMessageReceiver.cs        # Message receiver contract
+│   │   ├── IMessageSerializer.cs      # Serialization contract
+│   │   ├── ITransportConsumer.cs      # Transport consumer contract
+│   │   ├── ITransportEnvelope.cs      # Envelope contract
+│   │   ├── ITransportPublisher.cs     # Transport publisher contract
+│   │   ├── ITransportTopology.cs      # Topology capability contract
+│   │   ├── ITransportTransaction.cs   # Transaction abstraction
+│   │   ├── MessageContext.cs          # Handler message context
+│   │   ├── MessageHandler.cs          # Base handler implementation shared across transports
+│   │   ├── MessagePriority.cs         # Priority enumeration
+│   │   ├── MessageProcessingFailure.cs # Structured error metadata
+│   │   ├── MessageProcessingResult.cs # Handler result type
+│   │   ├── NoOpTransportTransaction.cs # Transport-agnostic no-op transaction implementation
+│   │   └── PublishOptions.cs          # Publish configuration options
 │   ├── Primitives/                    # Building blocks
-│   │   ├── TransportEnvelope.cs
-│   │   ├── EnvelopeFactory.cs
-│   │   └── EndpointAddress.cs
+│   │   ├── EnvelopeFactory.cs         # Envelope creation factory
+│   │   └── TransportEnvelope.cs       # Immutable envelope implementation
 │   ├── Configuration/                 # Settings and options
-│   │   ├── DefaultErrorHandlingStrategy.cs
-│   │   ├── ConfigurableErrorHandlingStrategy.cs
-│   │   └── ExceptionTypeMapStrategy.cs
+│   │   ├── BackoffStrategy.cs         # Backoff strategy enumeration
+│   │   ├── ConfigurableErrorHandlingStrategy.cs # Fluent rule-based strategy
+│   │   ├── DefaultErrorHandlingStrategy.cs # Default error handling
+│   │   ├── ErrorHandlingAction.cs     # Error action enumeration
+│   │   ├── ErrorHandlingDecision.cs   # Decision result type
+│   │   ├── ExceptionTypeMapStrategy.cs # Dictionary-based exception mapping
+│   │   ├── IErrorHandlingStrategy.cs  # Error handling contract
+│   │   ├── RetryOptions.cs            # Retry configuration
+│   │   ├── TransportCoreOptions.cs    # Core transport options
+│   │   └── TransportOptions.cs        # General transport options
 │   ├── Pipeline/                      # Middleware execution
-│   │   ├── TransportExecutionContext.cs
-│   │   └── MessagePipeline.cs
+│   │   ├── IMessageMiddleware.cs      # Middleware contract
+│   │   ├── IMessagePipeline.cs        # Pipeline contract
+│   │   ├── MessageHandlerException.cs # Handler exception wrapper
+│   │   ├── MessageHandlerInvoker.cs   # Handler invocation logic
+│   │   ├── MessageMiddleware.cs       # Base middleware class
+│   │   ├── MessagePipeline.cs         # Pipeline implementation
+│   │   ├── TransportExecutionContext.cs # Middleware execution context
+│   │   └── Middleware/                # Built-in middleware
+│   │       ├── CorrelationMiddleware.cs # Correlation ID propagation
+│   │       ├── GridContextPropagationMiddleware.cs # Grid context flow
+│   │       ├── LoggingMiddleware.cs   # Logging middleware
+│   │       └── RetryMiddleware.cs     # Retry with backoff
 │   ├── Context/                       # Grid context integration
+│   │   ├── GridContextFactory.cs      # Factory implementation
+│   │   ├── IGridContextFactory.cs     # Factory contract
+│   │   └── TransportGridContext.cs    # Transport-specific grid context
 │   ├── Runtime/                       # Lifecycle orchestration
-│   │   ├── ITransportRuntime.cs
-│   │   └── TransportRuntimeHost.cs
+│   │   ├── ITransportRuntime.cs       # Runtime contract
+│   │   └── TransportRuntimeHost.cs    # IHostedService implementation
 │   ├── Health/                        # Health monitoring
+│   │   ├── ITransportHealthContributor.cs # Health contributor contract
+│   │   ├── OutboxHealthContributor.cs # Outbox health check
+│   │   ├── PublisherHealthContributor.cs # Publisher health check
+│   │   └── TransportHealthResult.cs   # Health result type
 │   ├── Metrics/                       # Metrics collection
+│   │   ├── ITransportMetrics.cs       # Metrics contract
+│   │   └── NoOpTransportMetrics.cs    # No-op implementation
 │   ├── Outbox/                        # Transactional outbox
-│   │   ├── IOutboxStore.cs
-│   │   ├── IOutboxDispatcher.cs
-│   │   ├── DefaultOutboxDispatcher.cs
-│   │   └── OutboxDispatcherOptions.cs
+│   │   ├── DefaultOutboxDispatcher.cs # Background dispatcher service
+│   │   ├── IOutboxDispatcher.cs       # Dispatcher contract
+│   │   ├── IOutboxMessage.cs          # Message contract
+│   │   ├── IOutboxStore.cs            # Storage contract
+│   │   ├── OutboxDispatcherOptions.cs # Dispatcher configuration
+│   │   ├── OutboxMessage.cs           # Message implementation
+│   │   └── OutboxMessageState.cs      # Message state enumeration
 │   ├── Telemetry/                     # OpenTelemetry integration
-│   └── DependencyInjection/          # Service registration
+│   │   ├── TelemetryMiddleware.cs     # Telemetry middleware
+│   │   └── TransportTelemetry.cs      # Telemetry utilities
+│   ├── DependencyInjection/           # Service registration
+│   │   ├── DelegateMessageHandler.cs  # Delegate-based handler
+│   │   ├── DelegateMessageMiddleware.cs # Delegate-based middleware
+│   │   ├── ITransportBuilder.cs       # Builder contract
+│   │   ├── JsonMessageSerializer.cs   # JSON serializer implementation
+│   │   ├── NoOpMiddleware.cs          # No-op middleware
+│   │   ├── ServiceCollectionExtensions.cs # DI extensions
+│   │   └── TransportBuilder.cs        # Fluent builder implementation
+│   ├── Exceptions/                    # Custom exceptions
+│   │   └── MessageTooLargeException.cs # Size limit exception
+│   └── Publishers/                    # Publisher implementations
+│       └── MessagePublisher.cs        # High-level publisher
 │
 ├── HoneyDrunk.Transport.InMemory/    # In-memory transport
-│   ├── InMemoryBroker.cs
-│   ├── InMemoryTopology.cs
-│   ├── InMemoryTransportPublisher.cs
-│   └── InMemoryTransportConsumer.cs
+│   ├── InMemoryBroker.cs              # In-memory message broker
+│   ├── InMemoryTopology.cs            # Topology capabilities
+│   ├── InMemoryTransportPublisher.cs  # Publisher implementation
+│   ├── InMemoryTransportConsumer.cs   # Consumer implementation
+│   └── DependencyInjection/
+│       └── ServiceCollectionExtensions.cs # DI extensions
 │
 ├── HoneyDrunk.Transport.StorageQueue/ # Azure Storage Queue transport
-│   ├── StorageQueueOptions.cs
-│   ├── StorageQueueTopology.cs
-│   ├── StorageQueueSender.cs
-│   └── StorageQueueProcessor.cs
+│   ├── StorageQueueTopology.cs        # Topology capabilities
+│   ├── Configuration/
+│   │   └── StorageQueueOptions.cs     # Storage queue options
+│   ├── DependencyInjection/
+│   │   └── ServiceCollectionExtensions.cs # DI extensions
+│   └── Internal/
+│       ├── PoisonQueueMover.cs        # Poison message handling
+│       ├── QueueClientFactory.cs      # Client factory
+│       ├── StorageQueueEnvelope.cs    # Queue-specific envelope
+│       ├── StorageQueueProcessor.cs   # Message processor
+│       └── StorageQueueSender.cs      # Message sender
 │
 ├── HoneyDrunk.Transport.AzureServiceBus/ # Azure Service Bus transport
-│   ├── AzureServiceBusOptions.cs
-│   ├── ServiceBusTopology.cs
-│   ├── ServiceBusTransportPublisher.cs
-│   └── ServiceBusTransportConsumer.cs
+│   ├── ServiceBusTopology.cs          # Topology capabilities
+│   ├── ServiceBusTransportPublisher.cs # Publisher implementation
+│   ├── ServiceBusTransportConsumer.cs # Consumer implementation
+│   ├── Configuration/
+│   │   ├── AzureServiceBusOptions.cs  # Service Bus options
+│   │   ├── BlobFallbackOptions.cs     # Large message blob fallback
+│   │   ├── ServiceBusEntityType.cs    # Entity type enumeration
+│   │   ├── ServiceBusRetryMode.cs     # Retry mode enumeration
+│   │   └── ServiceBusRetryOptions.cs  # Retry configuration
+│   ├── DependencyInjection/
+│   │   └── ServiceCollectionExtensions.cs # DI extensions
+│   ├── Internal/
+│   │   ├── BlobFallbackDestination.cs # Blob storage destination
+│   │   ├── BlobFallbackRecord.cs      # Blob reference record
+│   │   ├── DefaultBlobFallbackStore.cs # Blob storage implementation
+│   │   └── IBlobFallbackStore.cs      # Blob fallback contract
+│   └── Mapping/
+│       ├── EnvelopeMapper.cs          # Envelope-to-ServiceBus mapping
+│       └── ServiceBusTransportTransaction.cs # Transaction wrapper
 │
 └── HoneyDrunk.Transport.Tests/       # Unit and integration tests
     ├── Core/                          # Core functionality tests
-    ├── InMemory/                      # InMemory transport tests
+    │   ├── Configuration/             # Configuration tests
+    │   ├── Context/                   # Context tests
+    │   ├── DependencyInjection/       # DI tests
+    │   ├── Envelope/                  # Envelope tests
+    │   ├── Exceptions/                # Exception tests
+    │   ├── Health/                    # Health check tests
+    │   ├── Metrics/                   # Metrics tests
+    │   ├── Middleware/                # Middleware tests
+    │   ├── Outbox/                    # Outbox tests
+    │   ├── Pipeline/                  # Pipeline tests
+    │   ├── Publishers/                # Publisher tests
+    │   ├── Serialization/             # Serialization tests
+    │   ├── Telemetry/                 # Telemetry tests
+    │   └── Transactions/              # Transaction tests
+    ├── Transports/                    # Transport-specific tests
+    │   ├── AzureServiceBus/           # Service Bus tests
+    │   ├── InMemory/                  # InMemory tests
+    │   └── StorageQueue/              # Storage Queue tests
     └── Support/                       # Test helpers
+        ├── SampleMessage.cs           # Test message type
+        ├── SampleMessageHandler.cs    # Test handler
+        └── TestData.cs                # Test data utilities
 ```
 
 ---
@@ -438,7 +539,7 @@ HoneyDrunk.Transport/
 - **Microsoft.Extensions.*** - DI, Hosting, Configuration abstractions
 - **System.Text.Json** - Default message serialization
 
-**Note on Data Integration:** Transport defines `IOutboxStore` for transactional outbox patterns, but does not depend on HoneyDrunk.Data. Application-level implementations of `IOutboxStore` often integrate with Data provider packages (e.g., SQL Server, PostgreSQL) to provide storage capabilities.
+**Note on Data Integration:** Transport defines `IOutboxStore` for transactional outbox patterns, but does not take a package dependency on `HoneyDrunk.Data`. Application-level implementations of `IOutboxStore` often integrate with Data provider packages (for example SQL Server, PostgreSQL) to provide storage capabilities.
 
 
 ### Downstream Consumers
@@ -479,5 +580,5 @@ Applications using HoneyDrunk.Transport:
 
 ---
 
-*Last Updated: 2025-01-22*  
+*Last Updated: 2025-12-03*  
 *Target Framework: .NET 10.0*  

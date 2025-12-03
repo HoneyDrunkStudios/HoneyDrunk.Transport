@@ -9,8 +9,11 @@
 - [Overview](#overview)
 - [ServiceCollectionExtensions.cs](#servicecollectionextensionscs)
 - [ITransportBuilder.cs](#itransportbuildercs)
+- [TransportBuilder.cs](#transportbuildercs)
+- [JsonMessageSerializer.cs](#jsonmessageserializercs)
 - [DelegateMessageHandler.cs](#delegatemessagehandlercs)
 - [DelegateMessageMiddleware.cs](#delegatemessagemiddlewarecs)
+- [NoOpMiddleware.cs](#noopmiddlewarecs)
 - [Registration Patterns](#registration-patterns)
   - [Complete Setup Example](#complete-setup-example)
   - [Testing Configuration](#testing-configuration)
@@ -48,7 +51,22 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddMessageMiddleware<TMiddleware>(
         this IServiceCollection services)
         where TMiddleware : class, IMessageMiddleware;
+    
+    public static IServiceCollection AddMessageMiddleware(
+        this IServiceCollection services,
+        MessageMiddleware middleware);
 }
+```
+
+`AddHoneyDrunkTransportCore` registers:
+
+- The message pipeline (`IMessagePipeline`)
+- Built-in middleware (conditionally via `TransportCoreOptions`)
+- `JsonMessageSerializer` as the default `IMessageSerializer`
+- The transport runtime host (`ITransportRuntime` / `IHostedService`)
+- The transport builder (`ITransportBuilder`) for fluent configuration
+
+```csharp
 ```
 
 ### Usage Example
@@ -85,6 +103,8 @@ services.AddMessageMiddleware<ValidationMiddleware>();
 
 ## ITransportBuilder.cs
 
+Contract for fluent transport configuration.
+
 ```csharp
 public interface ITransportBuilder
 {
@@ -113,6 +133,71 @@ services.AddHoneyDrunkTransportCore()
         retry.MaxAttempts = 5;
         retry.BackoffStrategy = BackoffStrategy.Exponential;
     });
+```
+
+> **Note:** Retry configuration typically belongs to transport adapters (ServiceBus, StorageQueue). Core transport exposes `RetryOptions` for shared behaviors such as pipeline-level retry middleware.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## TransportBuilder.cs
+
+Default implementation of `ITransportBuilder`. Created internally by `AddHoneyDrunkTransportCore()`.
+
+```csharp
+internal sealed class TransportBuilder(IServiceCollection services) : ITransportBuilder
+{
+    public IServiceCollection Services { get; } = services;
+}
+```
+
+This is an internal implementation detail. Transport adapter packages use the `ITransportBuilder` interface to chain configuration.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## JsonMessageSerializer.cs
+
+Default JSON serializer implementation using `System.Text.Json`. Registered automatically by `AddHoneyDrunkTransportCore()`.
+
+```csharp
+internal sealed class JsonMessageSerializer : IMessageSerializer
+{
+    public string ContentType => "application/json";
+    
+    public ReadOnlyMemory<byte> Serialize<TMessage>(TMessage message)
+        where TMessage : class;
+    
+    public TMessage Deserialize<TMessage>(ReadOnlyMemory<byte> payload)
+        where TMessage : class;
+    
+    public object Deserialize(ReadOnlyMemory<byte> payload, Type messageType);
+}
+```
+
+### Configuration
+
+Uses camelCase property naming and non-indented output for compact payloads:
+
+```csharp
+private readonly JsonSerializerOptions _options = new()
+{
+    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+    WriteIndented = false
+};
+```
+
+### Replacing the Default Serializer
+
+To use a custom serializer, register your implementation after `AddHoneyDrunkTransportCore()`:
+
+```csharp
+services.AddHoneyDrunkTransportCore();
+
+// Replace with custom serializer (e.g., MessagePack, Protobuf)
+services.AddSingleton<IMessageSerializer, MessagePackSerializer>();
 ```
 
 [↑ Back to top](#table-of-contents)
@@ -149,6 +234,8 @@ services.AddMessageHandler<PaymentCompleted>(
     });
 ```
 
+> **Note:** Delegate handlers are wrapped in `DelegateMessageHandler<TMessage>` and cached by `MessageHandlerInvoker` for efficient invocation.
+
 [↑ Back to top](#table-of-contents)
 
 ---
@@ -183,6 +270,40 @@ services.AddMessageMiddleware(async (envelope, context, next, ct) =>
         sw.ElapsedMilliseconds);
 });
 ```
+
+The delegate is wrapped in `DelegateMessageMiddleware` automatically.
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## NoOpMiddleware.cs
+
+Internal no-op middleware used for conditional registration. Passes through to the next middleware without any processing.
+
+```csharp
+internal sealed class NoOpMiddleware : IMessageMiddleware
+{
+    public Task InvokeAsync(
+        ITransportEnvelope envelope,
+        MessageContext context,
+        Func<Task> next,
+        CancellationToken cancellationToken = default)
+    {
+        return next();
+    }
+}
+```
+
+### Conditional Registration Behavior
+
+| Option | When `false` |
+|--------|-------------|
+| `EnableLogging` | `LoggingMiddleware` is not registered |
+| `EnableTelemetry` | `TelemetryMiddleware` is not registered |
+| `EnableCorrelation` | `GridContextPropagationMiddleware` is not registered |
+
+`NoOpMiddleware` may be used internally to maintain pipeline structure when features are conditionally disabled.
 
 [↑ Back to top](#table-of-contents)
 
@@ -288,6 +409,29 @@ builder.Services
         "notifications")
     .WithConcurrency(10);
 ```
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+### Removing or Overriding Middleware
+
+To replace built-in middleware with a custom implementation:
+
+```csharp
+// Option 1: Disable via options and add your own
+services.AddHoneyDrunkTransportCore(options =>
+{
+    options.EnableLogging = false;  // Don't register LoggingMiddleware
+});
+services.AddMessageMiddleware<MyCustomLoggingMiddleware>();
+
+// Option 2: Replace after registration
+services.Replace(
+    ServiceDescriptor.Singleton<IMessageMiddleware, MyCustomMiddleware>());
+```
+
+> **Note:** Middleware order matters. Built-in middleware runs in this order: GridContextPropagation → Telemetry → Logging → Custom middleware → Handler.
 
 [↑ Back to top](#table-of-contents)
 

@@ -1,19 +1,38 @@
-# Changelog
+﻿# Changelog
 
 All notable changes to HoneyDrunk.Transport.AzureServiceBus will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-12-03
+
+### Breaking Changes
+- **Kernel v0.3.0 Upgrade**: Requires `HoneyDrunk.Kernel.Abstractions` v0.3.0
+- **TenantId/ProjectId**: Envelope now includes `TenantId` and `ProjectId` for multi-tenant support
+- **GridHeaderNames**: Uses Kernel's canonical header names (`X-Causation-Id`, `X-Correlation-Id`, etc.)
+
+### Added
+- **Multi-Tenancy Support**: Full `TenantId` and `ProjectId` propagation via application properties
+- **EndpointAddress Pattern**: Session and partition key support via `EndpointAddress.Create()`
+- **Blob Fallback Configuration**: `BlobFallback` option for large message storage (application-level replay)
+
+### Changed
+- **AzureServiceBusOptions**: Renamed `IsQueue` to `EntityType`, `EnableSessions` to `SessionEnabled`
+- **Documentation**: Complete rewrite of README and docs for consistency
+
+### Fixed
+- **Header Standardization**: All Grid headers now use `GridHeaderNames` constants
+
 ## [0.2.0] - 2025-11-22
 
-### ?? BREAKING CHANGES
+### Breaking Changes
 - **Kernel Integration**: Requires HoneyDrunk.Kernel to be registered via `AddHoneyDrunkCoreNode` before calling `AddHoneyDrunkServiceBusTransport`
 - **Grid Context**: Envelope now includes `NodeId`, `StudioId`, `Environment` fields for Grid-aware context propagation
 
 ### Added
-- ? **Grid Context Support**: Automatic propagation of Kernel Grid context across messages
-- ? **Health Contributors**: Service Bus connectivity health monitoring
+- **Grid Context Support**: Automatic propagation of Kernel Grid context across messages
+- **Health Contributors**: Service Bus connectivity health monitoring
 
 ### Changed
 - **Dependency Updates**: Now depends on `HoneyDrunk.Kernel.Abstractions` v0.2.1

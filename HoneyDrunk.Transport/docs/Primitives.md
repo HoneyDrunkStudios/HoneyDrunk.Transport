@@ -9,56 +9,100 @@
 - [Overview](#overview)
 - [TransportEnvelope.cs](#transportenvelopecs)
 - [EnvelopeFactory.cs](#envelopefactorycs)
-- [JsonMessageSerializer.cs](#jsonmessageserializercs)
-- [EndpointAddress.cs](#endpointaddresscs)
-- [NoOpTransportTransaction.cs](#nooptransporttransactioncs)
 
 ---
 
 ## Overview
 
-Core implementation classes that provide the foundational building blocks for the transport system. These are the concrete types that implement the abstractions.
+Concrete implementations that back the core transport abstractions. This folder contains the envelope and factory types that wrap messages with Grid context metadata for transport across service boundaries.
 
 **Location:** `HoneyDrunk.Transport/Primitives/`
+
+**What Lives Here:**
+- **TransportEnvelope** - Immutable envelope implementation with Grid context support
+- **EnvelopeFactory** - Factory for creating envelopes with proper ID generation and timestamps
+
+**What Primitives Do NOT Contain:**
+- Serialization (lives in `DependencyInjection/` as `JsonMessageSerializer`)
+- Endpoint addressing (lives in `Abstractions/` as `EndpointAddress`)
+- Transactions (lives in `Abstractions/` as `NoOpTransportTransaction`)
+
+**Why These Live Elsewhere:**
+- `EndpointAddress` lives in Abstractions because it is a transport-agnostic value object that implements the address contract - it's part of the shared contract surface, not an internal implementation detail.
+- `JsonMessageSerializer` lives in DependencyInjection because it's a default registration, not a core primitive.
+- `NoOpTransportTransaction` lives in Abstractions as part of the transaction contract surface.
 
 ---
 
 ## TransportEnvelope.cs
 
+**Immutable envelope implementation aligned with Kernel IGridContext**
+
 ```csharp
 public sealed class TransportEnvelope : ITransportEnvelope
 {
-    public required string MessageId { get; init; }
+    public string MessageId { get; init; } = string.Empty;
     public string? CorrelationId { get; init; }
     public string? CausationId { get; init; }
     public string? NodeId { get; init; }
     public string? StudioId { get; init; }
+    public string? TenantId { get; init; }
+    public string? ProjectId { get; init; }
     public string? Environment { get; init; }
-    public required DateTimeOffset Timestamp { get; init; }
-    public required string MessageType { get; init; }
-    public required IReadOnlyDictionary<string, string> Headers { get; init; }
-    public required ReadOnlyMemory<byte> Payload { get; init; }
+    public DateTimeOffset Timestamp { get; init; }
+    public string MessageType { get; init; } = string.Empty;
+    public IReadOnlyDictionary<string, string> Headers { get; init; }
+    public ReadOnlyMemory<byte> Payload { get; init; }
+
+    public ITransportEnvelope WithHeaders(IDictionary<string, string> additionalHeaders);
+    public ITransportEnvelope WithGridContext(
+        string? correlationId = null,
+        string? causationId = null,
+        string? nodeId = null,
+        string? studioId = null,
+        string? tenantId = null,
+        string? projectId = null,
+        string? environment = null);
 }
 ```
+
+### Key Features
+
+- **Immutable** - All properties are init-only, mutations return new instances
+- **Grid context aligned** - Properties match `IGridContext` for seamless propagation
+- **Multi-tenant support** - `TenantId` and `ProjectId` for multi-tenant scenarios
+- **WithHeaders()** - Immutably add headers, returning a new envelope
+- **WithGridContext()** - Immutably update Grid context properties
+
+The `WithHeaders` and `WithGridContext` methods are implemented within `TransportEnvelope` to ensure immutability by returning cloned instances with updated metadata.
 
 ### Usage Example
 
 ```csharp
-// Create with headers
+// Create envelope directly (prefer EnvelopeFactory for most cases)
 var envelope = new TransportEnvelope
 {
     MessageId = "msg-123",
     MessageType = typeof(OrderCreated).FullName!,
+    CorrelationId = "corr-456",
+    NodeId = "order-service",
+    TenantId = "tenant-abc",
     Timestamp = DateTimeOffset.UtcNow,
-    Headers = new Dictionary<string, string> { ["Priority"] = "high" },
+    Headers = new Dictionary<string, string>(),
     Payload = payload
 };
 
-// Add more headers immutably
+// Add headers immutably (returns new envelope)
 var enriched = envelope.WithHeaders(new Dictionary<string, string>
 {
-    ["TenantId"] = "tenant-123"
+    ["Priority"] = "high",
+    ["Source"] = "api"
 });
+
+// Update Grid context immutably (returns new envelope)
+var updated = envelope.WithGridContext(
+    correlationId: "new-corr-789",
+    tenantId: "different-tenant");
 ```
 
 [↑ Back to top](#table-of-contents)
@@ -66,6 +110,8 @@ var enriched = envelope.WithHeaders(new Dictionary<string, string>
 ---
 
 ## EnvelopeFactory.cs
+
+**Factory for creating transport envelopes with proper ID generation and timestamps**
 
 ```csharp
 public sealed class EnvelopeFactory(TimeProvider timeProvider)
@@ -82,125 +128,103 @@ public sealed class EnvelopeFactory(TimeProvider timeProvider)
         IGridContext gridContext,
         IDictionary<string, string>? headers = null)
         where TMessage : class;
+    
+    public ITransportEnvelope CreateEnvelopeWithId(
+        string messageId,
+        string messageType,
+        ReadOnlyMemory<byte> payload,
+        string? correlationId = null,
+        string? causationId = null,
+        IDictionary<string, string>? headers = null);
+    
+    public ITransportEnvelope CreateReply(
+        ITransportEnvelope original,
+        string replyMessageType,
+        ReadOnlyMemory<byte> payload,
+        IDictionary<string, string>? additionalHeaders = null);
 }
 ```
+
+### Key Features
+
+- **Deterministic ID generation** - Uses Kernel's ULID-based ID generator for MessageId creation
+- **TimeProvider integration** - Testable timestamps via injected `TimeProvider`
+- **Grid context propagation** - Automatically propagates all Grid context properties including baggage
+- **Reply support** - Creates properly chained reply envelopes with causation tracking
+
+### Factory Methods
+
+| Method | Purpose |
+|--------|---------|
+| `CreateEnvelope<T>` | Basic envelope with auto-generated ID and timestamp |
+| `CreateEnvelopeWithGridContext<T>` | Envelope with full Grid context propagation (including baggage) |
+| `CreateEnvelopeWithId` | Envelope with explicit message ID (for replay/idempotency scenarios) |
+| `CreateReply` | Reply envelope derived from original (causation chain preserved) |
 
 ### Usage Example
 
 ```csharp
-public class OrderService(EnvelopeFactory factory, IGridContext gridContext)
+public class OrderService(
+    EnvelopeFactory factory,
+    IMessageSerializer serializer,
+    ITransportPublisher publisher,
+    IGridContext gridContext)
 {
-    public ITransportEnvelope CreateOrderMessage(Order order)
+    public async Task PublishOrderCreatedAsync(Order order, CancellationToken ct)
     {
-        var message = new OrderCreated(order.Id);
-        var payload = _serializer.Serialize(message);
+        var message = new OrderCreated(order.Id, order.CustomerId);
+        var payload = serializer.Serialize(message);
         
-        // Factory auto-generates MessageId and Timestamp
-        return factory.CreateEnvelopeWithGridContext<OrderCreated>(
+        // Factory auto-generates MessageId (ULID) and Timestamp
+        // Grid context properties (CorrelationId, NodeId, TenantId, etc.) are propagated
+        var envelope = factory.CreateEnvelopeWithGridContext<OrderCreated>(
             payload,
-            gridContext);
-    }
-}
-```
-
-[↑ Back to top](#table-of-contents)
-
----
-
-## JsonMessageSerializer.cs
-
-```csharp
-public sealed class JsonMessageSerializer : IMessageSerializer
-{
-    public ReadOnlyMemory<byte> Serialize<T>(T message) where T : class
-    {
-        return JsonSerializer.SerializeToUtf8Bytes(message, _options);
+            gridContext,
+            headers: new Dictionary<string, string>
+            {
+                ["Priority"] = "normal"
+            });
+        
+        var destination = EndpointAddress.Create("orders", "orders.created");
+        await publisher.PublishAsync(envelope, destination, options: null, ct);
     }
     
-    public T Deserialize<T>(ReadOnlyMemory<byte> data) where T : class
+    public async Task PublishReplyAsync(
+        ITransportEnvelope originalEnvelope,
+        OrderConfirmed confirmation,
+        CancellationToken ct)
     {
-        return JsonSerializer.Deserialize<T>(data.Span, _options)!;
+        var payload = serializer.Serialize(confirmation);
+        
+        // CreateReply preserves correlation chain:
+        // - CorrelationId = original.CorrelationId ?? original.MessageId
+        // - CausationId = original.MessageId
+        // - Inherits NodeId, TenantId, ProjectId, Environment
+        var replyEnvelope = factory.CreateReply(
+            originalEnvelope,
+            typeof(OrderConfirmed).FullName!,
+            payload);
+        
+        var destination = EndpointAddress.Create("orders", "orders.confirmed");
+        await publisher.PublishAsync(replyEnvelope, destination, options: null, ct);
     }
 }
 ```
 
-### Usage Example
+### Grid Context Propagation
 
-```csharp
-// Default (registered automatically)
-services.AddHoneyDrunkTransportCore();  // Uses JsonMessageSerializer
+When using `CreateEnvelopeWithGridContext`, the factory propagates:
 
-// Custom JSON options
-services.AddSingleton<IMessageSerializer>(
-    new JsonMessageSerializer(new JsonSerializerOptions
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-    }));
-```
-
-[↑ Back to top](#table-of-contents)
-
----
-
-## EndpointAddress.cs
-
-```csharp
-public sealed class EndpointAddress : IEndpointAddress
-{
-    public string Name { get; }
-    public string Address { get; }
-    public IReadOnlyDictionary<string, string> Properties { get; }
-    
-    public EndpointAddress(string address, IDictionary<string, string>? properties = null)
-    {
-        Address = address;
-        Name = address;
-        Properties = properties != null 
-            ? new Dictionary<string, string>(properties) 
-            : new Dictionary<string, string>();
-    }
-}
-```
-
-### Usage Example
-
-```csharp
-// Simple address
-var destination = new EndpointAddress("orders.created");
-
-// With routing properties
-var destination = new EndpointAddress(
-    "orders.created",
-    new Dictionary<string, string>
-    {
-        ["PartitionKey"] = customerId.ToString(),
-        ["SessionId"] = sessionId
-    });
-```
-
-[↑ Back to top](#table-of-contents)
-
----
-
-## NoOpTransportTransaction.cs
-
-```csharp
-public sealed class NoOpTransportTransaction : ITransportTransaction
-{
-    public Task CommitAsync(CancellationToken cancellationToken = default) 
-        => Task.CompletedTask;
-    
-    public Task RollbackAsync(CancellationToken cancellationToken = default) 
-        => Task.CompletedTask;
-}
-```
-
-### Usage Example
-
-```csharp
-// Used automatically for non-transactional transports (InMemory, Storage Queue)
-// No direct usage - accessed via MessageContext.Transaction
-```
+| From IGridContext | To TransportEnvelope |
+|-------------------|---------------------|
+| `CorrelationId` | `CorrelationId` |
+| `CausationId` | `CausationId` |
+| `NodeId` | `NodeId` |
+| `StudioId` | `StudioId` |
+| `TenantId` | `TenantId` |
+| `ProjectId` | `ProjectId` |
+| `Environment` | `Environment` |
+| `Baggage` | Merged into `Headers` |
 
 [↑ Back to top](#table-of-contents)
 

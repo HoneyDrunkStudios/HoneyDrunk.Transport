@@ -11,10 +11,11 @@
   - [HoneyDrunk.Kernel](#-honeydrunkkernel)
   - [HoneyDrunk.Data](#-honeydrunkdata)
   - [HoneyDrunk.Transport](#-honeydrunktransport)
+  - [Bridge Packages](#-bridge-packages)
   - [Application Nodes](#-application-nodes)
 - [Outbox Pattern: The Right Way](#outbox-pattern-the-right-way)
   - [Wrong Approach (Data → Transport)](#-wrong-approach-data--transport)
-  - [Correct Approach (Transport → Data)](#-correct-approach-transport--data)
+  - [Correct Approach (Bridge Package)](#-correct-approach-bridge-package-transport-outbox--data-provider)
 - [What Data Should Expose](#what-data-should-expose)
 - [What Data Should NOT Expose](#what-data-should-not-expose)
 - [Summary](#summary)
@@ -23,51 +24,53 @@
 
 ## Dependency Flow
 
-The HoneyDrunk architecture follows a strict layered approach:
+At the package level, the HoneyDrunk architecture follows this model:
 
-```
+```text
 ┌─────────────────────────────────────────┐
 │         Application Nodes               │
 │  (Order Service, Payment Service, etc)  │
 └─────────────────────────────────────────┘
-            ↓ depends on
-┌─────────────────────────────────────────┐
-│       HoneyDrunk.Transport.*            │
-│  (Messaging, Outbox, Consumers)         │
-└─────────────────────────────────────────┘
-            ↓ depends on
-┌─────────────────────────────────────────┐
-│         HoneyDrunk.Data.*               │
-│  (Storage primitives, conventions)      │
-└─────────────────────────────────────────┘
-            ↓ depends on
-┌─────────────────────────────────────────┐
-│      HoneyDrunk.Kernel.*                │
-│  (Base primitives, IGridContext)        │
-└─────────────────────────────────────────┘
+   ↑             ↑                 ↑
+   │             │                 │
+   │             │                 │
+┌──────────────┐ ┌──────────────┐ ┌──────────────┐
+│ HoneyDrunk.  │ │ HoneyDrunk.  │ │ HoneyDrunk.  │
+│  Transport   │ │    Data      │ │   Kernel     │
+└──────────────┘ └──────────────┘ └──────────────┘
+       ↑               ↑                 ↑
+       │               │                 │
+       └───────────────┴─────────────────┘
+                       │
+              (All depend on Kernel)
 ```
 
-### ✅ Allowed Dependencies
+Outbox implementations that integrate Data providers live either in application-level infrastructure projects or in dedicated bridge packages that depend on both Transport.Abstractions and the chosen Data provider.
 
-- **Transport → Data**: Transport uses Data's storage primitives for outbox
-- **Transport → Kernel**: Transport uses IGridContext, correlation IDs
+```text
+Example bridge package structure:
+  depends on:
+    - HoneyDrunk.Transport.Abstractions
+    - HoneyDrunk.Data.SqlServer (or other provider)
+```
+
+In the future this may be extracted to a reusable package such as `HoneyDrunk.Transport.Outbox.SqlServer` once the pattern stabilizes.
+
+### ✅ Allowed Package Dependencies
+
+- **Transport → Kernel**: Transport uses `IGridContext`, correlation IDs, time abstractions
 - **Data → Kernel**: Data uses base primitives
-- **Data → Transport.Abstractions**: Data can use `IMessagePublisher` (high-level messaging API)
-- **Application → Transport**: Apps publish/consume messages
-- **Application → Data**: Apps persist domain entities
-- **Application → Kernel**: Apps use Grid context
+- **Outbox bridge packages → Transport.Abstractions + Data provider**: Bridge packages integrate both
+- **Application Nodes → Kernel, Data, Transport**: Apps orchestrate all layers
 
-### ❌ Forbidden Dependencies
+### ❌ Forbidden Package Dependencies
 
-- **Data → Transport Implementation**: Data MUST NOT depend on transport implementations (Azure Service Bus, Storage Queue, etc.)
-- **Data defining messaging abstractions**: Data MUST NOT define `IMessagePublisher`, `ITransportPublisher`, etc.
+- **Core Transport → Data**: Core transport stays storage-agnostic
+- **Core Data → Transport**: Data has no messaging knowledge
 - **Kernel → Data**: Kernel has no storage knowledge
 - **Kernel → Transport**: Kernel has no messaging knowledge
 
-**Clarification**: The key distinction is:
-- ✅ **Data using Transport abstractions** (`IMessagePublisher`) = **Allowed**
-- ❌ **Data defining messaging abstractions** = **Forbidden**
-- ❌ **Data depending on transport implementations** = **Forbidden**
+**Key Principle**: Core Transport and core Data never reference each other directly. Integration happens either in application code or in dedicated bridge packages that depend on both.
 
 ---
 
@@ -94,29 +97,38 @@ The HoneyDrunk architecture follows a strict layered approach:
 
 **Purpose**: Storage primitives and conventions
 
-**Exports**:
-- `ISqlConnectionFactory` - Provides database connections
-- `IDbSession` / `IUnitOfWork` - Manages transactions
-- `OutboxConventions` - Table/column naming conventions
-  ```csharp
-  public static class OutboxConventions
-  {
-      public static string GetTableName() => "Outbox";
-      public static string GetSchemaName() => "messaging";
-      public static string GetIdColumnName() => "Id";
-      public static string GetPayloadColumnName() => "Payload";
-      // etc...
-  }
-  ```
-- `IMigrationContributor` - Hook for schema contributions
+**Exports (examples)**:
+- Connection and session abstractions
+  - `IConnectionFactory` / provider-specific factories
+  - `IDbSession` / `IUnitOfWork` style abstraction
+- Schema conventions
+  - Optional helpers like `OutboxTableConventions` that define table and column names for shared infrastructure tables
+- Migration hooks
+  - `IMigrationContributor` for components that want to contribute DDL
 
 **Does NOT Export**:
-- `ITransportPublisher` - That's Transport's job
-- `IMessageHandler<T>` - That's Transport's job
-- `IOutboxStore` - That's Transport's job
-- Any messaging behavior
+- Messaging abstractions (`IMessagePublisher`, `ITransportPublisher`, `IMessageHandler<T>`)
+- Messaging behavior (`IOutboxStore`, dispatchers, handlers)
+- Broker-specific knowledge
 
-**Data's Role**: Provide the "database muscle" that Transport uses to implement messaging patterns.
+**Data's Role**: Provide the "database muscle" that other layers (including outbox bridge packages) can use to persist state and infrastructure tables.
+
+**Example - Pure Storage Repository**:
+```csharp
+// Data layer - storage only, no messaging
+namespace HoneyDrunk.Data.Repositories
+{
+    public class OrderRepository(IDbSession session) : IOrderRepository
+    {
+        public Task SaveAsync(Order order, CancellationToken ct) =>
+            session.ExecuteAsync("INSERT INTO Orders ...", order);
+        
+        public Task<Order?> GetByIdAsync(Guid id, CancellationToken ct) =>
+            session.QuerySingleOrDefaultAsync<Order>(
+                "SELECT * FROM Orders WHERE Id = @Id", new { Id = id });
+    }
+}
+```
 
 ---
 
@@ -124,44 +136,66 @@ The HoneyDrunk architecture follows a strict layered approach:
 
 **Purpose**: Messaging and reliable delivery patterns
 
-**Exports**:
-- `ITransportPublisher` - Publishes envelopes to brokers
-- `ITransportConsumer` - Consumes messages from brokers
+**Core Exports**:
+- `ITransportPublisher` - Envelope-based publisher abstraction
+- `ITransportConsumer` - Message consumer abstraction
 - `IMessageHandler<T>` - Type-safe message processing
 - `ITransportEnvelope` - Message wrapper with Grid context
-- `EnvelopeFactory` - Creates envelopes from messages
+- `EnvelopeFactory` - Envelope creation helpers
+- `IOutboxStore`, `IOutboxDispatcher` - Contracts for transactional outbox
 
 **Depends On**:
-- **Kernel**: For `IGridContext`, `CorrelationId`, `TimeProvider`
-- **Data**: For storage primitives to implement outbox
+- **Kernel**: `IGridContext`, correlation IDs, time abstractions
+- **No direct dependency on Data**: Core transport stays storage-agnostic
 
-**Implements Outbox Using Data**:
+**Does NOT Export To Data**: Data never calls Transport APIs.
+
+---
+
+### 🔷 Bridge Packages / Application Infrastructure
+
+**Purpose**: Integrate Transport and Data without coupling core packages
+
+Outbox implementations that integrate Data providers live either in application-level infrastructure projects or in dedicated bridge packages that depend on both Transport.Abstractions and the chosen Data provider.
+
+**Example Dependency Structure**:
+```text
+Application infrastructure (or future bridge package):
+  depends on:
+    - HoneyDrunk.Transport.Abstractions
+    - HoneyDrunk.Data.SqlServer (or other provider)
+```
+
+These implementations provide `IOutboxStore` using Data's connection factories and conventions. In the future this pattern may be extracted to reusable packages once it stabilizes.
+
+**Example Implementation** (lives in application infrastructure or bridge package, not core Transport):
 ```csharp
-// HoneyDrunk.Transport.SqlServerOutbox
-public class SqlServerOutboxStore(
-    ISqlConnectionFactory connectionFactory) : IOutboxStore
+// Application.Infrastructure or future HoneyDrunk.Transport.Outbox.SqlServer
+namespace MyApp.Infrastructure.Outbox
 {
-    public async Task SaveAsync(OutboxMessage message, CancellationToken ct)
+    public class SqlServerOutboxStore(
+        ISqlConnectionFactory connectionFactory) : IOutboxStore
     {
-        // Use Data's connection factory
-        await using var connection = await connectionFactory.CreateConnectionAsync(ct);
-        await using var transaction = await connection.BeginTransactionAsync(ct);
-        
-        // Use Data's conventions
-        var tableName = OutboxConventions.GetFullTableName();
-        var sql = $@"
-            INSERT INTO {tableName} 
-            ({OutboxConventions.GetIdColumnName()}, 
-             {OutboxConventions.GetPayloadColumnName()})
-            VALUES (@Id, @Payload)";
-        
-        await connection.ExecuteAsync(sql, message, transaction);
-        await transaction.CommitAsync(ct);
+        public async Task SaveAsync(OutboxMessage message, CancellationToken ct)
+        {
+            // Use Data's connection factory
+            await using var connection = await connectionFactory.CreateConnectionAsync(ct);
+            await using var transaction = await connection.BeginTransactionAsync(ct);
+            
+            // Use Data's conventions
+            var tableName = OutboxTableConventions.GetFullTableName();
+            var sql = $@"
+                INSERT INTO {tableName} 
+                ({OutboxTableConventions.GetIdColumnName()}, 
+                 {OutboxTableConventions.GetPayloadColumnName()})
+                VALUES (@Id, @Payload)";
+            
+            await connection.ExecuteAsync(sql, message, transaction);
+            await transaction.CommitAsync(ct);
+        }
     }
 }
 ```
-
-**Does NOT Export To Data**: Data never calls Transport APIs.
 
 ---
 
@@ -171,29 +205,37 @@ public class SqlServerOutboxStore(
 
 **Uses**:
 - **Kernel**: For `IGridContext`, correlation tracking
-- **Data**: For persisting domain entities
+- **Data**: For persisting domain entities (via repositories)
 - **Transport**: For publishing domain events, consuming messages
+
+**Key Responsibility**: Application services orchestrate both persistence and messaging. Data does not publish messages.
 
 **Example**:
 ```csharp
-public class OrderService(
-    IOrderRepository repository,
-    ITransportPublisher publisher,
-    EnvelopeFactory envelopeFactory,
-    IGridContext gridContext)
+// Application layer - orchestrates Data and Transport
+namespace HoneyDrunk.OrderService.Application
 {
-    public async Task CreateOrderAsync(Order order, CancellationToken ct)
+    using HoneyDrunk.Transport.Abstractions;
+
+    public class OrderService(
+        IOrderRepository repository,
+        IMessagePublisher publisher)
     {
-        // 1. Use Data to persist
-        await repository.SaveAsync(order, ct);
-        
-        // 2. Use Transport to publish event
-        var domainEvent = new OrderCreated(order.Id);
-        var payload = JsonSerializer.SerializeToUtf8Bytes(domainEvent);
-        var envelope = envelopeFactory.CreateEnvelopeWithGridContext<OrderCreated>(
-            payload, gridContext);
-        
-        await publisher.PublishAsync(envelope, new EndpointAddress("orders.created"), ct);
+        public async Task CreateOrderAsync(
+            Order order, 
+            IGridContext context, 
+            CancellationToken ct)
+        {
+            // 1. Use Data to persist
+            await repository.SaveAsync(order, ct);
+
+            // 2. Use Transport to publish a domain event
+            await publisher.PublishAsync(
+                destination: "orders.created",
+                message: new OrderCreated(order.Id),
+                gridContext: context,
+                cancellationToken: ct);
+        }
     }
 }
 ```
@@ -226,10 +268,20 @@ namespace HoneyDrunk.Data
 
 ---
 
-### ✅ Correct Approach (Transport → Data)
+### ✅ Correct Approach (Bridge Package: Transport Outbox → Data Provider)
+
+- Data provider exposes:
+  - Connection/session abstractions
+  - Schema conventions for shared tables (optional)
+
+- Application infrastructure (or a future bridge package) implements:
+  - `IOutboxStore` using the provider's connection factory and conventions
+  - Optional dispatcher background service
+
+Core Data and core Transport stay decoupled; the application infrastructure layer (or bridge package) is where they meet.
 
 ```csharp
-// CORRECT: Data exposes storage primitives
+// CORRECT: Data exposes storage primitives only
 namespace HoneyDrunk.Data.SqlServer
 {
     public interface ISqlConnectionFactory
@@ -237,7 +289,7 @@ namespace HoneyDrunk.Data.SqlServer
         Task<SqlConnection> CreateConnectionAsync(CancellationToken ct);
     }
     
-    public static class OutboxConventions
+    public static class OutboxTableConventions
     {
         public static string GetFullTableName() => "[messaging].[Outbox]";
         public static string GetIdColumnName() => "Id";
@@ -247,8 +299,8 @@ namespace HoneyDrunk.Data.SqlServer
     }
 }
 
-// CORRECT: Transport implements outbox using Data's primitives
-namespace HoneyDrunk.Transport.SqlServerOutbox
+// CORRECT: Application infrastructure implements outbox using Data's primitives
+namespace MyApp.Infrastructure.Outbox
 {
     public class SqlServerOutboxStore(
         ISqlConnectionFactory connectionFactory) : IOutboxStore
@@ -259,7 +311,7 @@ namespace HoneyDrunk.Transport.SqlServerOutbox
             var connection = await connectionFactory.CreateConnectionAsync(ct);
             
             // Use Data's conventions
-            var table = OutboxConventions.GetFullTableName();
+            var table = OutboxTableConventions.GetFullTableName();
             var sql = $"INSERT INTO {table} ...";
             
             await connection.ExecuteAsync(sql, message);
@@ -268,8 +320,8 @@ namespace HoneyDrunk.Transport.SqlServerOutbox
         public async Task<IEnumerable<OutboxMessage>> LoadPendingAsync(int limit, CancellationToken ct)
         {
             var connection = await connectionFactory.CreateConnectionAsync(ct);
-            var table = OutboxConventions.GetFullTableName();
-            var dispatchedCol = OutboxConventions.GetDispatchedAtColumnName();
+            var table = OutboxTableConventions.GetFullTableName();
+            var dispatchedCol = OutboxTableConventions.GetDispatchedAtColumnName();
             
             var sql = $"SELECT TOP {limit} * FROM {table} WHERE {dispatchedCol} IS NULL";
             return await connection.QueryAsync<OutboxMessage>(sql);
@@ -302,7 +354,8 @@ namespace HoneyDrunk.Transport.SqlServerOutbox
 
 **Why This Is Correct**:
 - Data provides "database muscle" (connections, conventions)
-- Transport provides "messaging brain" (outbox logic, dispatch)
+- Transport defines "messaging brain" contracts (`IOutboxStore`, `IOutboxDispatcher`)
+- Bridge package provides the implementation that wires them together
 - Clean separation of concerns
 - Each layer testable independently
 - No circular dependencies
@@ -329,10 +382,10 @@ public interface IDbSession : IAsyncDisposable
 }
 ```
 
-### 2. Naming Conventions
+### 2. Naming Conventions (Optional)
 
 ```csharp
-public static class OutboxConventions
+public static class OutboxTableConventions
 {
     public const string DefaultSchema = "messaging";
     public const string DefaultTableName = "Outbox";
@@ -358,7 +411,8 @@ public interface IMigrationContributor
     Task<IEnumerable<string>> GetMigrationScriptsAsync(CancellationToken ct);
 }
 
-// Transport provides the migration
+// Application infrastructure (or future bridge package) provides the migration contributor
+// (lives in application infrastructure, not core Transport)
 public class OutboxMigrationContributor : IMigrationContributor
 {
     public string Name => "Transport.Outbox";
@@ -368,11 +422,11 @@ public class OutboxMigrationContributor : IMigrationContributor
         var scripts = new[]
         {
             $@"
-            CREATE TABLE {OutboxConventions.GetFullTableName()} (
-                {OutboxConventions.GetIdColumnName()} UNIQUEIDENTIFIER PRIMARY KEY,
-                {OutboxConventions.GetPayloadColumnName()} VARBINARY(MAX) NOT NULL,
-                {OutboxConventions.GetCreatedAtColumnName()} DATETIME2 NOT NULL,
-                {OutboxConventions.GetDispatchedAtColumnName()} DATETIME2 NULL
+            CREATE TABLE {OutboxTableConventions.GetFullTableName()} (
+                {OutboxTableConventions.GetIdColumnName()} UNIQUEIDENTIFIER PRIMARY KEY,
+                {OutboxTableConventions.GetPayloadColumnName()} VARBINARY(MAX) NOT NULL,
+                {OutboxTableConventions.GetCreatedAtColumnName()} DATETIME2 NOT NULL,
+                {OutboxTableConventions.GetDispatchedAtColumnName()} DATETIME2 NULL
             )"
         };
         
@@ -385,69 +439,80 @@ public class OutboxMigrationContributor : IMigrationContributor
 
 ## What Data Should NOT Expose
 
-### ❌ Messaging Abstractions - Definition vs Usage
+### ❌ Messaging Abstractions
 
-**Important Distinction**: Data should **NOT define** messaging abstractions, but it **CAN use** Transport's abstractions.
+Data should **never define** messaging abstractions. Those belong in Transport.
 
 ```csharp
-// ❌ WRONG - Data defining its own messaging abstractions
+// ❌ WRONG - Data defining messaging abstractions
 namespace HoneyDrunk.Data
 {
     public interface IMessagePublisher { }      // ❌ Don't define in Data
     public interface ITransportPublisher { }    // ❌ Don't define in Data
     public interface IMessageHandler<T> { }     // ❌ Don't define in Data
     public interface ITransportConsumer { }     // ❌ Don't define in Data
-}
-
-// ✅ CORRECT - Data using Transport's abstractions
-namespace HoneyDrunk.Data.Repositories
-{
-    using HoneyDrunk.Transport.Abstractions; // ✅ OK to depend on Transport
-    
-    public class OrderRepository(
-        IDbSession session,
-        IMessagePublisher publisher) // ✅ OK - using Transport's abstraction
-    {
-        public async Task SaveOrderAsync(Order order, IGridContext context, CancellationToken ct)
-        {
-            // 1. Save to database
-            await session.ExecuteAsync("INSERT INTO Orders ...", order);
-            
-            // 2. Publish domain event using Transport's high-level API
-            await publisher.PublishAsync(
-                "orders.created",
-                new OrderCreated(order.Id),
-                context,
-                ct);
-        }
-    }
+    public interface IOutboxStore { }           // ❌ Don't define in Data
 }
 ```
-
-**Design Rationale**:
-- `IMessagePublisher` is Transport's **high-level abstraction** for Grid-context-aware publishing
-- Data and Application layers **should use** `IMessagePublisher` (not `ITransportPublisher`)
-- `ITransportPublisher` is Transport's **low-level implementation detail** for envelope-based messaging
-- Data should **never define** its own competing messaging abstractions
-
----
 
 ### ❌ Messaging Behavior
 
 ```csharp
-// WRONG - Dispatch logic belongs in Transport
-public class OutboxDispatcher { }           // ❌
-public interface IOutboxStore { }           // ❌ (lives in Transport)
-public class OutboxMessage { }              // ❌ (Transport's DTO)
+// WRONG - Dispatch logic belongs in Transport (or bridge packages)
+namespace HoneyDrunk.Data
+{
+    public class OutboxDispatcher { }           // ❌
+    public class OutboxMessage { }              // ❌ (Transport's DTO)
+}
 ```
 
 ### ❌ Broker Knowledge
 
 ```csharp
 // WRONG - Data should not know about brokers
-public interface IServiceBusClient { }      // ❌
-public interface IStorageQueueClient { }    // ❌
-public class EnvelopeFactory { }            // ❌
+namespace HoneyDrunk.Data
+{
+    public interface IServiceBusClient { }      // ❌
+    public interface IStorageQueueClient { }    // ❌
+    public class EnvelopeFactory { }            // ❌
+}
+```
+
+### ❌ Publishing from Repositories
+
+Data repositories should **not** publish messages. That's application layer responsibility.
+
+```csharp
+// ❌ WRONG - Repository publishing events
+namespace HoneyDrunk.Data.Repositories
+{
+    public class OrderRepository(
+        IDbSession session,
+        IMessagePublisher publisher) // ❌ Don't inject publishers into Data
+    {
+        public async Task SaveAsync(Order order, CancellationToken ct)
+        {
+            await session.ExecuteAsync("INSERT INTO Orders ...", order);
+            await publisher.PublishAsync(...); // ❌ Data should not publish
+        }
+    }
+}
+
+// ✅ CORRECT - Application layer orchestrates persistence and messaging
+namespace HoneyDrunk.OrderService.Application
+{
+    public class OrderService(
+        IOrderRepository repository,    // From Data
+        IMessagePublisher publisher)    // From Transport
+    {
+        public async Task CreateOrderAsync(Order order, IGridContext context, CancellationToken ct)
+        {
+            await repository.SaveAsync(order, ct);           // Data persists
+            await publisher.PublishAsync("orders.created",   // Transport publishes
+                new OrderCreated(order.Id), context, ct);
+        }
+    }
+}
 ```
 
 ---
@@ -456,18 +521,19 @@ public class EnvelopeFactory { }            // ❌
 
 | Layer | Provides | Depends On | Does NOT Provide |
 |-------|----------|------------|------------------|
-| **Kernel** | Base primitives (IGridContext, CorrelationId) | Nothing | Storage, Messaging |
-| **Data** | Storage primitives, conventions | Kernel, **Transport (via IMessagePublisher)** | Messaging **abstractions** (but can use Transport's) |
-| **Transport** | Messaging abstractions (IMessagePublisher, ITransportPublisher), Outbox implementation | Kernel, Data | Domain logic |
-| **Application** | Business logic | Kernel, Data, Transport | Infrastructure |
+| **Kernel** | Base primitives (`IGridContext`, `CorrelationId`, etc.) | — | Storage, messaging |
+| **Data** | Storage primitives, provider conventions, migrations | Kernel | Messaging abstractions or behavior |
+| **Transport** | Messaging abstractions, pipeline, outbox contracts | Kernel | Domain logic, storage implementations |
+| **Bridge pkgs / App infra** | Outbox stores for specific databases | Transport.Abstractions, Data provider | Core abstractions |
+| **Application** | Business logic, orchestration | Kernel, Data, Transport | Infrastructure primitives |
 
-**Golden Rule**: Data is the "database muscle", Transport is the "messaging brain" that uses that muscle.
+**Core Principle**: Core Transport and core Data never reference each other directly. Integration happens either in application code or in dedicated bridge packages that depend on both.
 
-**Key Insights**:
-1. Transport depends on Data for persistence, but Data never knows Transport's **implementation details**
-2. Data **can use** Transport's high-level abstractions (`IMessagePublisher`) for publishing domain events
-3. `IMessagePublisher` is designed for Data/Application layers; `ITransportPublisher` is Transport's internal detail
-4. Data should **never define** its own messaging abstractions - always use Transport's
+**Golden Rules**:
+1. Data is the "database muscle" - connections, sessions, conventions
+2. Transport is the "messaging brain" - publishers, consumers, handlers, outbox contracts
+3. Bridge packages wire them together for specific database providers
+4. Application services orchestrate Data (persistence) and Transport (messaging)
 
 ---
 

@@ -7,15 +7,22 @@
 
 ## 📋 What Is This?
 
-**HoneyDrunk.Transport.InMemory** provides an in-process message broker for testing Transport applications without external dependencies. It implements the full Transport abstraction layer (ITransportPublisher, ITransportConsumer) with Channel-based observable queues, enabling fast integration tests with complete pipeline execution.
+**HoneyDrunk.Transport.InMemory** provides an in-process message broker for testing Transport applications without external dependencies. It implements the full Transport abstraction layer (`ITransportPublisher`, `ITransportConsumer`) with Channel-based observable queues, enabling fast integration tests with complete pipeline execution.
+
+The InMemory provider runs the **exact same middleware pipeline, handler resolution, and context propagation logic** as production transports. This isn't a mock—it's a real transport implementation.
 
 **Key Features:**
 - ✅ **Zero Infrastructure** - No Azure, no Docker, no external services
 - ✅ **Full Pipeline** - Complete middleware and handler execution
 - ✅ **Observable Queues** - Channel-based for test verification
-- ✅ **Pub/Sub Support** - Multiple subscribers per address
+- ✅ **Multi-Observer** - Multiple subscribers can observe messages for testing
 - ✅ **Fast Execution** - In-process, no network latency
 - ✅ **Deterministic Testing** - No timing issues or flaky tests
+
+**What InMemory Does Not Do:**
+> InMemory does not simulate broker-specific features like lock tokens, sessions, dead-letter queues, or delivery retries. Its purpose is deterministic pipeline execution, not emulating Azure broker semantics.
+
+> The InMemory transport is not designed for concurrency, lock renewal, or backpressure testing. Use real transports for those scenarios.
 
 **Signal Quote:** *"Test like production, fail like development."*
 
@@ -27,13 +34,13 @@
 Central message router with observable queues:
 - Subscribe to addresses for message notifications
 - Publish messages to in-memory channels
-- Retrieve Channel<ITransportEnvelope> for test assertions
+- Retrieve `Channel<ITransportEnvelope>` for test assertions
 
 ### InMemoryTransportPublisher
-ITransportPublisher implementation routing to InMemoryBroker
+`ITransportPublisher` implementation routing to InMemoryBroker
 
 ### InMemoryTransportConsumer
-ITransportConsumer implementation processing messages through pipeline
+`ITransportConsumer` implementation processing messages through pipeline. Participates fully in the `TransportRuntimeHost` lifecycle, starting automatically as an `IHostedService`.
 
 ---
 
@@ -70,8 +77,11 @@ public class IntegrationTests
         });
         
         // Register InMemory transport
-        services.AddHoneyDrunkTransportCore()
-            .AddHoneyDrunkInMemoryTransport();
+        services.AddHoneyDrunkTransportCore(options =>
+        {
+            options.EnableCorrelation = true;
+        })
+        .AddHoneyDrunkInMemoryTransport();
         
         // Register handlers
         services.AddMessageHandler<OrderCreated, OrderCreatedHandler>();
@@ -90,21 +100,23 @@ public async Task ProcessesOrderCreatedMessage()
     // Arrange
     var publisher = _services.GetRequiredService<ITransportPublisher>();
     var broker = _services.GetRequiredService<InMemoryBroker>();
-    var received = false;
+    var received = new TaskCompletionSource<bool>();
     
     broker.Subscribe("orders", async (envelope, ct) =>
     {
-        received = true;
+        received.SetResult(true);
         await Task.CompletedTask;
     });
     
     // Act
     var envelope = CreateEnvelope(new OrderCreated(123, 456));
-    await publisher.PublishAsync(envelope, new EndpointAddress("orders"), ct);
-    await Task.Delay(100); // Give consumer time to process
+    
+    // EndpointAddress behaves the same across all transports
+    await publisher.PublishAsync(envelope, EndpointAddress.Create("orders", "orders"), ct);
     
     // Assert
-    Assert.True(received);
+    var result = await received.Task.WaitAsync(TimeSpan.FromSeconds(5));
+    Assert.True(result);
 }
 ```
 
@@ -123,6 +135,8 @@ public async Task ProcessesOrderCreatedMessage()
 - ✅ Production deployments
 - ✅ Load testing
 - ✅ Multi-node distributed scenarios
+- ✅ Concurrency and backpressure testing
+- ✅ Testing broker-specific features (sessions, DLQ, retries)
 
 ---
 
