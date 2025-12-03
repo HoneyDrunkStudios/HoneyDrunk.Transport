@@ -5,15 +5,32 @@ All notable changes to HoneyDrunk.Transport.InMemory will be documented in this 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-12-03
+
+### Breaking Changes
+- **Kernel v0.3.0 Upgrade**: Requires `HoneyDrunk.Kernel.Abstractions` v0.3.0
+- **TenantId/ProjectId**: Envelope now includes `TenantId` and `ProjectId` for multi-tenant support
+
+### Added
+- **Multi-Tenancy Support**: Full `TenantId` and `ProjectId` propagation
+- **TransportRuntimeHost Integration**: InMemoryTransportConsumer works with runtime host as IHostedService
+
+### Changed
+- **Documentation**: Clarified InMemory runs real pipeline (not a mock), added limitations section
+- **Test Patterns**: Examples use `TaskCompletionSource` instead of `Task.Delay`
+
+### Fixed
+- **Terminology**: Changed "Pub/Sub" to "Multi-Observer" for honest semantics
+
 ## [0.2.0] - 2025-11-22
 
-### ?? BREAKING CHANGES
+### Breaking Changes
 - **Kernel Integration**: Requires HoneyDrunk.Kernel to be registered via `AddHoneyDrunkCoreNode` before calling `AddHoneyDrunkInMemoryTransport`
 - **Grid Context**: Envelope now includes `NodeId`, `StudioId`, `Environment` fields for Grid-aware context propagation
 
 ### Added
-- ? **Grid Context Support**: Automatic propagation of Kernel Grid context across messages in test scenarios
-- ? **Full Pipeline Testing**: Test Grid context flow end-to-end
+- **Grid Context Support**: Automatic propagation of Kernel Grid context across messages in test scenarios
+- **Full Pipeline Testing**: Test Grid context flow end-to-end
 
 ### Changed
 - **Dependency Updates**: Now depends on `HoneyDrunk.Kernel.Abstractions` v0.2.1

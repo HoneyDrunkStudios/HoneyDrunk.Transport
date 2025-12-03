@@ -21,6 +21,7 @@
     <File Path="docs/Primitives.md" />
     <File Path="docs/StorageQueue.md" />
     <File Path="docs/Testing.md" />
+    <File Path="Runtime.md" />
   </Folder>
   <Folder Name="/Pipelines/">
     <File Path="../.github/workflows/publish.yml" />

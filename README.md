@@ -13,12 +13,12 @@
 
 HoneyDrunk.Transport is the **messaging backbone** of HoneyDrunk.OS ("the Hive"). It provides a transport-agnostic abstraction layer over different message brokers with built-in resilience, observability, and exactly-once semantics:
 
-- ✅ **Transport Abstraction** - Unified interface for Azure Service Bus, RabbitMQ, Kafka, in-memory, and more
-- ✅ **Middleware Pipeline** - Onion-style processing with correlation, telemetry, logging, and retry
-- ✅ **Envelope Pattern** - Immutable message wrapping with correlation/causation tracking
+- ✅ **Transport Abstraction** - Unified `ITransportPublisher` and `ITransportConsumer` over Azure Service Bus, Azure Storage Queue, and InMemory
+- ✅ **Middleware Pipeline** - Onion-style processing with logging, telemetry, correlation, and retry
+- ✅ **Envelope Pattern** - Immutable `ITransportEnvelope` with correlation/causation tracking
 - ✅ **Transactional Outbox** - Exactly-once processing with database transactions
-- ✅ **Kernel Integration** - Uses `IClock`, `IIdGenerator`, `IKernelContext` for deterministic, testable messaging
-- ✅ **Framework Integration** - Extends Microsoft.Extensions, integrates seamlessly with ASP.NET Core
+- ✅ **Kernel Integration** - Uses `TimeProvider` and `IGridContext` from HoneyDrunk.Kernel for deterministic timestamps and distributed context
+- ✅ **Observability** - OpenTelemetry spans and pluggable `ITransportMetrics`
 - ✅ **Blob Fallback for Service Bus** - Persist failed publishes to Azure Blob Storage for later replay
 
 ---
@@ -29,28 +29,25 @@ HoneyDrunk.Transport is the **messaging backbone** of HoneyDrunk.OS ("the Hive")
 
 ```xml
 <ItemGroup>
-  <!-- Core Transport -->
   <PackageReference Include="HoneyDrunk.Transport" Version="0.1.0" />
-  
-  <!-- Azure Service Bus Provider -->
   <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.1.0" />
-  
-  <!-- Azure Storage Queue Provider -->
   <PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.1.0" />
-  
-  <!-- In-Memory Provider (for testing) -->
   <PackageReference Include="HoneyDrunk.Transport.InMemory" Version="0.1.0" />
 </ItemGroup>
 ```
 
-### Register Transport Services
+### Configure in Program.cs
 
 ```csharp
+using HoneyDrunk.Kernel.DependencyInjection;
 using HoneyDrunk.Transport.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Register Transport core (includes Kernel defaults)
+// 1. Register Kernel node
+builder.Services.AddHoneyDrunkCoreNode(nodeDescriptor);
+
+// 2. Register Transport core
 builder.Services.AddHoneyDrunkTransportCore(options =>
 {
     options.EnableTelemetry = true;
@@ -58,33 +55,137 @@ builder.Services.AddHoneyDrunkTransportCore(options =>
     options.EnableCorrelation = true;
 });
 
-// Option 1: Add Azure Service Bus transport
+// 3. Choose a transport
+
+// Azure Service Bus
 builder.Services.AddHoneyDrunkServiceBusTransport(options =>
 {
     options.FullyQualifiedNamespace = "mynamespace.servicebus.windows.net";
-    options.EntityType = ServiceBusEntityType.Queue;
-    options.Address = "my-queue";
-    options.AutoComplete = true;
+    options.Address = "orders";
+    options.EntityType = ServiceBusEntityType.Topic;
+    options.SubscriptionName = "order-processor";
+    options.MaxConcurrency = 10;
+    options.PrefetchCount = 20;
 
-    // Optional: enable Blob fallback for publish failures
-    // options.BlobFallback.Enabled = true;
-    // options.BlobFallback.ConnectionString = builder.Configuration["Blob:ConnectionString"];
-    // options.BlobFallback.ContainerName = "transport-fallback";
-    // options.BlobPrefix = "servicebus";
+    options.ServiceBusRetry.Mode = ServiceBusRetryMode.Exponential;
+    options.ServiceBusRetry.MaxRetries = 3;
 });
 
-// Option 2: Add Azure Storage Queue transport
-builder.Services.AddHoneyDrunkTransportStorageQueue(
-    connectionString: builder.Configuration["StorageQueue:ConnectionString"]!,
-    queueName: "orders")
+// OR Azure Storage Queue
+builder.Services
+    .AddHoneyDrunkTransportStorageQueue(
+        builder.Configuration["StorageQueue:ConnectionString"]!,
+        "orders")
     .WithMaxDequeueCount(5)
     .WithConcurrency(10);
 
-// Register message handlers
+// 4. Register message handlers
 builder.Services.AddMessageHandler<OrderCreatedEvent, OrderCreatedHandler>();
 
 var app = builder.Build();
 app.Run();
+```
+
+---
+
+## 📖 Usage Examples
+
+### Publishing Messages
+
+```csharp
+public class OrderService(
+    ITransportPublisher publisher,
+    EnvelopeFactory envelopeFactory,
+    IMessageSerializer serializer,
+    IGridContext gridContext)
+{
+    public async Task CreateOrderAsync(CreateOrderCommand command, CancellationToken ct)
+    {
+        // Create order...
+        
+        // Publish event
+        var @event = new OrderCreatedEvent { OrderId = orderId, Total = total };
+        var payload = serializer.Serialize(@event);
+        var envelope = envelopeFactory.CreateEnvelopeWithGridContext<OrderCreatedEvent>(
+            payload, gridContext);
+        
+        await publisher.PublishAsync(
+            envelope,
+            EndpointAddress.Create("orders", "orders-topic"),
+            ct);
+    }
+}
+```
+
+### Handling Messages
+
+```csharp
+public class OrderCreatedHandler : IMessageHandler<OrderCreatedEvent>
+{
+    private readonly ILogger<OrderCreatedHandler> _logger;
+    
+    public OrderCreatedHandler(ILogger<OrderCreatedHandler> logger)
+    {
+        _logger = logger;
+    }
+    
+    public async Task<MessageProcessingResult> HandleAsync(
+        OrderCreatedEvent message,
+        MessageContext context,
+        CancellationToken cancellationToken)
+    {
+        var grid = context.GridContext;
+        
+        _logger.LogInformation(
+            "Processing order {OrderId} with CorrelationId {CorrelationId} on Node {NodeId}",
+            message.OrderId,
+            grid?.CorrelationId,
+            grid?.NodeId);
+        
+        await SendConfirmationEmailAsync(message.OrderId, cancellationToken);
+        return MessageProcessingResult.Success;
+    }
+}
+```
+
+### Transactional Outbox
+
+```csharp
+public class OrderService(
+    IOutboxStore outboxStore,
+    EnvelopeFactory factory,
+    IMessageSerializer serializer,
+    IDbContext dbContext)
+{
+    public async Task CreateOrderAsync(CreateOrderCommand command, CancellationToken ct)
+    {
+        await using var transaction = await dbContext.BeginTransactionAsync(ct);
+        
+        try
+        {
+            // Save order to database
+            var order = new Order { /* ... */ };
+            await dbContext.Orders.AddAsync(order, ct);
+            
+            // Save message to outbox (same transaction)
+            var payload = serializer.Serialize(new OrderCreatedEvent { OrderId = order.Id });
+            var envelope = factory.CreateEnvelope<OrderCreatedEvent>(payload);
+            var destination = EndpointAddress.Create("orders", "orders-topic");
+            
+            await outboxStore.SaveAsync(destination, envelope, ct);
+            
+            await dbContext.SaveChangesAsync(ct);
+            await transaction.CommitAsync(ct);
+            
+            // DefaultOutboxDispatcher publishes from outbox in background
+        }
+        catch
+        {
+            await transaction.RollbackAsync(ct);
+            throw;
+        }
+    }
+}
 ```
 
 ---
@@ -98,9 +199,9 @@ app.Run();
 | **Transport Abstraction** | Unified publisher/consumer interface | `ITransportPublisher`, `ITransportConsumer` |
 | **Message Pipeline** | Middleware execution engine | `IMessagePipeline`, `IMessageMiddleware` |
 | **Envelope System** | Immutable message wrapping | `ITransportEnvelope`, `EnvelopeFactory` |
-| **Kernel Context** | Correlation/causation tracking | `IKernelContextFactory`, `KernelContext` |
+| **Grid Context** | Correlation/causation tracking | `IGridContext`, `IGridContextFactory` |
 | **Serialization** | Pluggable message serialization | `IMessageSerializer`, `JsonMessageSerializer` |
-| **Outbox Pattern** | Transactional outbox support | `IOutboxStore`, `IOutboxDispatcher` |
+| **Outbox Pattern** | Transactional outbox support | `IOutboxStore`, `DefaultOutboxDispatcher` |
 
 ### 🔗 Kernel Integration
 
@@ -108,11 +209,11 @@ HoneyDrunk.Transport **extends** HoneyDrunk.Kernel with messaging primitives:
 
 | Kernel Service | How Transport Uses It |
 |----------------|----------------------|
-| `IIdGenerator` | Message ID generation (ULID) |
-| `IClock` | Deterministic message timestamps |
-| `IKernelContext` | Correlation/causation propagation |
-| `IMetricsCollector` | Message processing metrics |
-| `ILogger<T>` | Structured logging throughout |
+| `TimeProvider` | Deterministic message timestamps via `EnvelopeFactory` |
+| `IGridContext` | Correlation, causation, Node/Studio/Tenant propagation |
+| `IGridContextFactory` | Creates Grid context for outbound messages |
+| `ILogger<T>` | Structured logging throughout pipeline |
+| `IMeterFactory` | OpenTelemetry metrics via `ITransportMetrics` |
 
 ### 🚀 Available Transports
 
@@ -126,446 +227,99 @@ HoneyDrunk.Transport **extends** HoneyDrunk.Kernel with messaging primitives:
 
 ---
 
-## 📖 Usage Examples
+## 🧪 Testing
 
-### Publishing Messages
-
-```csharp
-using HoneyDrunk.Transport.Abstractions;
-using HoneyDrunk.Transport.Primitives;
-
-public class OrderService(
-    ITransportPublisher publisher,
-    EnvelopeFactory envelopeFactory,
-    IMessageSerializer serializer)
-{
-    public async Task CreateOrderAsync(CreateOrderCommand command)
-    {
-        // Create order...
-        
-        // Publish event
-        var @event = new OrderCreatedEvent { OrderId = orderId, Total = total };
-        var payload = serializer.Serialize(@event);
-        var envelope = envelopeFactory.CreateEnvelope<OrderCreatedEvent>(
-            payload,
-            correlationId: command.CorrelationId);
-        
-        await publisher.PublishAsync(
-            envelope,
-            new EndpointAddress("orders-topic"),
-            cancellationToken);
-    }
-}
-```
-
-### Handling Messages
+Use InMemory transport and DI for tests:
 
 ```csharp
-using HoneyDrunk.Transport.Abstractions;
+var services = new ServiceCollection();
+services.AddHoneyDrunkCoreNode(TestNodeDescriptor);
+services.AddHoneyDrunkTransportCore()
+    .AddHoneyDrunkInMemoryTransport();
 
-public class OrderCreatedHandler : IMessageHandler<OrderCreatedEvent>
+services.AddMessageHandler<OrderCreatedEvent>((msg, ctx, ct) =>
 {
-    private readonly ILogger<OrderCreatedHandler> _logger;
-    
-    public OrderCreatedHandler(ILogger<OrderCreatedHandler> logger)
-    {
-        _logger = logger;
-    }
-    
-    public async Task HandleAsync(
-        OrderCreatedEvent message,
-        MessageContext context,
-        CancellationToken cancellationToken)
-    {
-        // Access kernel context for correlation tracking
-        if (context.Properties.TryGetValue("KernelContext", out var ctxObj)
-            && ctxObj is IKernelContext kernelContext)
-        {
-            _logger.LogInformation(
-                "Processing order {OrderId} with CorrelationId {CorrelationId}",
-                message.OrderId,
-                kernelContext.CorrelationId);
-        }
-        
-        // Process the event
-        await SendConfirmationEmailAsync(message.OrderId, cancellationToken);
-    }
-}
-```
-
-### Custom Middleware
-
-```csharp
-using HoneyDrunk.Transport.Pipeline;
-
-public class ValidationMiddleware : IMessageMiddleware
-{
-    public async Task InvokeAsync(
-        ITransportEnvelope envelope,
-        MessageContext context,
-        Func<Task> next,
-        CancellationToken cancellationToken)
-    {
-        // Validate envelope
-        if (string.IsNullOrEmpty(envelope.MessageType))
-        {
-            throw new MessageHandlerException(
-                "MessageType is required",
-                MessageProcessingResult.DeadLetter);
-        }
-        
-        // Continue pipeline
-        await next();
-    }
-}
-
-// Register in DI
-services.AddMessageMiddleware<ValidationMiddleware>();
-```
-
-### Transactional Outbox
-
-```csharp
-using HoneyDrunk.Transport.Outbox;
-
-public class OrderService(IOutboxStore outboxStore, IDbContext dbContext)
-{
-    public async Task CreateOrderAsync(CreateOrderCommand command)
-    {
-        await using var transaction = await dbContext.BeginTransactionAsync();
-        
-        try
-        {
-            // Save order to database
-            var order = new Order { /* ... */ };
-            await dbContext.Orders.AddAsync(order);
-            
-            // Save message to outbox (same transaction)
-            var envelope = CreateOrderCreatedEnvelope(order);
-            await outboxStore.SaveAsync(
-                envelope,
-                new EndpointAddress("orders-topic"),
-                cancellationToken);
-            
-            await transaction.CommitAsync();
-            
-            // Background dispatcher will publish from outbox
-        }
-        catch
-        {
-            await transaction.RollbackAsync();
-            throw;
-        }
-    }
-}
-```
-
-### Azure Service Bus Blob Fallback (optional)
-
-```csharp
-// Enable fallback to Azure Blob Storage when publish fails
-builder.Services.AddHoneyDrunkServiceBusTransport(options =>
-{
-    options.ConnectionString = builder.Configuration["ServiceBus:ConnectionString"];    
-    options.Address = "orders";
-
-    options.BlobFallback.Enabled = true;
-    options.BlobFallback.ConnectionString = builder.Configuration["Blob:ConnectionString"]; // or use AccountUrl with MSI
-    options.BlobFallback.ContainerName = "transport-fallback";
-    options.BlobFallback.BlobPrefix = "servicebus";
+    // Assert in handler
+    return Task.FromResult(MessageProcessingResult.Success);
 });
+
+await using var provider = services.BuildServiceProvider();
+
+var broker = provider.GetRequiredService<InMemoryBroker>();
+var publisher = provider.GetRequiredService<ITransportPublisher>();
+var pipeline = provider.GetRequiredService<IMessagePipeline>();
+
+// Use broker for broker-level tests, pipeline for pipeline-level tests
 ```
 
-Behavior: on publish exception, the publisher saves the full envelope + destination metadata to blob JSON and suppresses the error if the upload succeeds. If blob upload fails too, the original error is rethrown.
-
-### Azure Storage Queue with Poison Handling
-
-```csharp
-using HoneyDrunk.Transport.Abstractions;
-
-// Handler with explicit error control
-public class PaymentProcessingHandler : IMessageHandler<ProcessPaymentCommand>
-{
-    private readonly IPaymentGateway _gateway;
-    private readonly ILogger<PaymentProcessingHandler> _logger;
-    
-    public PaymentProcessingHandler(
-        IPaymentGateway gateway,
-        ILogger<PaymentProcessingHandler> logger)
-    {
-        _gateway = gateway;
-        _logger = logger;
-    }
-    
-    public async Task<MessageProcessingResult> HandleAsync(
-        ProcessPaymentCommand message,
-        MessageContext context,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            // Check dequeue count to detect repeated failures
-            if (context.DeliveryCount > 3)
-            {
-                _logger.LogWarning(
-                    "Payment {PaymentId} has been retried {Count} times",
-                    message.PaymentId,
-                    context.DeliveryCount);
-            }
-            
-            var result = await _gateway.ProcessPaymentAsync(
-                message.PaymentId,
-                message.Amount,
-                cancellationToken);
-            
-            if (result.IsSuccess)
-            {
-                return MessageProcessingResult.Success; // Message deleted from queue
-            }
-            else if (result.IsTransientError)
-            {
-                // Transient error (timeout, rate limit) - retry
-                _logger.LogWarning(
-                    "Transient error processing payment {PaymentId}: {Error}",
-                    message.PaymentId,
-                    result.ErrorMessage);
-                
-                return MessageProcessingResult.Retry; // Message becomes visible again
-            }
-            else
-            {
-                // Permanent error (invalid card, insufficient funds) - dead letter
-                _logger.LogError(
-                    "Permanent error processing payment {PaymentId}: {Error}",
-                    message.PaymentId,
-                    result.ErrorMessage);
-                
-                return MessageProcessingResult.DeadLetter; // Moved to poison queue
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Unexpected error processing payment {PaymentId}", message.PaymentId);
-            
-            // After MaxDequeueCount (default: 5), message automatically moves to poison queue
-            return MessageProcessingResult.Retry;
-        }
-    }
-}
-```
+See [Testing.md](HoneyDrunk.Transport/docs/Testing.md) for complete patterns including unit tests, integration tests, and test helpers.
 
 ---
 
-## 🧪 Testing & Validation
+## 📚 Documentation
 
-### In-Memory Transport for Tests
-
-```csharp
-using HoneyDrunk.Transport.InMemory;
-using Xunit;
-
-public class OrderServiceTests
-{
-    [Fact]
-    public async Task CreateOrder_PublishesOrderCreatedEvent()
-    {
-        // Arrange
-        var broker = new InMemoryBroker();
-        var publisher = new InMemoryTransportPublisher(broker, logger);
-        var service = new OrderService(publisher, /* ... */);
-        
-        var messagesReceived = new List<ITransportEnvelope>();
-        broker.Subscribe("orders-topic", (envelope, ct) =>
-        {
-            messagesReceived.Add(envelope);
-            return Task.CompletedTask;
-        });
-        
-        // Act
-        await service.CreateOrderAsync(new CreateOrderCommand { /* ... */ });
-        
-        // Assert
-        Assert.Single(messagesReceived);
-        Assert.Equal("OrderCreatedEvent", messagesReceived[0].MessageType);
-    }
-}
-```
-
-### Testing with Fixed Time
-
-```csharp
-using HoneyDrunk.Kernel.Abstractions.Time;
-
-public class EnvelopeFactoryTests
-{
-    [Fact]
-    public void CreateEnvelope_UsesFixedTimestamp()
-    {
-        // Arrange
-        var fixedTime = new DateTimeOffset(2025, 1, 15, 12, 0, 0, TimeSpan.Zero);
-        var clock = new FixedClock(fixedTime);
-        var idGenerator = new TestIdGenerator("test-id");
-        var factory = new EnvelopeFactory(idGenerator, clock);
-        
-        // Act
-        var envelope = factory.CreateEnvelope<TestMessage>(payload);
-        
-        // Assert
-        Assert.Equal(fixedTime, envelope.Timestamp);
-        Assert.Equal("test-id", envelope.MessageId);
-    }
-}
-```
+| Document | Description |
+|----------|-------------|
+| [Architecture.md](HoneyDrunk.Transport/docs/Architecture.md) | High-level architecture and design principles |
+| [Abstractions.md](HoneyDrunk.Transport/docs/Abstractions.md) | Core contracts: `ITransportEnvelope`, `IMessageHandler`, `MessageContext` |
+| [Pipeline.md](HoneyDrunk.Transport/docs/Pipeline.md) | Middleware pipeline and built-in middleware |
+| [Configuration.md](HoneyDrunk.Transport/docs/Configuration.md) | All options: `TransportCoreOptions`, `RetryOptions`, error strategies |
+| [Context.md](HoneyDrunk.Transport/docs/Context.md) | Grid context propagation and `IGridContextFactory` |
+| [Primitives.md](HoneyDrunk.Transport/docs/Primitives.md) | `EnvelopeFactory`, `TransportEnvelope`, serialization |
+| [AzureServiceBus.md](HoneyDrunk.Transport/docs/AzureServiceBus.md) | Service Bus transport: sessions, topics, blob fallback |
+| [StorageQueue.md](HoneyDrunk.Transport/docs/StorageQueue.md) | Storage Queue transport: concurrency model, poison queues |
+| [InMemory.md](HoneyDrunk.Transport/docs/InMemory.md) | InMemory transport for testing |
+| [Outbox.md](HoneyDrunk.Transport/docs/Outbox.md) | Transactional outbox pattern |
+| [Runtime.md](HoneyDrunk.Transport/docs/Runtime.md) | `ITransportRuntime` and consumer lifecycle |
+| [Health.md](HoneyDrunk.Transport/docs/Health.md) | Health monitoring with `ITransportHealthContributor` |
+| [Metrics.md](HoneyDrunk.Transport/docs/Metrics.md) | `ITransportMetrics` and OpenTelemetry integration |
+| [Testing.md](HoneyDrunk.Transport/docs/Testing.md) | Test patterns and helpers |
 
 ---
 
-## 🛠️ Configuration
-
-### Transport Core Options
-
-```csharp
-builder.Services.AddHoneyDrunkTransportCore(options =>
-{
-    options.EndpointName = "my-service";
-    options.Address = "my-queue";
-    options.EnableTelemetry = true;
-    options.EnableLogging = true;
-    options.EnableCorrelation = true;
-    options.MaxConcurrency = 10;
-    options.PrefetchCount = 20;
-});
-```
-
-### Azure Service Bus Options
-
-```csharp
-builder.Services.AddHoneyDrunkServiceBusTransport(options =>
-{
-    // Connection
-    options.FullyQualifiedNamespace = "mynamespace.servicebus.windows.net";
-    options.ConnectionString = config["ServiceBus:ConnectionString"];
-    
-    // Entity
-    options.EntityType = ServiceBusEntityType.Topic;
-    options.Address = "orders-topic";
-    options.SubscriptionName = "order-processor";
-    
-    // Processing
-    options.AutoComplete = true;
-    options.SessionEnabled = false;
-    options.MaxConcurrency = 10;
-    options.PrefetchCount = 20;
-    options.MessageLockDuration = TimeSpan.FromMinutes(5);
-    
-    // Retry
-    options.ServiceBusRetry.Mode = ServiceBusRetryMode.Exponential;
-    options.ServiceBusRetry.MaxRetries = 3;
-    options.ServiceBusRetry.Delay = TimeSpan.FromSeconds(0.8);
-    options.ServiceBusRetry.MaxDelay = TimeSpan.FromMinutes(1);
-    
-    // Dead Letter
-    options.EnableDeadLetterQueue = true;
-    options.MaxDeliveryCount = 10;
-    
-    // Blob fallback (optional)
-    // options.BlobFallback.Enabled = true;
-    // options.BlobFallback.ConnectionString = config["Blob:ConnectionString"]; // or AccountUrl + MSI
-    // options.BlobFallback.ContainerName = "transport-fallback";
-    // options.BlobFallback.BlobPrefix = "servicebus";
-});
-```
-
-### Azure Storage Queue Options
-
-```csharp
-builder.Services.AddHoneyDrunkTransportStorageQueue(options =>
-{
-    // Connection
-    options.ConnectionString = config["StorageQueue:ConnectionString"];
-    options.QueueName = "orders";
-    options.CreateIfNotExists = true;
-    
-    // Message Settings
-    options.Base64EncodePayload = true;
-    options.MessageTimeToLive = TimeSpan.FromDays(7);
-    options.VisibilityTimeout = TimeSpan.FromSeconds(30);
-    
-    // Processing
-    options.MaxConcurrency = 5;
-    options.PrefetchMaxMessages = 16;
-    
-    // Poison Handling
-    options.MaxDequeueCount = 5;
-    options.PoisonQueueName = "orders-poison";
-    
-    // Polling
-    options.EmptyQueuePollingInterval = TimeSpan.FromSeconds(1);
-    options.MaxPollingInterval = TimeSpan.FromSeconds(5);
-    
-    // Observability
-    options.EnableTelemetry = true;
-    options.EnableLogging = true;
-    options.EnableCorrelation = true;
-});
-
-// Or use fluent configuration
-builder.Services
-    .AddHoneyDrunkTransportStorageQueue(
-        config["StorageQueue:ConnectionString"]!,
-        "orders")
-    .WithMaxDequeueCount(3)
-    .WithVisibilityTimeout(TimeSpan.FromSeconds(60))
-    .WithPrefetchCount(32)
-    .WithConcurrency(10)
-    .WithPoisonQueue("orders-dlq");
-```
-
-### Repository Layout
+## 🛠️ Repository Layout
 
 ```
 HoneyDrunk.Transport/
- ├── HoneyDrunk.Transport/                    # Core abstractions & pipeline
- │   ├── Abstractions/                        # Contracts & interfaces
- │   ├── Pipeline/                            # Middleware execution engine
- │   ├── Configuration/                       # Options & settings
- │   ├── Context/                             # Kernel context integration
- │   ├── Primitives/                          # Envelope & factory
- │   ├── Outbox/                              # Transactional outbox
- │   └── DependencyInjection/                 # DI registration
- ├── HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
- ├── HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
- ├── HoneyDrunk.Transport.InMemory/           # In-memory provider
- ├── HoneyDrunk.Transport.Tests/              # Test project
- ├── HoneyDrunk.Transport.slnx
- ├── .editorconfig
- └── .github/workflows/
-     ├── validate-pr.yml
-     └── publish.yml
+├── HoneyDrunk.Transport/                    # Core abstractions & pipeline
+│   ├── Abstractions/                        # Contracts & interfaces
+│   ├── Pipeline/                            # Middleware execution engine
+│   ├── Configuration/                       # Options & settings
+│   ├── Context/                             # Grid context integration
+│   ├── Primitives/                          # Envelope & factory
+│   ├── Outbox/                              # Transactional outbox
+│   ├── Runtime/                             # ITransportRuntime host
+│   ├── Health/                              # Health contributors
+│   ├── Metrics/                             # ITransportMetrics
+│   ├── Telemetry/                           # OpenTelemetry integration
+│   └── DependencyInjection/                 # DI registration
+├── HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
+├── HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
+├── HoneyDrunk.Transport.InMemory/           # In-memory provider
+├── HoneyDrunk.Transport.Tests/              # Test project
+└── docs/                                    # Documentation
 ```
 
-#### Storage Queue vs Service Bus
+---
 
-**When to use Storage Queue:**
-- ✅ Simple queue-based messaging
-- ✅ Cost-effective for high-volume scenarios
-- ✅ No need for advanced features (sessions, transactions)
-- ✅ Message size < 64KB
-- ✅ At-least-once delivery is acceptable
+## ⚖️ Storage Queue vs Service Bus
 
-**When to use Service Bus:**
-- ✅ Need topics/subscriptions (pub/sub)
-- ✅ Require sessions for ordered processing
-- ✅ Need transactional receive
-- ✅ Message size up to 1MB (or 100MB with Premium)
-- ✅ Dead-letter queue with automatic retry policies
-- ✅ Advanced features (duplicate detection, message deferral)
+| Scenario | Storage Queue | Service Bus |
+|----------|---------------|-------------|
+| **Cost optimization** | ✅ $0.0004/10K ops | ❌ Higher cost |
+| **High volume (millions/day)** | ✅ Excellent | ✅ Good |
+| **Simple queue semantics** | ✅ Yes | ✅ Yes |
+| **Message size < 64KB** | ✅ Yes | ✅ Up to 100MB |
+| **Topics/subscriptions (fan-out)** | ❌ No | ✅ Yes |
+| **Sessions (ordered processing)** | ❌ No | ✅ Yes |
+| **Transactions** | ❌ No | ✅ Yes |
+| **Duplicate detection** | ❌ No | ✅ Yes |
 
-**Storage Queue Limitations:**
-- ⚠️ Maximum message size: ~64KB (after base64 encoding)
-- ⚠️ No native dead-letter queue (implemented via poison queue pattern)
-- ⚠️ No FIFO guarantees beyond queue semantics
-- ⚠️ No built-in duplicate detection
-- ⚠️ No transactional receive
-- ⚠️ Batch operations are not atomic (parallelized individual sends)
+**Choose Storage Queue** for cost-effective, high-volume, simple queue scenarios.  
+**Choose Service Bus** for enterprise messaging with topics, sessions, or transactions.
 
-For large payloads, consider storing data in Blob Storage and sending a reference/pointer message.
+---
+
+## 📄 License
+
+[MIT](LICENSE)

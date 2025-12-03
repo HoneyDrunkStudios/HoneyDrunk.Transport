@@ -7,13 +7,15 @@
 
 ## 📋 What Is This?
 
-**HoneyDrunk.Transport.AzureServiceBus** provides Azure Service Bus integration for enterprise messaging scenarios. Supports topics/subscriptions (pub/sub), sessions (ordered processing), transactional receive, and blob storage fallback for publish failures. Ideal for complex, mission-critical distributed systems.
+**HoneyDrunk.Transport.AzureServiceBus** provides Azure Service Bus integration for enterprise messaging scenarios. Supports topics/subscriptions (pub/sub), sessions (ordered processing), transactional receive, and blob storage fallback for publish failures. Ideal for high-throughput, high-correctness workloads where ordering, transactions, and DLQ behavior matter.
+
+This provider is configured via `AzureServiceBusOptions`, extending the core `TransportOptions` type.
 
 **Key Features:**
 - ✅ **Topics & Subscriptions** - Pub/sub messaging patterns
 - ✅ **Sessions** - Ordered message processing per session
 - ✅ **Transactions** - Transactional receive (PeekLock mode)
-- ✅ **Message Size** - Up to 1MB (256KB standard, 1MB premium)
+- ✅ **Message Size** - Up to 100MB (256KB standard, 100MB premium)
 - ✅ **Dead-Letter Queue** - Built-in DLQ support
 - ✅ **Duplicate Detection** - Message deduplication
 - ✅ **Blob Fallback** - Persist failed publishes to Blob Storage
@@ -27,13 +29,16 @@
 
 ### AzureServiceBusOptions
 Configuration for Service Bus and blob fallback:
-- **ConnectionString** - Service Bus connection
+- **FullyQualifiedNamespace** - Service Bus namespace (managed identity)
+- **ConnectionString** - Alternative to managed identity
 - **Address** - Topic or queue name
-- **IsQueue** - Queue (true) or topic (false)
+- **EntityType** - `ServiceBusEntityType.Queue` or `ServiceBusEntityType.Topic`
 - **SubscriptionName** - Topic subscription name
-- **EnableSessions** - Ordered processing via sessions
-- **MaxConcurrentCalls** - Concurrent message processing
+- **SessionEnabled** - Ordered processing via sessions
+- **MaxConcurrency** - Concurrent message processing
 - **BlobFallback** - Blob Storage persistence for publish failures
+
+The transport uses PeekLock mode with configurable AutoComplete behavior. Set `options.AutoComplete = false` to take manual control of message completion.
 
 ### Blob Fallback Pattern
 When Service Bus publish fails, messages are automatically persisted to Blob Storage:
@@ -46,12 +51,17 @@ Each blob contains:
 - Destination metadata
 - Failure timestamp and exception details
 
+> Blob fallback does **not** automatically replay messages. It preserves them durably so you can replay them intentionally using your own replayer logic.
+
 ### Session Support
 Enable ordered processing per SessionId:
 ```csharp
-options.EnableSessions = true;
-options.MaxConcurrentCalls = 10; // Process 10 sessions concurrently
+options.SessionEnabled = true;
+options.MaxConcurrency = 10; // Process 10 sessions concurrently
 ```
+
+### Dead-Letter Queue
+Messages move to DLQ when the handler returns `MessageProcessingResult.DeadLetter` or when the broker's `MaxDeliveryCount` is exceeded.
 
 ---
 
@@ -75,18 +85,24 @@ dotnet add package HoneyDrunk.Transport.AzureServiceBus
 builder.Services.AddHoneyDrunkCoreNode(nodeDescriptor);
 
 builder.Services
+    .AddHoneyDrunkTransportCore(options =>
+    {
+        options.EnableTelemetry = true;
+        options.EnableLogging = true;
+        options.EnableCorrelation = true;
+    })
     .AddHoneyDrunkServiceBusTransport(options =>
     {
-        options.ConnectionString = builder.Configuration["ServiceBus:ConnectionString"];
+        options.FullyQualifiedNamespace = "mynamespace.servicebus.windows.net";
         options.Address = "orders";
-        options.IsQueue = false; // Using topic
+        options.EntityType = ServiceBusEntityType.Topic;
         options.SubscriptionName = "order-processor";
-        options.EnableSessions = true;
-        options.MaxConcurrentCalls = 10;
+        options.SessionEnabled = true;
+        options.MaxConcurrency = 10;
         
         // Blob fallback for publish failures
         options.BlobFallback.Enabled = true;
-        options.BlobFallback.ConnectionString = builder.Configuration["Blob:ConnectionString"];
+        options.BlobFallback.AccountUrl = "https://myaccount.blob.core.windows.net";
         options.BlobFallback.ContainerName = "transport-fallback";
     })
     .WithRetry(retry =>
@@ -100,12 +116,14 @@ builder.Services
 
 ```csharp
 var envelope = factory.CreateEnvelope<OrderCreated>(payload);
-var withSession = envelope.WithHeaders(new Dictionary<string, string>
-{
-    ["SessionId"] = order.CustomerId.ToString()
-});
 
-await publisher.PublishAsync(withSession, new EndpointAddress("orders"), ct);
+// Use EndpointAddress for session - the transport maps this to ServiceBusMessage.SessionId
+var destination = EndpointAddress.Create(
+    name: "orders",
+    address: "orders",
+    sessionId: order.CustomerId.ToString());
+
+await publisher.PublishAsync(envelope, destination, ct);
 ```
 
 ### Replay Failed Messages
@@ -123,7 +141,12 @@ public class FailedMessageReplayer(
             var record = JsonSerializer.Deserialize<FailedMessageRecord>(json);
             
             var envelope = RecreateEnvelope(record);
-            await publisher.PublishAsync(envelope, record.Destination, ct);
+            var destination = EndpointAddress.Create(
+                record.Destination.Name,
+                record.Destination.Address,
+                sessionId: record.Destination.SessionId);
+            
+            await publisher.PublishAsync(envelope, destination, ct);
             await container.DeleteBlobAsync(blob.Name, ct);
         }
     }
@@ -138,7 +161,7 @@ public class FailedMessageReplayer(
 - ✅ Need topics/subscriptions (pub/sub)
 - ✅ Require sessions for ordered processing
 - ✅ Need transactional receive
-- ✅ Message size up to 1MB+
+- ✅ Message size up to 100MB
 - ✅ Duplicate detection is required
 - ✅ Mission-critical workloads
 
@@ -160,7 +183,7 @@ public class FailedMessageReplayer(
 ## 📚 Documentation
 
 - **[Azure Service Bus Guide](../docs/AzureServiceBus.md)** - Detailed implementation guide
-- **[Blob Fallback Guide](../docs/AzureServiceBus.md#blob-fallback-pattern)** - Failure handling patterns
+- **[Blob Fallback Guide](../docs/AzureServiceBus.md#blob-fallback)** - Failure handling patterns
 - **[Complete File Guide](../docs/FILE_GUIDE.md)** - Architecture documentation
 
 ---

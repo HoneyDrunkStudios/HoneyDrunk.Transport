@@ -5,39 +5,40 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.0] - 2025-01-28
+## [0.3.0] - 2025-12-03
 
-### ⚠️ BREAKING CHANGES
+### Breaking Changes
 - **Kernel v0.3.0 Upgrade**: Transport now requires HoneyDrunk.Kernel.Abstractions v0.3.0
 - **ITransportEnvelope Changes**: Added `TenantId` and `ProjectId` properties for multi-tenant/multi-project support
 - **WithGridContext Signature**: Added `tenantId` and `projectId` parameters
 - **GridHeaderNames**: Now uses Kernel's canonical header names (`X-Causation-Id`, `X-Correlation-Id`, etc.) instead of hardcoded strings
 
 ### Added
-- ✅ **Multi-Tenancy Support**: Full `TenantId` and `ProjectId` propagation through all transport layers
+- **Multi-Tenancy Support**: Full `TenantId` and `ProjectId` propagation through all transport layers
   - Added `TenantId` and `ProjectId` properties to `ITransportEnvelope`
   - Updated `EnvelopeFactory.CreateEnvelopeWithGridContext()` to map new fields from `IGridContext`
   - Updated `GridContextFactory` to reconstruct `TenantId` and `ProjectId` from envelopes
   - Azure Service Bus: Maps `TenantId`/`ProjectId` using `GridHeaderNames.TenantId` and `GridHeaderNames.ProjectId`
   - Storage Queue: Includes `tenantId` and `projectId` in JSON envelope schema
 
-- ✅ **GridHeaderNames Standardization**: All adapters now use Kernel's canonical header names
+- **GridHeaderNames Standardization**: All adapters now use Kernel's canonical header names
   - Replaced hardcoded `"CausationId"` with `GridHeaderNames.CausationId` (`"X-Causation-Id"`)
   - Replaced hardcoded `"CorrelationId"` with `GridHeaderNames.CorrelationId` (`"X-Correlation-Id"`)
   - Consistent header naming across Azure Service Bus, Storage Queue, and InMemory transports
 
-- ✅ **Documentation**: New comprehensive guides
-  - `docs/Publishing.md` - Complete guide for message publishing APIs (IMessagePublisher and ITransportPublisher)
-  - `docs/KernelV03IntegrationAudit.md` - Integration audit and verification checklist
+- **Documentation**: Comprehensive guide rewrites for consistency across all transports
+  - `docs/AzureServiceBus.md` - Aligned with Configuration.md, EndpointAddress patterns
+  - `docs/Testing.md` - Rewritten with proper unit/integration patterns, no ServiceProvider mutation
+  - All project READMEs updated for NuGet consistency
 
 ### Changed
 - **Dependency Updates**: Now depends on `HoneyDrunk.Kernel.Abstractions` v0.3.0
-- **GridContextFactory**: No longer duplicates `StudioId → TenantId`; uses actual `TenantId` and `ProjectId` from envelopes
+- **GridContextFactory**: No longer duplicates `StudioId -> TenantId`; uses actual `TenantId` and `ProjectId` from envelopes
 - **Azure Service Bus EnvelopeMapper**: Updated reserved properties list to include `TenantId`, `ProjectId`, and all Grid header names
 - **Storage Queue Envelope Schema**: Breaking change - JSON schema now includes `tenantId` and `projectId` fields
 
 ### Fixed
-- ✅ **Context Propagation Fidelity**: Grid context now preserves all fields through message round-trips
+- **Context Propagation Fidelity**: Grid context now preserves all fields through message round-trips
   - Fixed loss of `TenantId` and `ProjectId` in distributed messaging
   - Fixed header name inconsistencies between transport adapters
   - Ensured symmetric field mapping across all transport implementations
@@ -111,7 +112,7 @@ Application Nodes (uses all)
 
 ## [0.2.0] - 2025-11-22
 
-### ⚠️ BREAKING CHANGES
+### Breaking Changes
 - **Kernel Integration**: Transport now requires HoneyDrunk.Kernel to be registered via `AddHoneyDrunkCoreNode` before calling `AddHoneyDrunkTransportCore`
 - **ITransportEnvelope Changes**: Added `NodeId`, `StudioId`, `Environment` properties for Grid-aware context propagation
 - **Method Signature Changes**: 
@@ -120,24 +121,24 @@ Application Nodes (uses all)
 - **MessageContext Changes**: Added `IGridContext` property as first-class member
 
 ### Added
-- ✅ **Grid Context Integration**: Full IGridContext support for distributed context propagation
+- **Grid Context Integration**: Full IGridContext support for distributed context propagation
   - Added `NodeId`, `StudioId`, `Environment` to `ITransportEnvelope`
   - Added `CreateEnvelopeWithGridContext()` method to `EnvelopeFactory`
   - Added `IGridContext` property to `MessageContext`
   - Added `GridContextPropagationMiddleware` for automatic context propagation
 
-- ✅ **Health Contributors**: New health monitoring infrastructure
+- **Health Contributors**: New health monitoring infrastructure
   - `ITransportHealthContributor` - Interface for health checks
   - `TransportHealthResult` - Health check result type
   - `PublisherHealthContributor` - Publisher health monitoring
   - `OutboxHealthContributor` - Outbox backlog monitoring
 
-- ✅ **Metrics Infrastructure**: Metrics collection abstractions
+- **Metrics Infrastructure**: Metrics collection abstractions
   - `ITransportMetrics` - Metrics collection interface
   - `NoOpTransportMetrics` - Default no-op implementation
   - Ready for Kernel `IMetricsCollector` integration
 
-- ✅ **Context Factory**: `IGridContextFactory` and `GridContextFactory` for bridging Transport envelopes to Kernel Grid context
+- **Context Factory**: `IGridContextFactory` and `GridContextFactory` for bridging Transport envelopes to Kernel Grid context
 
 ### Changed
 - **Dependency Updates**: Now depends on `HoneyDrunk.Kernel.Abstractions` v0.2.1

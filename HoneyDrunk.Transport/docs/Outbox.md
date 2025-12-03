@@ -10,7 +10,10 @@
 - [IOutboxStore.cs](#ioutboxstorecs)
 - [IOutboxDispatcher.cs](#ioutboxdispatchercs)
 - [IOutboxMessage.cs](#ioutboxmessagecs)
+- [OutboxMessage.cs](#outboxmessagecs)
 - [OutboxMessageState.cs](#outboxmessagestatecs)
+- [OutboxDispatcherOptions.cs](#outboxdispatcheroptionscs)
+- [DefaultOutboxDispatcher.cs](#defaultoutboxdispatchercs)
 - [Complete Outbox Pattern Example](#complete-outbox-pattern-example)
 
 ---
@@ -21,33 +24,54 @@ The transactional outbox pattern ensures exactly-once message delivery by storin
 
 **Location:** `HoneyDrunk.Transport/Outbox/`
 
+**Layering Note:**
+
+- The `Outbox` folder in `HoneyDrunk.Transport` defines the abstractions and core dispatcher.
+- Concrete stores live either:
+  - In application code (like the `EfCoreOutboxStore` example below), or
+  - In provider packages (for example: `HoneyDrunk.Transport.Outbox.SqlServer`) that integrate with `HoneyDrunk.Data` connection factories and conventions.
+
+Transport itself does not depend on Entity Framework or any specific database library.
+
 ---
 
 ## IOutboxStore.cs
+
+Storage abstraction for the transactional outbox pattern.
 
 ```csharp
 public interface IOutboxStore
 {
     Task SaveAsync(
-        IOutboxMessage message,
+        IEndpointAddress destination,
+        ITransportEnvelope envelope,
+        CancellationToken cancellationToken = default);
+    
+    Task SaveBatchAsync(
+        IEnumerable<(IEndpointAddress destination, ITransportEnvelope envelope)> messages,
         CancellationToken cancellationToken = default);
     
     Task<IEnumerable<IOutboxMessage>> LoadPendingAsync(
-        int batchSize,
+        int batchSize = 100,
         CancellationToken cancellationToken = default);
     
     Task MarkDispatchedAsync(
-        string messageId,
+        string outboxMessageId,
         CancellationToken cancellationToken = default);
     
     Task MarkFailedAsync(
-        string messageId,
-        Exception exception,
+        string outboxMessageId,
+        string errorMessage,
+        DateTimeOffset? retryAt = null,
         CancellationToken cancellationToken = default);
     
     Task MarkPoisonedAsync(
-        string messageId,
-        string reason,
+        string outboxMessageId,
+        string errorMessage,
+        CancellationToken cancellationToken = default);
+    
+    Task CleanupDispatchedAsync(
+        DateTimeOffset olderThan,
         CancellationToken cancellationToken = default);
 }
 ```
@@ -55,19 +79,25 @@ public interface IOutboxStore
 ### Usage Example
 
 ```csharp
-// Entity Framework implementation
+// Entity Framework implementation (application-level)
 public class EfCoreOutboxStore(ApplicationDbContext db) : IOutboxStore
 {
-    public async Task SaveAsync(IOutboxMessage message, CancellationToken ct)
+    public async Task SaveAsync(
+        IEndpointAddress destination,
+        ITransportEnvelope envelope,
+        CancellationToken ct)
     {
         await db.OutboxMessages.AddAsync(new OutboxMessageEntity
         {
-            MessageId = message.MessageId,
-            MessageType = message.MessageType,
-            Payload = message.Payload.ToArray(),
-            Headers = JsonSerializer.Serialize(message.Headers),
+            Id = Ulid.NewUlid().ToString(),
+            DestinationName = destination.Name,
+            DestinationAddress = destination.Address,
+            MessageId = envelope.MessageId,
+            MessageType = envelope.MessageType,
+            Payload = envelope.Payload.ToArray(),
+            Headers = JsonSerializer.Serialize(envelope.Headers),
             State = OutboxMessageState.Pending,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTimeOffset.UtcNow
         }, ct);
         
         // Don't call SaveChangesAsync - parent transaction handles it
@@ -79,67 +109,83 @@ public class EfCoreOutboxStore(ApplicationDbContext db) : IOutboxStore
     {
         return await db.OutboxMessages
             .Where(m => m.State == OutboxMessageState.Pending)
+            .Where(m => m.ScheduledAt == null || m.ScheduledAt <= DateTimeOffset.UtcNow)
             .OrderBy(m => m.CreatedAt)
             .Take(batchSize)
             .Select(m => new OutboxMessage
             {
-                MessageId = m.MessageId,
-                MessageType = m.MessageType,
-                Payload = m.Payload,
-                Headers = JsonSerializer.Deserialize<Dictionary<string, string>>(m.Headers)!
+                Id = m.Id,
+                Destination = EndpointAddress.Create(m.DestinationName, m.DestinationAddress),
+                Envelope = new TransportEnvelope(
+                    messageId: m.MessageId,
+                    messageType: m.MessageType,
+                    payload: m.Payload,
+                    headers: JsonSerializer.Deserialize<Dictionary<string, string>>(m.Headers)!),
+                State = m.State,
+                Attempts = m.Attempts,
+                CreatedAt = m.CreatedAt,
+                ProcessedAt = m.ProcessedAt,
+                ScheduledAt = m.ScheduledAt,
+                ErrorMessage = m.ErrorMessage
             })
             .ToListAsync(ct);
     }
     
-    public async Task MarkDispatchedAsync(string messageId, CancellationToken ct)
+    public async Task MarkDispatchedAsync(string outboxMessageId, CancellationToken ct)
     {
-        var message = await db.OutboxMessages.FindAsync([messageId], ct);
+        var message = await db.OutboxMessages.FindAsync([outboxMessageId], ct);
         if (message != null)
         {
             message.State = OutboxMessageState.Dispatched;
-            message.DispatchedAt = DateTime.UtcNow;
+            message.ProcessedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync(ct);
         }
     }
     
     public async Task MarkFailedAsync(
-        string messageId,
-        Exception exception,
+        string outboxMessageId,
+        string errorMessage,
+        DateTimeOffset? retryAt,
         CancellationToken ct)
     {
-        var message = await db.OutboxMessages.FindAsync([messageId], ct);
+        var message = await db.OutboxMessages.FindAsync([outboxMessageId], ct);
         if (message != null)
         {
             message.State = OutboxMessageState.Failed;
-            message.FailedAt = DateTime.UtcNow;
-            message.Error = exception.ToString();
-            message.RetryCount++;
-            
-            // Mark as poisoned after max retries
-            if (message.RetryCount >= 5)
-            {
-                message.State = OutboxMessageState.Poisoned;
-            }
-            
+            message.ProcessedAt = DateTimeOffset.UtcNow;
+            message.ErrorMessage = errorMessage;
+            message.Attempts++;
+            message.ScheduledAt = retryAt;
             await db.SaveChangesAsync(ct);
         }
     }
     
     public async Task MarkPoisonedAsync(
-        string messageId,
-        string reason,
+        string outboxMessageId,
+        string errorMessage,
         CancellationToken ct)
     {
-        var message = await db.OutboxMessages.FindAsync([messageId], ct);
+        var message = await db.OutboxMessages.FindAsync([outboxMessageId], ct);
         if (message != null)
         {
             message.State = OutboxMessageState.Poisoned;
-            message.Error = reason;
+            message.ProcessedAt = DateTimeOffset.UtcNow;
+            message.ErrorMessage = errorMessage;
             await db.SaveChangesAsync(ct);
         }
     }
+    
+    public async Task CleanupDispatchedAsync(DateTimeOffset olderThan, CancellationToken ct)
+    {
+        await db.OutboxMessages
+            .Where(m => m.State == OutboxMessageState.Dispatched)
+            .Where(m => m.ProcessedAt < olderThan)
+            .ExecuteDeleteAsync(ct);
+    }
 }
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -148,81 +194,59 @@ public class EfCoreOutboxStore(ApplicationDbContext db) : IOutboxStore
 ```csharp
 public interface IOutboxDispatcher
 {
-    Task DispatchPendingAsync(CancellationToken cancellationToken = default);
+    Task DispatchPendingAsync(
+        int batchSize = 100,
+        CancellationToken cancellationToken = default);
 }
 ```
 
-### Usage Example
-
-```csharp
-public class OutboxDispatcherService(
-    IOutboxStore store,
-    ITransportPublisher publisher,
-    ILogger<OutboxDispatcherService> logger) 
-    : BackgroundService
-{
-    protected override async Task ExecuteAsync(CancellationToken ct)
-    {
-        while (!ct.IsCancellationRequested)
-        {
-            try
-            {
-                var pending = await store.LoadPendingAsync(100, ct);
-                
-                foreach (var message in pending)
-                {
-                    try
-                    {
-                        await publisher.PublishAsync(message.Envelope, ct);
-                        await store.MarkDispatchedAsync(message.MessageId, ct);
-                        
-                        logger.LogInformation(
-                            "Dispatched outbox message {MessageId}",
-                            message.MessageId);
-                    }
-                    catch (Exception ex)
-                    {
-                        logger.LogError(ex,
-                            "Failed to dispatch outbox message {MessageId}",
-                            message.MessageId);
-                        
-                        await store.MarkFailedAsync(message.MessageId, ex, ct);
-                    }
-                }
-                
-                // Poll interval
-                await Task.Delay(TimeSpan.FromSeconds(5), ct);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error in outbox dispatcher loop");
-                await Task.Delay(TimeSpan.FromSeconds(30), ct);
-            }
-        }
-    }
-}
-
-// Register
-services.AddHostedService<OutboxDispatcherService>();
-```
+[↑ Back to top](#table-of-contents)
 
 ---
 
 ## IOutboxMessage.cs
 
+Represents an outbox message pending dispatch. Contains both the envelope and its destination.
+
 ```csharp
 public interface IOutboxMessage
 {
-    string MessageId { get; }
-    string MessageType { get; }
-    ReadOnlyMemory<byte> Payload { get; }
-    IReadOnlyDictionary<string, string> Headers { get; }
-    OutboxMessageState State { get; }
-    DateTimeOffset CreatedAt { get; }
-    DateTimeOffset? DispatchedAt { get; }
+    string Id { get; }
+    IEndpointAddress Destination { get; }
     ITransportEnvelope Envelope { get; }
+    OutboxMessageState State { get; }
+    int Attempts { get; }
+    DateTimeOffset CreatedAt { get; }
+    DateTimeOffset? ProcessedAt { get; }
+    DateTimeOffset? ScheduledAt { get; }
+    string? ErrorMessage { get; }
 }
 ```
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## OutboxMessage.cs
+
+Default implementation of `IOutboxMessage`.
+
+```csharp
+public sealed class OutboxMessage : IOutboxMessage
+{
+    public required string Id { get; init; }
+    public required IEndpointAddress Destination { get; init; }
+    public required ITransportEnvelope Envelope { get; init; }
+    public OutboxMessageState State { get; init; }
+    public int Attempts { get; init; }
+    public DateTimeOffset CreatedAt { get; init; }
+    public DateTimeOffset? ProcessedAt { get; init; }
+    public DateTimeOffset? ScheduledAt { get; init; }
+    public string? ErrorMessage { get; init; }
+}
+```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 
@@ -238,6 +262,81 @@ public enum OutboxMessageState
 }
 ```
 
+[↑ Back to top](#table-of-contents)
+
+---
+
+## OutboxDispatcherOptions.cs
+
+Configuration for the built-in outbox dispatcher.
+
+```csharp
+public sealed class OutboxDispatcherOptions
+{
+    public TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(5);
+    public int BatchSize { get; set; } = 100;
+    public int MaxRetryAttempts { get; set; } = 5;
+    public TimeSpan BaseRetryDelay { get; set; } = TimeSpan.FromSeconds(1);
+    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan StartupDelay { get; set; } = TimeSpan.Zero;
+    public TimeSpan ErrorDelay { get; set; } = TimeSpan.FromSeconds(30);
+}
+```
+
+[↑ Back to top](#table-of-contents)
+
+---
+
+## DefaultOutboxDispatcher.cs
+
+Background service that implements the outbox dispatch loop with exponential backoff retry.
+
+```csharp
+public sealed partial class DefaultOutboxDispatcher(
+    IOutboxStore store,
+    ITransportPublisher publisher,
+    IOptions<OutboxDispatcherOptions> options,
+    ILogger<DefaultOutboxDispatcher> logger) : BackgroundService, IOutboxDispatcher
+{
+    public async Task DispatchPendingAsync(
+        int batchSize = 100,
+        CancellationToken cancellationToken = default);
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken);
+}
+```
+
+### How It Works
+
+1. **Polls** the outbox store at configured intervals
+2. **Loads** pending messages in batches
+3. **Publishes** each message using `ITransportPublisher.PublishAsync(envelope, destination, ct)`
+4. **Marks dispatched** on success
+5. **Marks failed** with exponential backoff retry scheduling on failure
+6. **Marks poisoned** after exceeding `MaxRetryAttempts`
+
+### Registration
+
+```csharp
+// Register outbox store implementation (application or provider package)
+services.AddSingleton<IOutboxStore, EfCoreOutboxStore>();
+
+// Register dispatcher as hosted service
+services.AddHostedService<DefaultOutboxDispatcher>();
+
+// Configure options
+services.Configure<OutboxDispatcherOptions>(options =>
+{
+    options.PollInterval = TimeSpan.FromSeconds(5);
+    options.BatchSize = 100;
+    options.MaxRetryAttempts = 5;
+    options.BaseRetryDelay = TimeSpan.FromSeconds(1);
+    options.MaxRetryDelay = TimeSpan.FromMinutes(5);
+});
+```
+
+[↑ Back to top](#table-of-contents)
+
 ---
 
 ## Complete Outbox Pattern Example
@@ -248,7 +347,8 @@ public class OrderService(
     ApplicationDbContext db,
     IOutboxStore outbox,
     EnvelopeFactory factory,
-    IMessageSerializer serializer)
+    IMessageSerializer serializer,
+    IGridContext gridContext)
 {
     public async Task CreateOrderAsync(Order order, CancellationToken ct)
     {
@@ -259,27 +359,26 @@ public class OrderService(
             // Save order to database
             db.Orders.Add(order);
             
-            // Save message to outbox (same transaction)
+            // Create message and envelope
             var message = new OrderCreated(order.Id, order.CustomerId);
             var payload = serializer.Serialize(message);
-            var envelope = factory.CreateEnvelope<OrderCreated>(payload);
+            var envelope = factory.CreateEnvelopeWithGridContext<OrderCreated>(
+                payload,
+                gridContext);
             
-            await outbox.SaveAsync(new OutboxMessage
-            {
-                MessageId = envelope.MessageId,
-                MessageType = envelope.MessageType,
-                Payload = envelope.Payload,
-                Headers = envelope.Headers,
-                State = OutboxMessageState.Pending,
-                CreatedAt = DateTimeOffset.UtcNow,
-                Envelope = envelope
-            }, ct);
+            // Create destination
+            var destination = EndpointAddress.Create(
+                name: "orders",
+                address: "orders.created");
+            
+            // Save to outbox (same transaction)
+            await outbox.SaveAsync(destination, envelope, ct);
             
             // Commit both operations atomically
             await db.SaveChangesAsync(ct);
             await transaction.CommitAsync(ct);
             
-            // Background dispatcher will publish later
+            // DefaultOutboxDispatcher will publish later
         }
         catch
         {
@@ -289,12 +388,20 @@ public class OrderService(
     }
 }
 
-// Step 2: Background service dispatches messages
-services.AddHostedService<OutboxDispatcherService>();
+// Step 2: Register outbox infrastructure
+services.AddSingleton<IOutboxStore, EfCoreOutboxStore>();
+services.AddHostedService<DefaultOutboxDispatcher>();
+services.Configure<OutboxDispatcherOptions>(options =>
+{
+    options.PollInterval = TimeSpan.FromSeconds(5);
+    options.BatchSize = 100;
+});
 
 // Step 3: Monitor outbox health
 services.AddSingleton<ITransportHealthContributor, OutboxHealthContributor>();
 ```
+
+[↑ Back to top](#table-of-contents)
 
 ---
 

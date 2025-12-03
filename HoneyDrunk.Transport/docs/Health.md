@@ -20,6 +20,10 @@ Health monitoring abstractions for transport components. Integrates with Kernel 
 
 **Location:** `HoneyDrunk.Transport/Health/`
 
+Transport health contributors are collected by `ITransportRuntime` and can be included in the node's composite health check using Kernel's contributor aggregation model.
+
+A transport adapter may expose multiple health contributors (for example publisher, consumer, and outbox). `TransportRuntimeHost` simply aggregates whatever contributors are registered in DI.
+
 ---
 
 ## ITransportHealthContributor.cs
@@ -118,6 +122,8 @@ return TransportHealthResult.Unhealthy(
 
 ## PublisherHealthContributor.cs
 
+This contributor does *not* publish a real message. It performs a lightweight transport-specific connectivity probe such as opening a management connection or pinging the namespace.
+
 ```csharp
 public sealed class PublisherHealthContributor(ITransportPublisher publisher) 
     : ITransportHealthContributor
@@ -128,8 +134,8 @@ public sealed class PublisherHealthContributor(ITransportPublisher publisher)
     {
         try
         {
-            // Attempt lightweight connectivity check
-            // Implementation varies by transport
+            // Lightweight connectivity probe (transport-specific)
+            // Does NOT publish a real message
             return TransportHealthResult.Healthy("Publisher operational");
         }
         catch (Exception ex)
@@ -147,6 +153,8 @@ public sealed class PublisherHealthContributor(ITransportPublisher publisher)
 ---
 
 ## OutboxHealthContributor.cs
+
+Thresholds should be tuned per environment. In high-throughput nodes, consider bumping `CriticalThreshold` significantly higher.
 
 ```csharp
 public sealed class OutboxHealthContributor(IOutboxStore store) 
@@ -224,6 +232,12 @@ public class OutboxMonitor(IEnumerable<ITransportHealthContributor> contributors
 ```
 
 [↑ Back to top](#table-of-contents)
+
+---
+
+## Summary
+
+Transport health checks provide visibility into broker reachability, publisher readiness, and outbox durability. The `TransportRuntimeHost` aggregates all registered contributors, and Kernel surfaces them through node-level readiness and liveness probes. This separation ensures transport-specific failures never compromise the structure of the node itself.
 
 ---
 
