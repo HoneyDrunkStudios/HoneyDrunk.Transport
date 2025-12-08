@@ -319,8 +319,9 @@ internal sealed class PoisonQueueMover(ILogger<PoisonQueueMover> logger)
             DequeueCount = dequeueCount,
             PoisonedAt = DateTimeOffset.UtcNow,
             ErrorType = error?.GetType().FullName,
-            ErrorMessage = error?.Message,
-            ErrorStackTrace = error?.StackTrace
+            // Optionally redact or omit ErrorMessage if sensitive
+            ErrorMessage = error?.Message
+            // Do not include stack traces in poison queue payloads; log them securely instead
         };
         
         await poisonQueueClient.SendMessageAsync(
