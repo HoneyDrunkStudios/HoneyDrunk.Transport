@@ -58,7 +58,8 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IMessagePublisher, MessagePublisher>();
 
         // Metrics (no-op by default, can be replaced with Kernel-backed implementation)
-        services.TryAddSingleton<ITransportMetrics, NoOpTransportMetrics>();
+        // Use the singleton instance since NoOpTransportMetrics has a private constructor
+        services.TryAddSingleton<ITransportMetrics>(NoOpTransportMetrics.Instance);
 
         // Register transport runtime host (coordinates consumer lifecycle)
         services.TryAddSingleton<ITransportRuntime, TransportRuntimeHost>();

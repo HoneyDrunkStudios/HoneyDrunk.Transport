@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support. Integrated with HoneyDrunk.Kernel for Grid-aware context propagation.</Description>
-    <PackageReleaseNotes>v0.3.0: BREAKING - Kernel v0.3.0 integration with TenantId/ProjectId multi-tenancy, IMessagePublisher high-level API, and GridHeaderNames standardization. See CHANGELOG.md for migration guide.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.3.1: Fixed ITransportMetrics DI registration - NoOpTransportMetrics is now automatically registered, eliminating manual registration requirements.</PackageReleaseNotes>
     <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
