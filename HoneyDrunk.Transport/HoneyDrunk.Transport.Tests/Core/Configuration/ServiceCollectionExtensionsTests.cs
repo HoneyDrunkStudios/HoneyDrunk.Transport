@@ -1,5 +1,6 @@
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.DependencyInjection;
+using HoneyDrunk.Transport.Metrics;
 using HoneyDrunk.Transport.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -77,5 +78,79 @@ public sealed class ServiceCollectionExtensionsTests
 
         await handler!.HandleAsync(new SampleMessage { Value = "test" }, context, CancellationToken.None);
         Assert.True(called);
+    }
+
+    /// <summary>
+    /// Verifies AddHoneyDrunkTransportCore registers ITransportMetrics.
+    /// </summary>
+    [Fact]
+    public void AddHoneyDrunkTransportCore_WhenCalled_RegistersITransportMetrics()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkTransportCore();
+
+        // Act
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var metrics = provider.GetService<ITransportMetrics>();
+
+        // Assert
+        Assert.NotNull(metrics);
+        Assert.Same(NoOpTransportMetrics.Instance, metrics);
+    }
+
+    /// <summary>
+    /// Verifies consumer can override ITransportMetrics before calling AddHoneyDrunkTransportCore.
+    /// </summary>
+    [Fact]
+    public void AddHoneyDrunkTransportCore_WhenCustomMetricsRegisteredFirst_UsesCustomMetrics()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        var customMetrics = new CustomTransportMetrics();
+        services.AddSingleton<ITransportMetrics>(customMetrics);
+
+        services.AddHoneyDrunkTransportCore();
+
+        // Act
+        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var metrics = provider.GetService<ITransportMetrics>();
+
+        // Assert
+        Assert.NotNull(metrics);
+        Assert.Same(customMetrics, metrics);
+    }
+
+    /// <summary>
+    /// Custom implementation for testing consumer override.
+    /// </summary>
+    private sealed class CustomTransportMetrics : ITransportMetrics
+    {
+        public void RecordMessagePublished(string messageType, string destination)
+        {
+        }
+
+        public void RecordMessageConsumed(string messageType, string source)
+        {
+        }
+
+        public void RecordProcessingDuration(string messageType, TimeSpan duration, string result)
+        {
+        }
+
+        public void RecordMessageRetry(string messageType, int attemptNumber)
+        {
+        }
+
+        public void RecordMessageDeadLettered(string messageType, string reason)
+        {
+        }
+
+        public void RecordPayloadSize(string messageType, long sizeBytes, string direction)
+        {
+        }
     }
 }

@@ -1,4 +1,6 @@
 using HoneyDrunk.Transport.InMemory;
+using HoneyDrunk.Transport.InMemory.DependencyInjection;
+using HoneyDrunk.Transport.Metrics;
 using HoneyDrunk.Transport.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -43,5 +45,25 @@ public sealed class InMemoryTransportTests
         await Task.Delay(100);
 
         await consumer.StopAsync();
+    }
+
+    /// <summary>
+    /// Verifies AddHoneyDrunkInMemoryTransport registers ITransportMetrics automatically.
+    /// </summary>
+    [Fact]
+    public void AddHoneyDrunkInMemoryTransport_WhenCalled_RegistersITransportMetrics()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHoneyDrunkInMemoryTransport();
+
+        // Act
+        var provider = services.BuildServiceProvider();
+        var metrics = provider.GetService<ITransportMetrics>();
+
+        // Assert
+        Assert.NotNull(metrics);
+        Assert.Same(NoOpTransportMetrics.Instance, metrics);
     }
 }

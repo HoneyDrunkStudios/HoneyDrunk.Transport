@@ -5,6 +5,11 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-01-14
+
+### Fixed
+- **ITransportMetrics DI Registration**: Fixed `NoOpTransportMetrics` not being resolvable from DI. The singleton instance is now registered correctly, eliminating the need for downstream services to manually register `ITransportMetrics`. Consumers calling any transport registration method (e.g., `AddHoneyDrunkInMemoryTransport`) now automatically receive a valid `ITransportMetrics` implementation.
+
 ## [0.3.0] - 2025-12-03
 
 ### Breaking Changes

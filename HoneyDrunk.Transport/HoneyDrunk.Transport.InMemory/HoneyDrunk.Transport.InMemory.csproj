@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.InMemory</PackageId>
-    <Version>0.3.0</Version>
+    <Version>0.3.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>In-memory transport implementation for HoneyDrunk.Transport. Provides observable queues and pub/sub subscriptions for testing without external dependencies.</Description>
-    <PackageReleaseNotes>v0.3.0: Kernel v0.3.0 integration with TenantId/ProjectId multi-tenancy support. Non-breaking for InMemory transport.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.3.1: Inherits ITransportMetrics DI fix from HoneyDrunk.Transport v0.3.1.</PackageReleaseNotes>
     <PackageTags>messaging;transport;inmemory;testing;broker;queue;pubsub;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

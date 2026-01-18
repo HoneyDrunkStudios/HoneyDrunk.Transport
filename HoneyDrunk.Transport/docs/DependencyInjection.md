@@ -63,6 +63,7 @@ public static class ServiceCollectionExtensions
 - The message pipeline (`IMessagePipeline`)
 - Built-in middleware (conditionally via `TransportCoreOptions`)
 - `JsonMessageSerializer` as the default `IMessageSerializer`
+- `NoOpTransportMetrics` as the default `ITransportMetrics` (can be overridden by registering a custom implementation before calling this method)
 - The transport runtime host (`ITransportRuntime` / `IHostedService`)
 - The transport builder (`ITransportBuilder`) for fluent configuration
 
