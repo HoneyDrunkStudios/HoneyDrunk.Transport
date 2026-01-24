@@ -14,9 +14,12 @@ namespace HoneyDrunk.Transport.Exceptions;
 /// Common causes include:
 /// <list type="bullet">
 ///   <item><description>Headers/baggage exceeding size limits (48KB default)</description></item>
-///   <item><description>Missing required identifiers (CorrelationId, etc.)</description></item>
-///   <item><description>Attempting to publish from an uninitialized GridContext</description></item>
+///   <item><description>Missing required identifiers (CorrelationId, etc.) in an initialized GridContext</description></item>
 /// </list>
+/// </para>
+/// <para>
+/// Note: Attempting to publish from an uninitialized GridContext results in
+/// <see cref="InvalidOperationException"/>, not this exception.
 /// </para>
 /// </remarks>
 public sealed class EnvelopeValidationException : Exception

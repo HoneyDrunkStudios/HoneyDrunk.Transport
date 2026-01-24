@@ -88,13 +88,17 @@ public void InitializeFromEnvelope(IGridContext gridContext, ITransportEnvelope 
     kernelContext.Initialize(correlationId, causationId, tenantId, projectId, baggage, ct);
 }
 ```
+
+**Step 5: Update Baggage API Usage**
+```csharp
+// OLD (immutable, returned new context)
 var newContext = context.WithBaggage("key", "value");
 
 // NEW (mutates in place)
 context.AddBaggage("key", "value");
 ```
 
-**Step 3: Remove CorrelationMiddleware References**
+**Step 6: Remove CorrelationMiddleware References**
 ```csharp
 // OLD - Remove this completely
 #pragma warning disable CS0618
@@ -105,7 +109,7 @@ services.AddSingleton<IMessageMiddleware, CorrelationMiddleware>();
 // No action needed - it's already in the pipeline
 ```
 
-**Step 4: Handle Envelope Validation Exceptions**
+**Step 7: Handle Envelope Validation Exceptions**
 ```csharp
 try
 {
