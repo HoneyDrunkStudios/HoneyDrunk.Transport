@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.AzureServiceBus;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -33,6 +34,7 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
         var processor = Substitute.For<ServiceBusProcessor>();
@@ -40,7 +42,7 @@ public sealed class ServiceBusTransportConsumerTests
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         processor.StopProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
 
@@ -71,9 +73,10 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => consumer.StartAsync());
     }
@@ -97,6 +100,7 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
         var sessionProcessor = Substitute.For<ServiceBusSessionProcessor>();
@@ -104,7 +108,7 @@ public sealed class ServiceBusTransportConsumerTests
         sessionProcessor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         sessionProcessor.StopProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
 
@@ -128,9 +132,10 @@ public sealed class ServiceBusTransportConsumerTests
         var options = new TestOptions(new AzureServiceBusOptions());
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StopAsync();
 
         // No exceptions and nothing to assert; coverage of branch
@@ -153,13 +158,14 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
         var processor = Substitute.For<ServiceBusProcessor>();
         client.CreateProcessor("orders", Arg.Any<ServiceBusProcessorOptions>()).Returns(processor);
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => consumer.StartAsync());
@@ -182,13 +188,14 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
         var processor = Substitute.For<ServiceBusProcessor>();
         client.CreateProcessor("orders-topic", "sub-a", Arg.Any<ServiceBusProcessorOptions>()).Returns(processor);
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         client.Received(1).CreateProcessor("orders-topic", "sub-a", Arg.Any<ServiceBusProcessorOptions>());
@@ -213,13 +220,14 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
         var sessionProcessor = Substitute.For<ServiceBusSessionProcessor>();
         client.CreateSessionProcessor("orders-topic", "sub-a", Arg.Any<ServiceBusSessionProcessorOptions>()).Returns(sessionProcessor);
         sessionProcessor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         client.Received(1).CreateSessionProcessor("orders-topic", "sub-a", Arg.Any<ServiceBusSessionProcessorOptions>());
@@ -242,9 +250,10 @@ public sealed class ServiceBusTransportConsumerTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
 
-        var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
 
         // Dispose multiple times
         await consumer.DisposeAsync();

@@ -5,6 +5,7 @@ using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
 using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Primitives;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -270,6 +271,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
         logger.IsEnabled(LogLevel.Debug).Returns(false);
         logger.IsEnabled(LogLevel.Information).Returns(false);  // Disable info logging too
@@ -278,7 +280,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         client.CreateProcessor("orders", Arg.Any<ServiceBusProcessorOptions>()).Returns(processor);
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         // Verify Debug was NOT logged
@@ -307,6 +309,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
         logger.IsEnabled(LogLevel.Information).Returns(true);
 
@@ -314,7 +317,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         client.CreateProcessor("orders", Arg.Any<ServiceBusProcessorOptions>()).Returns(processor);
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         // Verify Information logs were made
@@ -342,6 +345,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var client = Substitute.For<ServiceBusClient>();
         var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
         var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
         logger.IsEnabled(LogLevel.Information).Returns(true);
 
@@ -350,7 +354,7 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
         processor.StartProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
         processor.StopProcessingAsync(Arg.Any<CancellationToken>()).Returns(Task.CompletedTask);
 
-        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, options, logger);
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
         await consumer.StopAsync();
 
