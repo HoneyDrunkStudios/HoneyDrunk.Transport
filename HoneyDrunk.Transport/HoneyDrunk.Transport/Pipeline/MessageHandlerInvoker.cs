@@ -8,16 +8,20 @@ namespace HoneyDrunk.Transport.Pipeline;
 /// Provides high-performance message handler invocation using compiled delegates.
 /// </summary>
 /// <remarks>
+/// <para>
 /// This class caches compiled expression trees per message type to avoid reflection overhead
 /// on every message processing operation. The delegates are thread-safe and built lazily.
+/// </para>
+/// <para>
+/// <b>Kernel vNext (v0.4.0+):</b> Handlers are resolved from <see cref="MessageContext.ServiceProvider"/>
+/// (the scoped provider) to ensure they share the same DI scope as middleware. This is critical
+/// for the one-GridContext-per-scope invariant.
+/// </para>
 /// </remarks>
-/// <remarks>
-/// Initializes a new instance of the <see cref="MessageHandlerInvoker"/> class.
-/// </remarks>
-/// <param name="serviceProvider">The service provider for resolving handlers.</param>
-internal sealed class MessageHandlerInvoker(IServiceProvider serviceProvider)
+/// <param name="rootServiceProvider">The root service provider (fallback only).</param>
+internal sealed class MessageHandlerInvoker(IServiceProvider rootServiceProvider)
 {
-    private readonly IServiceProvider _serviceProvider = serviceProvider;
+    private readonly IServiceProvider _rootServiceProvider = rootServiceProvider;
     private readonly ConcurrentDictionary<Type, Func<object, object, MessageContext, CancellationToken, Task>> _invokerCache = new();
 
     /// <summary>
@@ -41,9 +45,12 @@ internal sealed class MessageHandlerInvoker(IServiceProvider serviceProvider)
         // Get or compile the invoker for this message type
         var invoker = _invokerCache.GetOrAdd(messageType, BuildInvoker);
 
-        // Resolve the handler instance
+        // Kernel vNext: Resolve handler from scoped provider to share DI scope with middleware
+        // This ensures IGridContext injected into handler is the same instance as middleware used
+        var scopedProvider = context.ServiceProvider ?? _rootServiceProvider;
+
         var handlerType = typeof(IMessageHandler<>).MakeGenericType(messageType);
-        var handler = _serviceProvider.GetService(handlerType);
+        var handler = scopedProvider.GetService(handlerType);
 
         // Return null if no handler is registered
         if (handler == null)

@@ -89,9 +89,25 @@ public sealed class MessagePipeline(
 
     private static Type? ResolveMessageType(string typeName)
     {
-        // Type.GetType with throwOnError: false already returns null on failure
-        // No need for try-catch as it won't throw
-        return Type.GetType(typeName, throwOnError: false);
+        // Try direct resolution first (works for assembly-qualified names and mscorlib types)
+        var type = Type.GetType(typeName, throwOnError: false);
+        if (type != null)
+        {
+            return type;
+        }
+
+        // Fall back to searching loaded assemblies for the type by full name
+        // This is necessary because Type.GetType only searches the calling assembly and mscorlib
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            type = assembly.GetType(typeName);
+            if (type != null)
+            {
+                return type;
+            }
+        }
+
+        return null;
     }
 
     private Func<Task> BuildPipeline(

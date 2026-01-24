@@ -22,6 +22,7 @@ public sealed class InMemoryTransportConsumerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
         services.AddMessageHandler<SampleMessage, SampleMessageHandler>();
         var sp = services.BuildServiceProvider();
@@ -36,9 +37,10 @@ public sealed class InMemoryTransportConsumerTests
         var brokerLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryBroker>.Instance;
         var broker = new InMemoryBroker(brokerLogger);
         var pipeline = sp.GetRequiredService<IMessagePipeline>();
+        var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, options, logger);
+        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
 
@@ -57,6 +59,7 @@ public sealed class InMemoryTransportConsumerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
         var sp = services.BuildServiceProvider();
 
@@ -70,9 +73,10 @@ public sealed class InMemoryTransportConsumerTests
         var brokerLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryBroker>.Instance;
         var broker = new InMemoryBroker(brokerLogger);
         var pipeline = sp.GetRequiredService<IMessagePipeline>();
+        var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, options, logger);
+        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
         await consumer.StopAsync();
@@ -90,6 +94,7 @@ public sealed class InMemoryTransportConsumerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
         var sp = services.BuildServiceProvider();
 
@@ -103,9 +108,10 @@ public sealed class InMemoryTransportConsumerTests
         var brokerLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryBroker>.Instance;
         var broker = new InMemoryBroker(brokerLogger);
         var pipeline = sp.GetRequiredService<IMessagePipeline>();
+        var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        var consumer = new InMemoryTransportConsumer(broker, pipeline, options, logger);
+        var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
         await consumer.DisposeAsync();
@@ -123,6 +129,7 @@ public sealed class InMemoryTransportConsumerTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
 
         var handled = false;
@@ -144,9 +151,10 @@ public sealed class InMemoryTransportConsumerTests
         var brokerLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryBroker>.Instance;
         var broker = new InMemoryBroker(brokerLogger);
         var pipeline = sp.GetRequiredService<IMessagePipeline>();
+        var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, options, logger);
+        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
         await consumer.StartAsync();
 
         // Publish a message

@@ -5,6 +5,12 @@ namespace HoneyDrunk.Transport.Tests.Core.Context;
 /// <summary>
 /// Tests for TransportGridContext implementation.
 /// </summary>
+/// <remarks>
+/// <b>Note:</b> TransportGridContext is obsolete as of v0.4.0. These tests verify the deprecated
+/// API still works correctly until it is removed in v0.5.0. New code should use the DI-scoped
+/// GridContext from Kernel instead.
+/// </remarks>
+#pragma warning disable CS0618 // Type or member is obsolete - testing deprecated TransportGridContext
 public sealed class TransportGridContextTests
 {
     /// <summary>
@@ -53,10 +59,10 @@ public sealed class TransportGridContextTests
     }
 
     /// <summary>
-    /// Verifies baggage dictionary is cloned and immutable.
+    /// Verifies baggage dictionary is cloned and immutable from external modification.
     /// </summary>
     [Fact]
-    public void Baggage_IsClonedAndImmutable()
+    public void Baggage_IsClonedFromOriginal()
     {
         // Arrange
         var originalBaggage = new Dictionary<string, string> { ["key1"] = "value1" };
@@ -84,10 +90,10 @@ public sealed class TransportGridContextTests
     }
 
     /// <summary>
-    /// Verifies BeginScope returns a disposable scope.
+    /// Verifies IsInitialized always returns true for TransportGridContext.
     /// </summary>
     [Fact]
-    public void BeginScope_ReturnsDisposableScope()
+    public void IsInitialized_AlwaysReturnsTrue()
     {
         // Arrange
         var context = new TransportGridContext(
@@ -101,40 +107,9 @@ public sealed class TransportGridContextTests
             new Dictionary<string, string>(),
             DateTimeOffset.UtcNow,
             CancellationToken.None);
-
-        // Act
-        var scope = context.BeginScope();
 
         // Assert
-        Assert.NotNull(scope);
-        scope.Dispose(); // Should not throw
-    }
-
-    /// <summary>
-    /// Verifies BeginScope can be disposed multiple times safely.
-    /// </summary>
-    [Fact]
-    public void BeginScope_MultipleDispose_DoesNotThrow()
-    {
-        // Arrange
-        var context = new TransportGridContext(
-            "corr",
-            null,
-            "node",
-            "studio",
-            null,
-            null,
-            "env",
-            new Dictionary<string, string>(),
-            DateTimeOffset.UtcNow,
-            CancellationToken.None);
-
-        var scope = context.BeginScope();
-
-        // Act & Assert - multiple disposes should not throw
-        scope.Dispose();
-        scope.Dispose();
-        scope.Dispose();
+        Assert.True(context.IsInitialized);
     }
 
     /// <summary>
@@ -231,13 +206,13 @@ public sealed class TransportGridContextTests
     }
 
     /// <summary>
-    /// Verifies WithBaggage creates new context with added baggage item.
+    /// Verifies AddBaggage adds item to existing context (mutates in place).
     /// </summary>
     [Fact]
-    public void WithBaggage_CreatesNewContextWithAddedItem()
+    public void AddBaggage_AddsItemToExistingContext()
     {
         // Arrange
-        var originalContext = new TransportGridContext(
+        var context = new TransportGridContext(
             "corr",
             "cause",
             "node",
@@ -250,27 +225,22 @@ public sealed class TransportGridContextTests
             CancellationToken.None);
 
         // Act
-        var newContext = originalContext.WithBaggage("key2", "value2");
+        context.AddBaggage("key2", "value2");
 
-        // Assert - original context unchanged
-        Assert.Single(originalContext.Baggage);
-        Assert.Equal("value1", originalContext.Baggage["key1"]);
-        Assert.False(originalContext.Baggage.ContainsKey("key2"));
-
-        // New context has both items
-        Assert.Equal(2, newContext.Baggage.Count);
-        Assert.Equal("value1", newContext.Baggage["key1"]);
-        Assert.Equal("value2", newContext.Baggage["key2"]);
+        // Assert - context is mutated in place
+        Assert.Equal(2, context.Baggage.Count);
+        Assert.Equal("value1", context.Baggage["key1"]);
+        Assert.Equal("value2", context.Baggage["key2"]);
     }
 
     /// <summary>
-    /// Verifies WithBaggage can override existing baggage item.
+    /// Verifies AddBaggage can override existing baggage item.
     /// </summary>
     [Fact]
-    public void WithBaggage_OverridesExistingItem()
+    public void AddBaggage_OverridesExistingItem()
     {
         // Arrange
-        var originalContext = new TransportGridContext(
+        var context = new TransportGridContext(
             "corr",
             "cause",
             "node",
@@ -283,27 +253,24 @@ public sealed class TransportGridContextTests
             CancellationToken.None);
 
         // Act
-        var newContext = originalContext.WithBaggage("key1", "updated");
+        context.AddBaggage("key1", "updated");
 
-        // Assert - original context unchanged
-        Assert.Equal("original", originalContext.Baggage["key1"]);
-
-        // New context has updated value
-        Assert.Single(newContext.Baggage);
-        Assert.Equal("updated", newContext.Baggage["key1"]);
+        // Assert - value is updated in place
+        Assert.Single(context.Baggage);
+        Assert.Equal("updated", context.Baggage["key1"]);
     }
 
     /// <summary>
-    /// Verifies WithBaggage preserves all other context properties.
+    /// Verifies AddBaggage preserves all other context properties.
     /// </summary>
     [Fact]
-    public void WithBaggage_PreservesOtherProperties()
+    public void AddBaggage_PreservesOtherProperties()
     {
         // Arrange
         var createdAt = DateTimeOffset.UtcNow;
         using var cts = new CancellationTokenSource();
 
-        var originalContext = new TransportGridContext(
+        var context = new TransportGridContext(
             "corr",
             "cause",
             "node",
@@ -316,18 +283,20 @@ public sealed class TransportGridContextTests
             cts.Token);
 
         // Act
-        var newContext = originalContext.WithBaggage("key", "value");
+        context.AddBaggage("key", "value");
 
-        // Assert - all properties preserved except baggage
-        Assert.Equal(originalContext.CorrelationId, newContext.CorrelationId);
-        Assert.Equal(originalContext.CausationId, newContext.CausationId);
-        Assert.Equal(originalContext.NodeId, newContext.NodeId);
-        Assert.Equal(originalContext.StudioId, newContext.StudioId);
-        Assert.Equal(originalContext.TenantId, newContext.TenantId);
-        Assert.Equal(originalContext.ProjectId, newContext.ProjectId);
-        Assert.Equal(originalContext.Environment, newContext.Environment);
-        Assert.Equal(originalContext.CreatedAtUtc, newContext.CreatedAtUtc);
-        Assert.Equal(originalContext.Cancellation, newContext.Cancellation);
+        // Assert - all properties preserved, baggage updated
+        Assert.Equal("corr", context.CorrelationId);
+        Assert.Equal("cause", context.CausationId);
+        Assert.Equal("node", context.NodeId);
+        Assert.Equal("studio", context.StudioId);
+        Assert.Equal("tenant", context.TenantId);
+        Assert.Equal("project", context.ProjectId);
+        Assert.Equal("env", context.Environment);
+        Assert.Equal(createdAt, context.CreatedAtUtc);
+        Assert.Equal(cts.Token, context.Cancellation);
+        Assert.Single(context.Baggage);
+        Assert.Equal("value", context.Baggage["key"]);
     }
 
     /// <summary>

@@ -1,24 +1,33 @@
-using HoneyDrunk.Transport.Context;
+using HoneyDrunk.Kernel.Context;
+using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Primitives;
+
+using TransportGridContextFactory = HoneyDrunk.Transport.Context.GridContextFactory;
 
 namespace HoneyDrunk.Transport.Tests.Core.Context;
 
 /// <summary>
 /// Tests for Grid context factory.
 /// </summary>
+/// <remarks>
+/// These tests verify the Kernel vNext pattern where the factory INITIALIZES
+/// an existing DI-scoped GridContext rather than creating a new one.
+/// </remarks>
 public sealed class GridContextFactoryTests
 {
-    private static readonly DateTimeOffset FixedTime = new(2024, 12, 31, 12, 0, 0, TimeSpan.Zero);
+    private const string TestNodeId = "test-node";
+    private const string TestStudioId = "test-studio";
+    private const string TestEnvironment = "test-env";
 
     /// <summary>
-    /// Verifies factory creates Grid context from envelope with all fields populated.
+    /// Verifies factory initializes Grid context from envelope with all fields populated.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithAllFields_CreatesGridContextWithAllProperties()
+    public void InitializeFromEnvelope_WithAllFields_InitializesGridContext()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
         var envelope = new TransportEnvelope
         {
@@ -27,6 +36,8 @@ public sealed class GridContextFactoryTests
             CausationId = "cause-789",
             NodeId = "node-1",
             StudioId = "studio-1",
+            TenantId = "tenant-1",
+            ProjectId = "project-1",
             Environment = "production",
             Headers = new Dictionary<string, string>
             {
@@ -39,30 +50,28 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
 
         // Assert
-        Assert.NotNull(gridContext);
+        Assert.True(gridContext.IsInitialized);
         Assert.Equal("corr-456", gridContext.CorrelationId);
         Assert.Equal("cause-789", gridContext.CausationId);
-        Assert.Equal("node-1", gridContext.NodeId);
-        Assert.Equal("studio-1", gridContext.StudioId);
-        Assert.Equal("production", gridContext.Environment);
+        Assert.Equal("tenant-1", gridContext.TenantId);
+        Assert.Equal("project-1", gridContext.ProjectId);
         Assert.Equal(2, gridContext.Baggage.Count);
         Assert.Equal("value1", gridContext.Baggage["key1"]);
         Assert.Equal("value2", gridContext.Baggage["key2"]);
-        Assert.Equal(FixedTime, gridContext.CreatedAtUtc);
     }
 
     /// <summary>
     /// Verifies factory falls back to messageId when correlationId is missing.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithMissingCorrelationId_FallsBackToMessageId()
+    public void InitializeFromEnvelope_WithMissingCorrelationId_FallsBackToMessageId()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
         var envelope = new TransportEnvelope
         {
@@ -74,7 +83,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal("msg-abc", gridContext.CorrelationId);
@@ -84,11 +93,11 @@ public sealed class GridContextFactoryTests
     /// Verifies factory falls back to messageId when causationId is missing.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithMissingCausationId_FallsBackToMessageId()
+    public void InitializeFromEnvelope_WithMissingCausationId_FallsBackToMessageId()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
         var envelope = new TransportEnvelope
         {
@@ -100,7 +109,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal("msg-xyz", gridContext.CausationId);
@@ -110,23 +119,25 @@ public sealed class GridContextFactoryTests
     /// Verifies factory creates empty baggage when headers are null.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithNullHeaders_CreatesEmptyBaggage()
+    public void InitializeFromEnvelope_WithNullHeaders_CreatesEmptyBaggage()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
+        IReadOnlyDictionary<string, string>? nullHeaders = null;
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
-            Headers = null!, // Null headers
+            CorrelationId = "corr-456",
+            Headers = nullHeaders!, // No headers
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
 
         // Assert
         Assert.NotNull(gridContext.Baggage);
@@ -134,291 +145,122 @@ public sealed class GridContextFactoryTests
     }
 
     /// <summary>
-    /// Verifies factory creates empty baggage when headers are empty.
+    /// Verifies factory propagates cancellation token to Grid context.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithEmptyHeaders_CreatesEmptyBaggage()
+    public void InitializeFromEnvelope_WithCancellationToken_PropagatesToken()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-123",
-            Headers = new Dictionary<string, string>(), // Empty
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
-
-        // Assert
-        Assert.NotNull(gridContext.Baggage);
-        Assert.Empty(gridContext.Baggage);
-    }
-
-    /// <summary>
-    /// Verifies factory defaults missing Grid fields to empty strings.
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_WithMissingGridFields_DefaultsToEmptyStrings()
-    {
-        // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-123",
-            NodeId = null,
-            StudioId = null,
-            Environment = null,
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
-
-        // Assert
-        Assert.Equal(string.Empty, gridContext.NodeId);
-        Assert.Equal(string.Empty, gridContext.StudioId);
-        Assert.Equal(string.Empty, gridContext.Environment);
-    }
-
-    /// <summary>
-    /// Verifies factory uses provided TimeProvider for timestamp.
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_UsesTimeProviderForCreatedAtUtc()
-    {
-        // Arrange
-        var expectedTime = new DateTimeOffset(2025, 1, 15, 10, 30, 45, TimeSpan.Zero);
-        var timeProvider = new TestTimeProvider(expectedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-123",
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
-
-        // Assert
-        Assert.Equal(expectedTime, gridContext.CreatedAtUtc);
-    }
-
-    /// <summary>
-    /// Verifies factory passes cancellation token to Grid context.
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_PassesCancellationTokenToGridContext()
-    {
-        // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-123",
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
         using var cts = new CancellationTokenSource();
-        var token = cts.Token;
-
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, token);
-
-        // Assert
-        Assert.Equal(token, gridContext.Cancellation);
-    }
-
-    /// <summary>
-    /// Verifies factory clones headers dictionary (mutation safety).
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_ClonesHeadersDictionary_MutationSafe()
-    {
-        // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var originalHeaders = new Dictionary<string, string>
-        {
-            ["key1"] = "original"
-        };
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
-            Headers = originalHeaders,
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, cts.Token);
 
-        // Mutate original headers after creation
-        originalHeaders["key1"] = "mutated";
-        originalHeaders["key2"] = "added";
-
-        // Assert - Grid context baggage should not be affected
-        Assert.Equal("original", gridContext.Baggage["key1"]);
-        Assert.False(gridContext.Baggage.ContainsKey("key2"));
+        // Assert
+        Assert.Equal(cts.Token, gridContext.Cancellation);
     }
 
     /// <summary>
-    /// Verifies factory works with empty string Grid fields.
+    /// Verifies factory throws when envelope is null.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithEmptyStringGridFields_PreservesEmptyStrings()
+    public void InitializeFromEnvelope_WithNullEnvelope_ThrowsArgumentNullException()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
+        ITransportEnvelope? nullEnvelope = null;
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            factory.InitializeFromEnvelope(gridContext, nullEnvelope!, CancellationToken.None));
+    }
+
+    /// <summary>
+    /// Verifies factory throws when gridContext is null.
+    /// </summary>
+    [Fact]
+    public void InitializeFromEnvelope_WithNullGridContext_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var factory = new TransportGridContextFactory();
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
-            NodeId = string.Empty,
-            StudioId = string.Empty,
-            Environment = string.Empty,
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
-
-        // Assert
-        Assert.Equal(string.Empty, gridContext.NodeId);
-        Assert.Equal(string.Empty, gridContext.StudioId);
-        Assert.Equal(string.Empty, gridContext.Environment);
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            factory.InitializeFromEnvelope(null!, envelope, CancellationToken.None));
     }
 
     /// <summary>
-    /// Verifies factory handles both correlation and causation being null.
+    /// Verifies factory handles optional tenant and project IDs.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithBothIdsNull_FallsBackToMessageId()
+    public void InitializeFromEnvelope_WithTenantAndProjectIds_SetsMultiTenantProperties()
     {
         // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-fallback",
-            CorrelationId = null,
-            CausationId = null,
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
-
-        // Assert
-        Assert.Equal("msg-fallback", gridContext.CorrelationId);
-        Assert.Equal("msg-fallback", gridContext.CausationId);
-    }
-
-    /// <summary>
-    /// Verifies factory creates Grid context that can be used multiple times.
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_CalledMultipleTimes_CreatesIndependentContexts()
-    {
-        // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var envelope1 = new TransportEnvelope
-        {
-            MessageId = "msg-1",
-            CorrelationId = "corr-1",
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        var envelope2 = new TransportEnvelope
-        {
-            MessageId = "msg-2",
-            CorrelationId = "corr-2",
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act
-        var context1 = factory.CreateFromEnvelope(envelope1, CancellationToken.None);
-        var context2 = factory.CreateFromEnvelope(envelope2, CancellationToken.None);
-
-        // Assert - contexts should be independent
-        Assert.NotSame(context1, context2);
-        Assert.Equal("corr-1", context1.CorrelationId);
-        Assert.Equal("corr-2", context2.CorrelationId);
-    }
-
-    /// <summary>
-    /// Verifies factory handles large headers dictionary.
-    /// </summary>
-    [Fact]
-    public void CreateFromEnvelope_WithLargeHeadersDictionary_CopiesAllItems()
-    {
-        // Arrange
-        var timeProvider = new TestTimeProvider(FixedTime);
-        var factory = new GridContextFactory(timeProvider);
-
-        var headers = new Dictionary<string, string>();
-        for (int i = 0; i < 100; i++)
-        {
-            headers[$"key{i}"] = $"value{i}";
-        }
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
-            Headers = headers,
+            TenantId = "tenant-abc",
+            ProjectId = "project-xyz",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
 
         // Assert
-        Assert.Equal(100, gridContext.Baggage.Count);
-        for (int i = 0; i < 100; i++)
-        {
-            Assert.Equal($"value{i}", gridContext.Baggage[$"key{i}"]);
-        }
+        Assert.Equal("tenant-abc", gridContext.TenantId);
+        Assert.Equal("project-xyz", gridContext.ProjectId);
     }
 
     /// <summary>
-    /// Test time provider that returns a fixed time.
+    /// Verifies factory handles null tenant and project IDs gracefully.
     /// </summary>
-    private sealed class TestTimeProvider(DateTimeOffset fixedTime) : TimeProvider
+    [Fact]
+    public void InitializeFromEnvelope_WithNullTenantAndProject_SetsNullProperties()
     {
-        private readonly DateTimeOffset _fixedTime = fixedTime;
+        // Arrange
+        var factory = new TransportGridContextFactory();
+        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
 
-        public override DateTimeOffset GetUtcNow() => _fixedTime;
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-123",
+            TenantId = null,
+            ProjectId = null,
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+
+        // Assert
+        Assert.Null(gridContext.TenantId);
+        Assert.Null(gridContext.ProjectId);
     }
 }

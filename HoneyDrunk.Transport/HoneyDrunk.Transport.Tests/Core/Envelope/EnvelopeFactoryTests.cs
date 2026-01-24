@@ -364,6 +364,7 @@ public sealed class EnvelopeFactoryTests
         context.Environment.Returns(environment);
         context.Baggage.Returns(baggage ?? []);
         context.CreatedAtUtc.Returns(FixedTime);
+        context.IsInitialized.Returns(true);
         return context;
     }
 

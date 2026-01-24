@@ -21,18 +21,23 @@ public sealed class MessagePipelineTests
     {
         var services = new ServiceCollection();
         services.AddLogging(builder => builder.SetMinimumLevel(LogLevel.Debug));
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
         services.AddMessageHandler<SampleMessage, SampleMessageHandler>();
 
-        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
-        var pipeline = provider.GetRequiredService<IMessagePipeline>();
+        var rootProvider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = rootProvider.GetRequiredService<IMessagePipeline>();
+
+        // Create a scope for the context (Kernel vNext pattern)
+        using var scope = rootProvider.CreateScope();
 
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "ok" });
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = scope.ServiceProvider
         };
 
         var result = await pipeline.ProcessAsync(envelope, context);
@@ -50,16 +55,21 @@ public sealed class MessagePipelineTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
-        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
-        var pipeline = provider.GetRequiredService<IMessagePipeline>();
+        var rootProvider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var pipeline = rootProvider.GetRequiredService<IMessagePipeline>();
+
+        // Create a scope for the context (Kernel vNext pattern)
+        using var scope = rootProvider.CreateScope();
 
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "x" });
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = scope.ServiceProvider
         };
 
         var result = await pipeline.ProcessAsync(envelope, context);
@@ -75,10 +85,14 @@ public sealed class MessagePipelineTests
     {
         var services = new ServiceCollection();
         services.AddLogging();
+        services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
-        var provider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
+        var rootProvider = new DefaultServiceProviderFactory().CreateServiceProvider(services);
 
-        var pipeline = provider.GetRequiredService<IMessagePipeline>();
+        var pipeline = rootProvider.GetRequiredService<IMessagePipeline>();
+
+        // Create a scope for the context (Kernel vNext pattern)
+        using var scope = rootProvider.CreateScope();
 
         // Use a bad payload for a valid type to cause deserialization to fail
         var badEnvelope = new Primitives.TransportEnvelope
@@ -94,7 +108,8 @@ public sealed class MessagePipelineTests
         {
             Envelope = badEnvelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = scope.ServiceProvider
         };
 
         var result = await pipeline.ProcessAsync(badEnvelope, context);

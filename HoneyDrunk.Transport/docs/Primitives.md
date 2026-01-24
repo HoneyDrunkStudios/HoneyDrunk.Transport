@@ -151,6 +151,37 @@ public sealed class EnvelopeFactory(TimeProvider timeProvider)
 - **TimeProvider integration** - Testable timestamps via injected `TimeProvider`
 - **Grid context propagation** - Automatically propagates all Grid context properties including baggage
 - **Reply support** - Creates properly chained reply envelopes with causation tracking
+- **Fail-fast validation** - Validates envelopes before publishing to prevent broker-level failures
+
+### Fail-Fast Validation (v0.4.0+)
+
+`EnvelopeFactory` now performs validation before creating envelopes to catch misuse at the point of origin:
+
+| Validation | Error Type | When |
+|------------|------------|------|
+| `GridContext.IsInitialized` | `InvalidOperationException` | Context not initialized |
+| `CorrelationId` required | `EnvelopeValidationException` | Missing or empty CorrelationId |
+| Headers size limit (48KB) | `EnvelopeValidationException` | Headers/baggage too large |
+
+This prevents cryptic broker errors by failing at the publishing point with clear error messages.
+
+```csharp
+try
+{
+    var envelope = factory.CreateEnvelopeWithGridContext<OrderCreated>(payload, gridContext);
+    await publisher.PublishAsync(envelope, destination, ct);
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("not initialized"))
+{
+    // GridContext was not initialized - likely programming error
+    _logger.LogError(ex, "Attempted to publish with uninitialized GridContext");
+}
+catch (EnvelopeValidationException ex)
+{
+    // Envelope validation failed (missing CorrelationId, oversized headers, etc.)
+    _logger.LogError(ex, "Envelope validation failed");
+}
+```
 
 ### Factory Methods
 

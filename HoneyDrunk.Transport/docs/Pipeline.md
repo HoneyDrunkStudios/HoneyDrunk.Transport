@@ -521,37 +521,6 @@ services.AddSingleton<IMessageMiddleware>(sp =>
 
 ---
 
-## CorrelationMiddleware.cs
-
-> **⚠️ DEPRECATED:** Use `GridContextPropagationMiddleware` for full Grid context propagation. This middleware remains for backward compatibility only and will be removed in v1.0.
-
-> **Migration:** `CorrelationMiddleware` is **not added by default**. Only resolve it manually if you are migrating legacy code that depends on the `KernelContext` property key.
-
-```csharp
-[Obsolete("Use GridContextPropagationMiddleware for full Grid context propagation.")]
-public sealed class CorrelationMiddleware : IMessageMiddleware
-{
-    public CorrelationMiddleware(IGridContextFactory gridContextFactory);
-    
-    public Task InvokeAsync(
-        ITransportEnvelope envelope,
-        MessageContext context,
-        Func<Task> next,
-        CancellationToken cancellationToken = default);
-}
-```
-
-### Legacy Behavior
-
-- Creates Grid context from envelope
-- Stores in `context.Properties["KernelContext"]` (legacy key)
-- Stores in `context.Properties["GridContext"]`
-- Stores `CorrelationId` and `CausationId` separately
-
-[↑ Back to top](#table-of-contents)
-
----
-
 # Telemetry Middleware
 
 ---

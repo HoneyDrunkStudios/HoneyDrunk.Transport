@@ -72,7 +72,7 @@ dotnet add package HoneyDrunk.Transport.AzureServiceBus
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.1.2" />
+<PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.4.0" />
 ```
 
 ---

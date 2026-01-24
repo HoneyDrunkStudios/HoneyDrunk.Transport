@@ -3,10 +3,35 @@ using HoneyDrunk.Kernel.Abstractions.Context;
 namespace HoneyDrunk.Transport.Context;
 
 /// <summary>
-/// Lightweight Grid context implementation for Transport.
-/// This is used when the full Kernel package is not available.
-/// Applications should use Kernel's GridContext implementation when possible.
+/// Transport-specific Grid context implementation for inbound messages.
+/// This implementation is used when processing received messages to provide
+/// handlers with a fully-hydrated Grid context from envelope metadata.
 /// </summary>
+/// <remarks>
+/// <para>
+/// <b>DEPRECATED (v0.4.0):</b> This class violates Kernel vNext's one-GridContext-per-scope
+/// invariant. Use the DI-scoped <c>GridContext</c> from Kernel instead, initialized via
+/// <see cref="IGridContextFactory.InitializeFromEnvelope"/>.
+/// </para>
+/// <para>
+/// This context was previously created by <see cref="GridContextFactory"/> from transport envelope
+/// metadata. It provided all the context information needed for distributed tracing,
+/// multi-tenancy, and operation correlation.
+/// </para>
+/// </remarks>
+/// <param name="correlationId">The correlation identifier for distributed tracing.</param>
+/// <param name="causationId">The causation identifier linking to the causing operation.</param>
+/// <param name="nodeId">The node identifier where the operation executes.</param>
+/// <param name="studioId">The studio identifier for studio-scoped operations.</param>
+/// <param name="tenantId">The tenant identifier for multi-tenant operations.</param>
+/// <param name="projectId">The project identifier for project-scoped operations.</param>
+/// <param name="environment">The environment name (e.g., production, staging).</param>
+/// <param name="baggage">Key-value pairs propagated with the context.</param>
+/// <param name="createdAtUtc">The UTC timestamp when the context was created.</param>
+/// <param name="cancellation">The cancellation token for the operation.</param>
+[Obsolete("TransportGridContext violates Kernel vNext's one-GridContext-per-scope invariant. " +
+          "Use the DI-scoped GridContext from Kernel instead, initialized via IGridContextFactory.InitializeFromEnvelope(). " +
+          "This class will be removed in v0.5.0.")]
 internal sealed class TransportGridContext(
     string correlationId,
     string? causationId,
@@ -52,61 +77,37 @@ internal sealed class TransportGridContext(
     public DateTimeOffset CreatedAtUtc { get; } = createdAtUtc;
 
     /// <summary>
-    /// Begins a scope for this Grid context.
+    /// Gets a value indicating whether this context is initialized.
+    /// Always returns true for TransportGridContext as it is initialized at construction.
     /// </summary>
-    public IDisposable BeginScope()
-    {
-        // No-op scope for lightweight implementation
-        return new NoOpScope();
-    }
+    public bool IsInitialized => true;
 
     /// <summary>
-    /// Creates a child context derived from this context.
+    /// Creates a child context for nested operations.
+    /// The current correlation ID becomes the causation ID in the child context.
     /// </summary>
+    /// <param name="nodeId">Optional node ID override for the child context.</param>
+    /// <returns>A new <see cref="IGridContext"/> with causation linking to this context.</returns>
     public IGridContext CreateChildContext(string? nodeId = null)
     {
         // Create child context with current correlation as causation
         return new TransportGridContext(
-            CorrelationId, // Correlation flows through
-            CorrelationId, // Current becomes causation
-            nodeId ?? NodeId,
-            StudioId,
-            TenantId,
-            ProjectId,
-            Environment,
-            _baggage,
-            CreatedAtUtc,
-            Cancellation);
+            correlationId: CorrelationId, // Correlation flows through
+            causationId: CorrelationId,   // Current becomes causation
+            nodeId: nodeId ?? NodeId,
+            studioId: StudioId,
+            tenantId: TenantId,
+            projectId: ProjectId,
+            environment: Environment,
+            baggage: _baggage,
+            createdAtUtc: CreatedAtUtc,
+            cancellation: Cancellation);
     }
 
-    /// <summary>
-    /// Creates a new context with additional baggage.
-    /// </summary>
-    public IGridContext WithBaggage(string key, string value)
+    /// <inheritdoc/>
+    public void AddBaggage(string key, string value)
     {
-        var newBaggage = new Dictionary<string, string>(_baggage)
-        {
-            [key] = value
-        };
-
-        return new TransportGridContext(
-            CorrelationId,
-            CausationId,
-            NodeId,
-            StudioId,
-            TenantId,
-            ProjectId,
-            Environment,
-            newBaggage,
-            CreatedAtUtc,
-            Cancellation);
-    }
-
-    private sealed class NoOpScope : IDisposable
-    {
-        public void Dispose()
-        {
-            // No-op
-        }
+        ArgumentException.ThrowIfNullOrEmpty(key);
+        _baggage[key] = value;
     }
 }
