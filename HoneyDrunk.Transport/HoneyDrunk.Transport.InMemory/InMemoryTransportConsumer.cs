@@ -1,6 +1,7 @@
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Configuration;
 using HoneyDrunk.Transport.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -14,16 +15,19 @@ namespace HoneyDrunk.Transport.InMemory;
 /// </remarks>
 /// <param name="broker">The in-memory message broker.</param>
 /// <param name="pipeline">The message processing pipeline.</param>
+/// <param name="serviceScopeFactory">The service scope factory for creating scoped service providers.</param>
 /// <param name="options">The transport configuration options.</param>
 /// <param name="logger">The logger instance.</param>
 public sealed class InMemoryTransportConsumer(
     InMemoryBroker broker,
     IMessagePipeline pipeline,
+    IServiceScopeFactory serviceScopeFactory,
     IOptions<TransportOptions> options,
     ILogger<InMemoryTransportConsumer> logger) : ITransportConsumer, IAsyncDisposable
 {
     private readonly InMemoryBroker _broker = broker;
     private readonly IMessagePipeline _pipeline = pipeline;
+    private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
     private readonly IOptions<TransportOptions> _options = options;
     private readonly ILogger<InMemoryTransportConsumer> _logger = logger;
     private readonly SemaphoreSlim _startStopLock = new(1, 1);
@@ -187,11 +191,17 @@ public sealed class InMemoryTransportConsumer(
 
     private async Task ProcessMessageAsync(ITransportEnvelope envelope, CancellationToken cancellationToken)
     {
+        // Create a scope for each message - this is critical for Kernel vNext's
+        // one-GridContext-per-scope invariant. The scoped IGridContext from Kernel
+        // will be resolved within this scope.
+        await using var scope = _serviceScopeFactory.CreateAsyncScope();
+
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = scope.ServiceProvider
         };
 
         try

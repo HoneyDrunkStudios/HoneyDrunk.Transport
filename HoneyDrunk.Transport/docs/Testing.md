@@ -717,11 +717,13 @@ Minimal `IGridContext` implementation for tests.
 
 ```csharp
 /// <summary>
-/// Minimal IGridContext fake for tests. CreateChildContext and WithBaggage
-/// return `this` for simplicity - not representative of production behavior.
+/// Minimal IGridContext fake for tests. CreateChildContext returns `this` 
+/// for simplicity - not representative of production behavior.
 /// </summary>
 public class TestGridContext : IGridContext
 {
+    private readonly Dictionary<string, string> _baggage = new();
+    
     public string CorrelationId { get; set; } = "test-correlation";
     public string? CausationId { get; set; }
     public string NodeId { get; set; } = "test-node";
@@ -729,21 +731,16 @@ public class TestGridContext : IGridContext
     public string? TenantId { get; set; }
     public string? ProjectId { get; set; }
     public string Environment { get; set; } = "test";
-    public IReadOnlyDictionary<string, string> Baggage { get; set; } 
-        = new Dictionary<string, string>();
+    public IReadOnlyDictionary<string, string> Baggage => _baggage;
     public CancellationToken Cancellation { get; set; } = CancellationToken.None;
     public DateTimeOffset CreatedAtUtc { get; set; } = DateTimeOffset.UtcNow;
-    
-    public IDisposable BeginScope() => new NoOpScope();
+    public bool IsInitialized { get; set; } = true;
     
     // Simplified for tests - production creates actual child contexts
     public IGridContext CreateChildContext(string? nodeId = null) => this;
-    public IGridContext WithBaggage(string key, string value) => this;
     
-    private sealed class NoOpScope : IDisposable
-    {
-        public void Dispose() { }
-    }
+    // v0.4.0: AddBaggage mutates in place
+    public void AddBaggage(string key, string value) => _baggage[key] = value;
 }
 ```
 

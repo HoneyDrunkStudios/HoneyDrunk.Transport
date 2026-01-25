@@ -379,9 +379,8 @@ HoneyDrunk.Transport/
 │   │       ├── LoggingMiddleware.cs   # Logging middleware
 │   │       └── RetryMiddleware.cs     # Retry with backoff
 │   ├── Context/                       # Grid context integration
-│   │   ├── GridContextFactory.cs      # Factory implementation
-│   │   ├── IGridContextFactory.cs     # Factory contract
-│   │   └── TransportGridContext.cs    # Transport-specific grid context
+│   │   ├── GridContextFactory.cs      # Factory implementation (initializes Kernel's GridContext)
+│   │   └── IGridContextFactory.cs     # Factory contract
 │   ├── Runtime/                       # Lifecycle orchestration
 │   │   ├── ITransportRuntime.cs       # Runtime contract
 │   │   └── TransportRuntimeHost.cs    # IHostedService implementation

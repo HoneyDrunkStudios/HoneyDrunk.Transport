@@ -1,21 +1,33 @@
+using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Context;
 using HoneyDrunk.Transport.Abstractions;
-using HoneyDrunk.Transport.Context;
 using HoneyDrunk.Transport.Pipeline.Middleware;
 using HoneyDrunk.Transport.Tests.Support;
+using Microsoft.Extensions.DependencyInjection;
+
+using TransportGridContextFactory = HoneyDrunk.Transport.Context.GridContextFactory;
 
 namespace HoneyDrunk.Transport.Tests.Core.Middleware;
 
 /// <summary>
 /// Tests for Grid context propagation middleware.
 /// </summary>
+/// <remarks>
+/// These tests verify the Kernel vNext pattern where the middleware INITIALIZES
+/// a DI-scoped GridContext rather than creating a new one.
+/// </remarks>
 public sealed class GridContextPropagationMiddlewareTests
 {
+    private const string TestNodeId = "test-node";
+    private const string TestStudioId = "test-studio";
+    private const string TestEnvironment = "test-env";
+
     /// <summary>
-    /// Verifies middleware creates Grid context from envelope and populates MessageContext.
+    /// Verifies middleware initializes Grid context from envelope and populates MessageContext.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeAsync_WithValidEnvelope_CreatesAndPopulatesGridContext()
+    public async Task InvokeAsync_WithValidEnvelope_InitializesAndPopulatesGridContext()
     {
         // Arrange
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
@@ -33,14 +45,16 @@ public sealed class GridContextPropagationMiddlewareTests
             Timestamp = envelope.Timestamp
         };
 
+        var serviceProvider = CreateServiceProvider();
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = serviceProvider
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         var nextCalled = false;
@@ -61,9 +75,10 @@ public sealed class GridContextPropagationMiddlewareTests
         Assert.NotNull(context.GridContext);
         Assert.Equal("corr-123", context.GridContext!.CorrelationId);
         Assert.Equal("cause-456", context.GridContext.CausationId);
-        Assert.Equal("node-1", context.GridContext.NodeId);
-        Assert.Equal("studio-1", context.GridContext.StudioId);
-        Assert.Equal("production", context.GridContext.Environment);
+
+        // Verify it's the same instance as DI's
+        var diGridContext = serviceProvider.GetRequiredService<IGridContext>();
+        Assert.Same(context.GridContext, diGridContext);
     }
 
     /// <summary>
@@ -92,10 +107,11 @@ public sealed class GridContextPropagationMiddlewareTests
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = CreateServiceProvider()
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         // Act
@@ -109,15 +125,9 @@ public sealed class GridContextPropagationMiddlewareTests
         Assert.True(context.Properties.ContainsKey("GridContext"));
         Assert.True(context.Properties.TryGetValue("CorrelationId", out var correlationId));
         Assert.True(context.Properties.TryGetValue("CausationId", out var causationId));
-        Assert.True(context.Properties.TryGetValue("NodeId", out var nodeId));
-        Assert.True(context.Properties.TryGetValue("StudioId", out var studioId));
-        Assert.True(context.Properties.TryGetValue("Environment", out var environment));
 
         Assert.Equal("corr-abc", correlationId);
         Assert.Equal("cause-xyz", causationId);
-        Assert.Equal("node-2", nodeId);
-        Assert.Equal("studio-2", studioId);
-        Assert.Equal("staging", environment);
     }
 
     /// <summary>
@@ -125,19 +135,20 @@ public sealed class GridContextPropagationMiddlewareTests
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeAsync_WithMissingOptionalFields_CreatesGridContextWithDefaults()
+    public async Task InvokeAsync_WithMissingOptionalFields_InitializesGridContextWithDefaults()
     {
-        // Arrange - Envelope has no CorrelationId, CausationId, NodeId, StudioId, Environment
+        // Arrange - Envelope has no CorrelationId, CausationId
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
 
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = CreateServiceProvider()
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         // Act
@@ -151,9 +162,7 @@ public sealed class GridContextPropagationMiddlewareTests
         Assert.NotNull(context.GridContext);
         Assert.Equal(envelope.MessageId, context.GridContext!.CorrelationId);
         Assert.Equal(envelope.MessageId, context.GridContext.CausationId);
-        Assert.Equal(string.Empty, context.GridContext.NodeId);
-        Assert.Equal(string.Empty, context.GridContext.StudioId);
-        Assert.Equal(string.Empty, context.GridContext.Environment);
+        Assert.True(context.GridContext.IsInitialized);
     }
 
     /// <summary>
@@ -169,10 +178,11 @@ public sealed class GridContextPropagationMiddlewareTests
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = CreateServiceProvider()
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         using var cts = new CancellationTokenSource();
@@ -200,10 +210,11 @@ public sealed class GridContextPropagationMiddlewareTests
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = CreateServiceProvider()
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         // Act & Assert
@@ -242,10 +253,11 @@ public sealed class GridContextPropagationMiddlewareTests
         {
             Envelope = envelope,
             Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1
+            DeliveryCount = 1,
+            ServiceProvider = CreateServiceProvider()
         };
 
-        var gridContextFactory = new GridContextFactory(TimeProvider.System);
+        var gridContextFactory = new TransportGridContextFactory();
         var middleware = new GridContextPropagationMiddleware(gridContextFactory);
 
         // Act
@@ -261,4 +273,51 @@ public sealed class GridContextPropagationMiddlewareTests
         Assert.Equal("value1", context.GridContext.Baggage["baggage-key1"]);
         Assert.Equal("value2", context.GridContext.Baggage["baggage-key2"]);
     }
+
+    /// <summary>
+    /// Verifies middleware throws when ServiceProvider is null (Kernel vNext invariant).
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task InvokeAsync_WithNullServiceProvider_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new MessageContext
+        {
+            Envelope = envelope,
+            Transaction = NoOpTransportTransaction.Instance,
+            DeliveryCount = 1,
+            ServiceProvider = null // No DI scope
+        };
+
+        var gridContextFactory = new TransportGridContextFactory();
+        var middleware = new GridContextPropagationMiddleware(gridContextFactory);
+
+        // Act & Assert
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => middleware.InvokeAsync(
+                envelope,
+                context,
+                () => Task.CompletedTask,
+                CancellationToken.None));
+
+        Assert.Contains("ServiceProvider is null", ex.Message);
+    }
+
+    /// <summary>
+    /// Creates a service provider with a scoped GridContext.
+    /// </summary>
+    /// <remarks>
+    /// The scope is intentionally created and not disposed during tests.
+    /// Each test method creates its own scope for isolation.
+    /// </remarks>
+#pragma warning disable CA2000 // Dispose objects before losing scope - intentional for test isolation
+    private static IServiceProvider CreateServiceProvider()
+    {
+        var services = new ServiceCollection();
+        services.AddScoped<IGridContext>(_ => new GridContext(TestNodeId, TestStudioId, TestEnvironment));
+        return services.BuildServiceProvider().CreateScope().ServiceProvider;
+    }
+#pragma warning restore CA2000
 }

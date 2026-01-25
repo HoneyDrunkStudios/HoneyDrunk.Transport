@@ -1,5 +1,6 @@
 using HoneyDrunk.Transport.Abstractions;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 
 namespace HoneyDrunk.Transport.Pipeline;
 
@@ -19,6 +20,12 @@ public sealed class MessagePipeline(
     IServiceProvider serviceProvider,
     ILogger<MessagePipeline> logger) : IMessagePipeline
 {
+    /// <summary>
+    /// Cache for resolved message types to avoid repeated assembly scanning.
+    /// Uses a sentinel value approach: null values are stored to cache failed resolutions.
+    /// </summary>
+    private static readonly ConcurrentDictionary<string, Type?> TypeCache = new();
+
     private readonly IReadOnlyList<IMessageMiddleware> _reversedMiddlewares = [.. middlewares.Reverse()];
     private readonly IMessageSerializer _serializer = serializer;
     private readonly MessageHandlerInvoker _handlerInvoker = new(serviceProvider);
@@ -89,9 +96,35 @@ public sealed class MessagePipeline(
 
     private static Type? ResolveMessageType(string typeName)
     {
-        // Type.GetType with throwOnError: false already returns null on failure
-        // No need for try-catch as it won't throw
-        return Type.GetType(typeName, throwOnError: false);
+        // Check cache first - this includes both successful and failed resolutions
+        if (TypeCache.TryGetValue(typeName, out var cachedType))
+        {
+            return cachedType;
+        }
+
+        // Try direct resolution first (works for assembly-qualified names and mscorlib types)
+        var type = Type.GetType(typeName, throwOnError: false);
+        if (type != null)
+        {
+            TypeCache.TryAdd(typeName, type);
+            return type;
+        }
+
+        // Fall back to searching loaded assemblies for the type by full name
+        // This is necessary because Type.GetType only searches the calling assembly and mscorlib
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            type = assembly.GetType(typeName);
+            if (type != null)
+            {
+                TypeCache.TryAdd(typeName, type);
+                return type;
+            }
+        }
+
+        // Cache the failed resolution to avoid repeated assembly scans
+        TypeCache.TryAdd(typeName, null);
+        return null;
     }
 
     private Func<Task> BuildPipeline(

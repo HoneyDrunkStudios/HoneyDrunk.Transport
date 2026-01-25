@@ -5,6 +5,128 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-01-20
+
+### Breaking Changes
+
+#### Kernel vNext Integration
+- **GridContext Ownership**: Transport no longer creates its own GridContext. Instead, it initializes Kernel's DI-scoped `IGridContext` via `IGridContextFactory.InitializeFromEnvelope()`.
+- **TransportGridContext Removed**: The `TransportGridContext` class has been removed. Use Kernel's `GridContext` instead.
+- **IGridContextFactory API Changed**: `CreateFromEnvelope()` replaced by `InitializeFromEnvelope(IGridContext, ITransportEnvelope, CancellationToken)`.
+- **GridContextFactory Constructor**: No longer requires `TimeProvider` parameter.
+- **MessageContext.ServiceProvider Required**: Consumers must set `MessageContext.ServiceProvider` for middleware to resolve `IGridContext`.
+
+#### Other Breaking Changes
+- **Kernel v0.4.0 Upgrade**: Transport now requires HoneyDrunk.Kernel v0.4.0 (full package, not just Abstractions)
+- **CorrelationMiddleware Removed**: The deprecated `CorrelationMiddleware` has been fully removed; use `GridContextPropagationMiddleware` instead
+
+### Added
+- **Kernel vNext Invariant Enforcement**: `ReferenceEquals(DI GridContext, MessageContext.GridContext) == true`
+- **InMemoryTransportConsumer Scope Creation**: Now creates DI scope per message via `IServiceScopeFactory`
+- **MessageContext.ServiceProvider Property**: Provides scoped service provider to middleware
+- **SandboxNode Project**: New `HoneyDrunk.Transport.SandboxNode` for testing and verification of Kernel + Transport integration
+- **EnvelopeValidationException**: New exception type for fail-fast envelope validation
+- **EnvelopeFactory Fail-Fast Validation**:
+  - Validates `GridContext.IsInitialized` before creating envelopes
+  - Validates `CorrelationId` is present and non-empty
+  - Validates headers/baggage size against 48KB limit
+
+### Changed
+- **Dependency Updates**:
+  - HoneyDrunk.Kernel: Now references full package (not just Abstractions) for `GridContext.Initialize()` access
+  - Microsoft.Extensions.Logging.Abstractions: 10.0.0 → 10.0.2
+- **GridContextPropagationMiddleware**: Now resolves `IGridContext` from DI scope and initializes it (instead of creating new context)
+- **MessageHandlerInvoker**: Uses `MessageContext.ServiceProvider` for handler resolution (scoped handlers)
+
+### Removed
+- **TransportGridContext**: Removed in favor of Kernel's `GridContext`
+- **IGridContextFactory.CreateFromEnvelope()**: Replaced by `InitializeFromEnvelope()`
+- **GridContextFactory TimeProvider dependency**: No longer needed
+- **CorrelationMiddleware**: Fully removed (was deprecated in v0.2.0)
+
+### Migration Guide
+
+**Step 1: Update Package References**
+```xml
+<PackageReference Include="HoneyDrunk.Transport" Version="0.4.0" />
+<PackageReference Include="HoneyDrunk.Kernel" Version="0.4.0" />
+```
+
+**Step 2: Register Kernel's GridContext**
+```csharp
+// Application must register IGridContext as scoped
+services.AddScoped<IGridContext>(_ => 
+    new GridContext(nodeId, studioId, environment));
+```
+
+**Step 3: Update Custom Consumers (if any)**
+```csharp
+// OLD: No scope creation
+var context = new MessageContext { Envelope = envelope };
+
+// NEW: Create scope and provide ServiceProvider
+using var scope = _serviceScopeFactory.CreateScope();
+var context = new MessageContext 
+{ 
+    Envelope = envelope,
+    ServiceProvider = scope.ServiceProvider  // Required for Kernel vNext
+};
+```
+
+**Step 4: Update IGridContextFactory Implementations (if custom)**
+```csharp
+// OLD
+public IGridContext CreateFromEnvelope(ITransportEnvelope envelope, CancellationToken ct)
+{
+    return new TransportGridContext(...);
+}
+
+// NEW
+public void InitializeFromEnvelope(IGridContext gridContext, ITransportEnvelope envelope, CancellationToken ct)
+{
+    var kernelContext = (GridContext)gridContext;
+    kernelContext.Initialize(correlationId, causationId, tenantId, projectId, baggage, ct);
+}
+```
+
+**Step 5: Update Baggage API Usage**
+```csharp
+// OLD (immutable, returned new context)
+var newContext = context.WithBaggage("key", "value");
+
+// NEW (mutates in place)
+context.AddBaggage("key", "value");
+```
+
+**Step 6: Remove CorrelationMiddleware References**
+```csharp
+// OLD - Remove this completely
+#pragma warning disable CS0618
+services.AddSingleton<IMessageMiddleware, CorrelationMiddleware>();
+#pragma warning restore CS0618
+
+// NEW - GridContextPropagationMiddleware is registered by default
+// No action needed - it's already in the pipeline
+```
+
+**Step 7: Handle Envelope Validation Exceptions**
+```csharp
+try
+{
+    await publisher.PublishAsync(address, message, gridContext, ct);
+}
+catch (EnvelopeValidationException ex)
+{
+    // Handle validation failures (oversized headers, missing correlation, etc.)
+    _logger.LogError(ex, "Envelope validation failed");
+}
+catch (InvalidOperationException ex) when (ex.Message.Contains("not initialized"))
+{
+    // Handle uninitialized context
+    _logger.LogError(ex, "GridContext not initialized");
+}
+```
+
 ## [0.3.1] - 2026-01-18
 
 ### Fixed

@@ -16,7 +16,6 @@ namespace HoneyDrunk.Transport.DependencyInjection;
 
 /// <summary>
 /// Extension methods for registering transport services.
-/// Transport services assume HoneyDrunk.Kernel has been registered via AddHoneyDrunkCoreNode.
 /// </summary>
 public static class ServiceCollectionExtensions
 {
@@ -26,10 +25,6 @@ public static class ServiceCollectionExtensions
     /// <param name="services">The service collection.</param>
     /// <param name="configure">Optional configuration action.</param>
     /// <returns>A transport builder for fluent configuration.</returns>
-    /// <remarks>
-    /// This method assumes HoneyDrunk.Kernel has already been registered via AddHoneyDrunkCoreNode.
-    /// Transport layers on top of Kernel for messaging-specific functionality.
-    /// </remarks>
     public static ITransportBuilder AddHoneyDrunkTransportCore(
         this IServiceCollection services,
         Action<TransportCoreOptions>? configure = null)
@@ -47,7 +42,7 @@ public static class ServiceCollectionExtensions
         // Register TimeProvider if not already registered (use system time by default)
         services.TryAddSingleton(TimeProvider.System);
 
-        // Core transport services (these depend on Kernel abstractions only)
+        // Core transport services
         services.TryAddSingleton<IGridContextFactory, GridContextFactory>();
         services.TryAddSingleton<EnvelopeFactory>();
         services.TryAddSingleton<IMessageSerializer, JsonMessageSerializer>();
@@ -58,7 +53,6 @@ public static class ServiceCollectionExtensions
         services.TryAddSingleton<IMessagePublisher, MessagePublisher>();
 
         // Metrics (no-op by default, can be replaced with Kernel-backed implementation)
-        // Use the singleton instance since NoOpTransportMetrics has a private constructor
         services.TryAddSingleton<ITransportMetrics>(NoOpTransportMetrics.Instance);
 
         // Register transport runtime host (coordinates consumer lifecycle)
@@ -66,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TransportRuntimeHost>();
 
         // Register built-in middleware
+        // GridContextPropagationMiddleware creates context from envelope metadata
         services.TryAddEnumerable(ServiceDescriptor.Singleton<IMessageMiddleware, GridContextPropagationMiddleware>());
 
         services.AddSingleton<IMessageMiddleware>(sp =>

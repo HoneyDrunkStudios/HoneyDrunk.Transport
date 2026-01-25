@@ -6,6 +6,7 @@ using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Primitives;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
 using HoneyDrunk.Transport.Telemetry;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
@@ -25,7 +26,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <item><description><strong>BatchProcessingConcurrency</strong>: Concurrent messages per fetch loop (default: 1).</description></item>
 /// </list>
 /// <para>
-/// Total concurrent message processing = MaxConcurrency × BatchProcessingConcurrency.
+/// Total concurrent message processing = MaxConcurrency * BatchProcessingConcurrency.
 /// </para>
 /// <para>
 /// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 concurrent operations.
@@ -33,6 +34,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// </remarks>
 /// <param name="queueClientFactory">The queue client factory.</param>
 /// <param name="pipeline">The message processing pipeline.</param>
+/// <param name="serviceScopeFactory">The service scope factory for creating scoped service providers.</param>
 /// <param name="poisonQueueMover">The poison queue mover for handling dead-lettered messages.</param>
 /// <param name="options">The storage queue configuration options.</param>
 /// <param name="logger">The logger instance.</param>
@@ -40,6 +42,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 internal sealed class StorageQueueProcessor(
     QueueClientFactory queueClientFactory,
     IMessagePipeline pipeline,
+    IServiceScopeFactory serviceScopeFactory,
     PoisonQueueMover poisonQueueMover,
     IOptions<StorageQueueOptions> options,
     ILogger<StorageQueueProcessor> logger) : ITransportConsumer, IAsyncDisposable
@@ -51,6 +54,7 @@ internal sealed class StorageQueueProcessor(
 
     private readonly QueueClientFactory _queueClientFactory = queueClientFactory;
     private readonly IMessagePipeline _pipeline = pipeline;
+    private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
     private readonly PoisonQueueMover _poisonMover = poisonQueueMover;
     private readonly StorageQueueOptions _options = options.Value;
     private readonly ILogger<StorageQueueProcessor> _logger = logger;
@@ -386,12 +390,18 @@ internal sealed class StorageQueueProcessor(
 
             TransportTelemetry.RecordDeliveryCount(activity, (int)message.DequeueCount);
 
+            // Create a scope for each message - this is critical for Kernel vNext's
+            // one-GridContext-per-scope invariant. The scoped IGridContext from Kernel
+            // will be resolved within this scope.
+            await using var scope = _serviceScopeFactory.CreateAsyncScope();
+
             // Create message context
             var context = new MessageContext
             {
                 Envelope = envelope,
                 Transaction = NoOpTransportTransaction.Instance,
-                DeliveryCount = (int)message.DequeueCount
+                DeliveryCount = (int)message.DequeueCount,
+                ServiceProvider = scope.ServiceProvider
             };
 
             try

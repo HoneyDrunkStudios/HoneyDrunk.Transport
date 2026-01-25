@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.3.1</Version>
-       <Authors>HoneyDrunk Studios</Authors>
-       <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-	<PackageReleaseNotes>v0.3.1: Inherits ITransportMetrics DI fix from HoneyDrunk.Transport v0.3.1.</PackageReleaseNotes>
+    <Version>0.4.0</Version>
+    <Authors>HoneyDrunk Studios</Authors>
+    <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
+    <PackageReleaseNotes>v0.4.0: Kernel v0.4.0 upgrade with IGridContext.AddBaggage() API change, fail-fast envelope validation, and updated Azure SDK dependencies.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -32,16 +32,15 @@
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.17.1" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.26.0" />
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.3.0" />
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.3.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
+    <!-- HoneyDrunk.Kernel.Abstractions comes transitively from HoneyDrunk.Transport -->
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Azure" Version="1.13.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -50,7 +49,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.100" />
+    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.102" />
   </ItemGroup>
 
 </Project>

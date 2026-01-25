@@ -3,6 +3,7 @@ using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
 using HoneyDrunk.Transport.Pipeline;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
@@ -17,17 +18,20 @@ namespace HoneyDrunk.Transport.AzureServiceBus;
 /// </remarks>
 /// <param name="client">The Service Bus client.</param>
 /// <param name="pipeline">The message processing pipeline.</param>
+/// <param name="serviceScopeFactory">The service scope factory for creating scoped service providers.</param>
 /// <param name="options">The Azure Service Bus configuration options.</param>
 /// <param name="logger">The logger instance.</param>
 [SuppressMessage("Usage", "CA2213:Disposable fields should be disposed", Justification = "ServiceBusClient is injected via DI and its lifetime is managed by the DI container, not by this class")]
 public sealed class ServiceBusTransportConsumer(
     ServiceBusClient client,
     IMessagePipeline pipeline,
+    IServiceScopeFactory serviceScopeFactory,
     IOptions<AzureServiceBusOptions> options,
     ILogger<ServiceBusTransportConsumer> logger) : ITransportConsumer, IAsyncDisposable
 {
     private readonly ServiceBusClient _client = client;
     private readonly IMessagePipeline _pipeline = pipeline;
+    private readonly IServiceScopeFactory _serviceScopeFactory = serviceScopeFactory;
     private readonly IOptions<AzureServiceBusOptions> _options = options;
     private readonly ILogger<ServiceBusTransportConsumer> _logger = logger;
     private readonly SemaphoreSlim _initLock = new(1, 1);
@@ -342,11 +346,17 @@ public sealed class ServiceBusTransportConsumer(
         object args,
         CancellationToken cancellationToken)
     {
+        // Create a scope for each message - this is critical for Kernel vNext's
+        // one-GridContext-per-scope invariant. The scoped IGridContext from Kernel
+        // will be resolved within this scope.
+        await using var scope = _serviceScopeFactory.CreateAsyncScope();
+
         var context = new MessageContext
         {
             Envelope = envelope,
             Transaction = transaction,
-            DeliveryCount = deliveryCount
+            DeliveryCount = deliveryCount,
+            ServiceProvider = scope.ServiceProvider
         };
 
         try

@@ -493,6 +493,7 @@ public sealed class MessagePublisherTests
         context.Environment.Returns(environment);
         context.CreatedAtUtc.Returns(FixedTime);
         context.Baggage.Returns(new Dictionary<string, string>());
+        context.IsInitialized.Returns(true);
         return context;
     }
 
