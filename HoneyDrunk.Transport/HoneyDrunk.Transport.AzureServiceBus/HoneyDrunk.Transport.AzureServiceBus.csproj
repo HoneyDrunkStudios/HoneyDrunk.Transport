@@ -33,8 +33,7 @@
     <PackageReference Include="Azure.Identity" Version="1.17.1" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
     <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.4.0" />
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.4.0" />
+    <!-- HoneyDrunk.Kernel.Abstractions comes transitively from HoneyDrunk.Transport -->
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.6">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

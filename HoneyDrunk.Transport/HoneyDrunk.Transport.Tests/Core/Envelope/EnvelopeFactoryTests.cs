@@ -1,4 +1,5 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Primitives;
 using NSubstitute;
 
@@ -342,6 +343,225 @@ public sealed class EnvelopeFactoryTests
     }
 
     /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext throws InvalidOperationException when context is not initialized.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_WhenContextNotInitialized_ThrowsInvalidOperationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = Substitute.For<IGridContext>();
+        gridContext.IsInitialized.Returns(false);
+
+        // Act & Assert
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                gridContext));
+
+        Assert.Contains("not initialized", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext throws EnvelopeValidationException when CorrelationId is null.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_WhenCorrelationIdIsNull_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = Substitute.For<IGridContext>();
+        gridContext.IsInitialized.Returns(true);
+        gridContext.CorrelationId.Returns((string?)null);
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                gridContext));
+
+        Assert.Contains("CorrelationId is required", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext throws EnvelopeValidationException when CorrelationId is empty.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_WhenCorrelationIdIsEmpty_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+        var gridContext = Substitute.For<IGridContext>();
+        gridContext.IsInitialized.Returns(true);
+        gridContext.CorrelationId.Returns(string.Empty);
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                gridContext));
+
+        Assert.Contains("CorrelationId is required", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext throws EnvelopeValidationException when headers exceed size limit.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_WhenHeadersExceedSizeLimit_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+
+        // Create baggage that exceeds 48KB limit
+        var oversizedBaggage = new Dictionary<string, string>();
+        var largeValue = new string('x', 10_000); // 10KB per value
+
+        // 10 * 10KB = 100KB > 48KB
+        for (int i = 0; i < 10; i++)
+        {
+            oversizedBaggage[$"key-{i}"] = largeValue;
+        }
+
+        var gridContext = Substitute.For<IGridContext>();
+        gridContext.IsInitialized.Returns(true);
+        gridContext.CorrelationId.Returns("valid-correlation");
+        gridContext.Baggage.Returns(oversizedBaggage);
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                gridContext));
+
+        Assert.Contains("exceeds maximum allowed", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelope throws EnvelopeValidationException when headers exceed size limit.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelope_WhenHeadersExceedSizeLimit_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+
+        // Create headers that exceed 48KB limit
+        var oversizedHeaders = new Dictionary<string, string>();
+        var largeValue = new string('x', 10_000); // 10KB per value
+
+        // 10 * 10KB = 100KB > 48KB
+        for (int i = 0; i < 10; i++)
+        {
+            oversizedHeaders[$"key-{i}"] = largeValue;
+        }
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateEnvelope<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                headers: oversizedHeaders));
+
+        Assert.Contains("exceeds maximum allowed", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithId throws EnvelopeValidationException when headers exceed size limit.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithId_WhenHeadersExceedSizeLimit_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+
+        // Create headers that exceed 48KB limit
+        var oversizedHeaders = new Dictionary<string, string>();
+        var largeValue = new string('x', 10_000);
+        for (int i = 0; i < 10; i++)
+        {
+            oversizedHeaders[$"key-{i}"] = largeValue;
+        }
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateEnvelopeWithId(
+                "msg-id",
+                "TestType",
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                headers: oversizedHeaders));
+
+        Assert.Contains("exceeds maximum allowed", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateReply throws EnvelopeValidationException when merged headers exceed size limit.
+    /// </summary>
+    [Fact]
+    public void CreateReply_WhenMergedHeadersExceedSizeLimit_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+
+        // Create original with small headers (under limit)
+        var originalHeaders = new Dictionary<string, string>();
+        var smallValue = new string('x', 2_000); // 2KB per value
+
+        // ~6KB total - well under 48KB limit
+        for (int i = 0; i < 3; i++)
+        {
+            originalHeaders[$"original-{i}"] = smallValue;
+        }
+
+        var original = factory.CreateEnvelope<EnvelopeFactoryTests>(
+            new ReadOnlyMemory<byte>([1, 2, 3]),
+            headers: originalHeaders);
+
+        // Create additional headers that push total over limit
+        var additionalHeaders = new Dictionary<string, string>();
+        var largeValue = new string('x', 10_000); // 10KB per value
+
+        // ~100KB additional - combined exceeds 48KB
+        for (int i = 0; i < 10; i++)
+        {
+            additionalHeaders[$"additional-{i}"] = largeValue;
+        }
+
+        // Act & Assert
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateReply(
+                original,
+                "ReplyType",
+                new ReadOnlyMemory<byte>([4, 5, 6]),
+                additionalHeaders));
+
+        Assert.Contains("exceeds maximum allowed", ex.Message);
+    }
+
+    /// <summary>
+    /// Verifies CreateEnvelopeWithGridContext throws ArgumentNullException when gridContext is null.
+    /// </summary>
+    [Fact]
+    public void CreateEnvelopeWithGridContext_WhenGridContextIsNull_ThrowsArgumentNullException()
+    {
+        // Arrange
+        var timeProvider = new TestTimeProvider(FixedTime);
+        var factory = new EnvelopeFactory(timeProvider);
+
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
+                new ReadOnlyMemory<byte>([1, 2, 3]),
+                null!));
+                }
+
+                /// <summary>
     /// Creates a test Grid context with customizable field values.
     /// </summary>
     private static IGridContext CreateTestGridContext(

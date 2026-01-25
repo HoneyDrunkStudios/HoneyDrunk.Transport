@@ -26,7 +26,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <item><description><strong>BatchProcessingConcurrency</strong>: Concurrent messages per fetch loop (default: 1).</description></item>
 /// </list>
 /// <para>
-/// Total concurrent message processing = MaxConcurrency � BatchProcessingConcurrency.
+/// Total concurrent message processing = MaxConcurrency * BatchProcessingConcurrency.
 /// </para>
 /// <para>
 /// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 concurrent operations.
