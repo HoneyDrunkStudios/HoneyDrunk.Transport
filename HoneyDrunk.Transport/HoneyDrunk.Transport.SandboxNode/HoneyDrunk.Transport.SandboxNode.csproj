@@ -26,10 +26,10 @@
     <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.4.0" />
     
     <!-- Generic Host -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
     
     <!-- Console logging for readable output -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.2" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
   </ItemGroup>
 
 </Project>

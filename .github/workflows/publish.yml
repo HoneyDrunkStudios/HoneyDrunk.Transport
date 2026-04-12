@@ -43,6 +43,11 @@ jobs:
   release:
     name: Build, Pack & Publish
     needs: prepare
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
     uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/release.yml@main
     with:
       dotnet-version: '10.0.x'
@@ -65,60 +70,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout Actions
+        uses: actions/checkout@v4
+        with:
+          repository: HoneyDrunkStudios/HoneyDrunk.Actions
+          ref: main
+          path: .actions
+
+      - name: Generate Release Notes
+        id: notes
+        uses: ./.actions/.github/actions/release/generate-notes
+        with:
+          version: ${{ needs.prepare.outputs.version }}
+          product-name: HoneyDrunk.Transport
+          product-description: 'Transport-agnostic messaging library for .NET with middleware pipeline pattern.'
+          nuget-packages: |
+            HoneyDrunk.Transport
+            HoneyDrunk.Transport.InMemory
+            HoneyDrunk.Transport.AzureServiceBus
+            HoneyDrunk.Transport.StorageQueue
+          docs-url: 'https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme'
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.prepare.outputs.version-tag }}
           name: HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
-          body: |
-            ## HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
-
-            Transport-agnostic messaging library for .NET with middleware pipeline pattern.
-
-            ### 📦 Packages
-
-            **HoneyDrunk.Transport** - Core abstractions and middleware pipeline
-
-            ```xml
-            <PackageReference Include="HoneyDrunk.Transport" Version="${{ needs.prepare.outputs.version }}" />
-            ```
-
-            **HoneyDrunk.Transport.InMemory** - In-memory broker for testing
-
-            ```xml
-            <PackageReference Include="HoneyDrunk.Transport.InMemory" Version="${{ needs.prepare.outputs.version }}" />
-            ```
-
-            **HoneyDrunk.Transport.AzureServiceBus** - Azure Service Bus implementation
-
-            ```xml
-            <PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="${{ needs.prepare.outputs.version }}" />
-            ```
-
-            ### 🔗 Links
-            - [NuGet: HoneyDrunk.Transport](https://www.nuget.org/packages/HoneyDrunk.Transport/${{ needs.prepare.outputs.version }})
-            - [NuGet: HoneyDrunk.Transport.InMemory](https://www.nuget.org/packages/HoneyDrunk.Transport.InMemory/${{ needs.prepare.outputs.version }})
-            - [NuGet: HoneyDrunk.Transport.AzureServiceBus](https://www.nuget.org/packages/HoneyDrunk.Transport.AzureServiceBus/${{ needs.prepare.outputs.version }})
-            - [Documentation](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme)
-
-            ### 🚀 Quick Start
-
-            ```csharp
-            using HoneyDrunk.Transport.DependencyInjection;
-
-            var builder = WebApplication.CreateBuilder(args);
-
-            // Add transport core with Azure Service Bus
-            builder.Services.AddHoneyDrunkTransportCore()
-                .AddHoneyDrunkServiceBusTransport(options => 
-                {
-                    options.ConnectionString = builder.Configuration["ServiceBus:ConnectionString"];
-                })
-                .WithTopicSubscription("my-subscription")
-                .WithRetry(retry => retry.MaxAttempts = 5);
-
-            // Register message handlers
-            builder.Services.AddMessageHandler<MyMessage, MyMessageHandler>();
-            ```
+          body: ${{ steps.notes.outputs.body }}
+          generate_release_notes: ${{ steps.notes.outputs.has-changelog == 'false' }}
           draft: false
           prerelease: false

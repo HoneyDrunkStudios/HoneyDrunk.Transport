@@ -1,17 +1,8 @@
-name: PR Validation
+name: PR
 
 on:
   pull_request:
-    branches: [ main, develop ]
-    paths:
-      - '**/*.cs'
-      - '**/*.csproj'
-      - '**/*.sln'
-      - '**/*.slnx'
-      - '**/*.props'
-      - '**/*.targets'
-      - '**/.editorconfig'
-      - '**/stylecop.json'
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -19,15 +10,14 @@ permissions:
   pull-requests: write
 
 jobs:
-  pr-validation:
+  pr-core:
+    name: PR Core
     uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/pr-core.yml@main
     with:
       dotnet-version: '10.0.x'
       configuration: 'Release'
       runs-on: 'ubuntu-latest'
       working-directory: 'HoneyDrunk.Transport'
-      # Optional: target a specific solution or project
-      # project-path: './HoneyDrunk.Transport.sln'
       enable-secret-scan: true
       enable-accessibility-check: false
       post-pr-summary: true
