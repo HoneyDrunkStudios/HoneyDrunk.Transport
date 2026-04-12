@@ -19,10 +19,12 @@ public sealed class InMemoryBrokerAdditionalTests
         // Arrange
         var broker = new InMemoryBroker(NullLogger<InMemoryBroker>.Instance);
         var receivedEnvelopes = new List<string>();
+        var received = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         broker.Subscribe("test-address", (envelope, ct) =>
         {
             receivedEnvelopes.Add(envelope.MessageId);
+            received.TrySetResult();
             return Task.CompletedTask;
         });
 
@@ -31,7 +33,7 @@ public sealed class InMemoryBrokerAdditionalTests
 
         // Act
         await broker.PublishAsync("test-address", envelope);
-        await Task.Delay(100); // Allow async handler to execute
+        await received.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         // Assert
         Assert.Single(receivedEnvelopes);
@@ -126,22 +128,39 @@ public sealed class InMemoryBrokerAdditionalTests
         var received1 = false;
         var received2 = false;
         var received3 = false;
+        var allReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var remaining = 3;
 
         broker.Subscribe("test-address", (envelope, ct) =>
         {
             received1 = true;
+            if (Interlocked.Decrement(ref remaining) == 0)
+            {
+                allReceived.TrySetResult();
+            }
+
             return Task.CompletedTask;
         });
 
         broker.Subscribe("test-address", (envelope, ct) =>
         {
             received2 = true;
+            if (Interlocked.Decrement(ref remaining) == 0)
+            {
+                allReceived.TrySetResult();
+            }
+
             return Task.CompletedTask;
         });
 
         broker.Subscribe("test-address", (envelope, ct) =>
         {
             received3 = true;
+            if (Interlocked.Decrement(ref remaining) == 0)
+            {
+                allReceived.TrySetResult();
+            }
+
             return Task.CompletedTask;
         });
 
@@ -150,7 +169,7 @@ public sealed class InMemoryBrokerAdditionalTests
 
         // Act
         await broker.PublishAsync("test-address", envelope);
-        await Task.Delay(100); // Allow async handlers to execute
+        await allReceived.Task.WaitAsync(TimeSpan.FromSeconds(2));
 
         // Assert
         Assert.True(received1);

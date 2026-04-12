@@ -5,14 +5,23 @@ on:
     - cron: '0 2 * * *'
   workflow_dispatch:
 
+permissions:
+  contents: read
+  security-events: write
+  issues: write
+
 jobs:
   nightly-security:
     name: Nightly Security
     uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/nightly-security.yml@main
     with:
+      dotnet-version: '10.0.x'
+      runs-on: 'ubuntu-latest'
+      working-directory: 'HoneyDrunk.Transport'
       enable-sast: true
       enable-iac-scan: true
       enable-secret-scan: true
       create-issues: true
+      actions-ref: 'main'
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
