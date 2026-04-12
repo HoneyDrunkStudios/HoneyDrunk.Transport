@@ -1,0 +1,12 @@
+name: PR
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  pr-core:
+    name: PR Core
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/pr-core.yml@main
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

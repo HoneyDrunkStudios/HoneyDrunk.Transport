@@ -1,0 +1,16 @@
+name: Nightly Dependencies
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+jobs:
+  nightly-deps:
+    name: Nightly Dependencies
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/nightly-deps.yml@main
+    with:
+      check-dotnet-deps: true
+      create-update-prs: false
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

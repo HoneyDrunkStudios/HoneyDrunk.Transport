@@ -1,0 +1,18 @@
+name: Nightly Security
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+
+jobs:
+  nightly-security:
+    name: Nightly Security
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/nightly-security.yml@main
+    with:
+      enable-sast: true
+      enable-iac-scan: true
+      enable-secret-scan: true
+      create-issues: true
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
