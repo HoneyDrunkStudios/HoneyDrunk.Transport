@@ -559,9 +559,9 @@ public sealed class EnvelopeFactoryTests
             factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
                 new ReadOnlyMemory<byte>([1, 2, 3]),
                 null!));
-                }
+    }
 
-                /// <summary>
+    /// <summary>
     /// Creates a test Grid context with customizable field values.
     /// </summary>
     private static IGridContext CreateTestGridContext(
