@@ -34,9 +34,10 @@ internal sealed class QueueClientFactory(
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_primaryQueueClient != null)
+        var existing = _primaryQueueClient;
+        if (existing is not null)
         {
-            return _primaryQueueClient;
+            return existing;
         }
 
         await _initLock.WaitAsync(cancellationToken);
@@ -44,29 +45,9 @@ internal sealed class QueueClientFactory(
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_primaryQueueClient != null)
-            {
-                return _primaryQueueClient;
-            }
-
-            _primaryQueueClient = CreateQueueClient(_options.QueueName);
-
-            if (_options.CreateIfNotExists)
-            {
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    _logger.LogDebug("Creating queue {QueueName} if not exists", _options.QueueName);
-                }
-
-                await _primaryQueueClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
-
-                if (_logger.IsEnabled(LogLevel.Information))
-                {
-                    _logger.LogInformation("Queue {QueueName} ready", _options.QueueName);
-                }
-            }
-
-            return _primaryQueueClient;
+            // The fast-path above may have observed a null client while another
+            // thread was initializing. Re-read after acquiring the lock.
+            return _primaryQueueClient ??= await CreatePrimaryQueueClientAsync(cancellationToken);
         }
         finally
         {
@@ -81,9 +62,10 @@ internal sealed class QueueClientFactory(
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
-        if (_poisonQueueClient != null)
+        var existing = _poisonQueueClient;
+        if (existing is not null)
         {
-            return _poisonQueueClient;
+            return existing;
         }
 
         await _initLock.WaitAsync(cancellationToken);
@@ -91,30 +73,7 @@ internal sealed class QueueClientFactory(
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_poisonQueueClient != null)
-            {
-                return _poisonQueueClient;
-            }
-
-            var poisonQueueName = _options.GetPoisonQueueName();
-            _poisonQueueClient = CreateQueueClient(poisonQueueName);
-
-            if (_options.CreateIfNotExists)
-            {
-                if (_logger.IsEnabled(LogLevel.Debug))
-                {
-                    _logger.LogDebug("Creating poison queue {QueueName} if not exists", poisonQueueName);
-                }
-
-                await _poisonQueueClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
-
-                if (_logger.IsEnabled(LogLevel.Information))
-                {
-                    _logger.LogInformation("Poison queue {QueueName} ready", poisonQueueName);
-                }
-            }
-
-            return _poisonQueueClient;
+            return _poisonQueueClient ??= await CreatePoisonQueueClientAsync(cancellationToken);
         }
         finally
         {
@@ -148,8 +107,9 @@ internal sealed class QueueClientFactory(
         finally
         {
             _initLock.Release();
-            _initLock.Dispose();
         }
+
+        _initLock.Dispose();
     }
 
     private static StorageQueueOptions ValidateOptions(StorageQueueOptions options)
@@ -161,6 +121,51 @@ internal sealed class QueueClientFactory(
         }
 
         return options;
+    }
+
+    private async Task<QueueClient> CreatePrimaryQueueClientAsync(CancellationToken cancellationToken)
+    {
+        var client = CreateQueueClient(_options.QueueName);
+
+        if (_options.CreateIfNotExists)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Creating queue {QueueName} if not exists", _options.QueueName);
+            }
+
+            await client.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Queue {QueueName} ready", _options.QueueName);
+            }
+        }
+
+        return client;
+    }
+
+    private async Task<QueueClient> CreatePoisonQueueClientAsync(CancellationToken cancellationToken)
+    {
+        var poisonQueueName = _options.GetPoisonQueueName();
+        var client = CreateQueueClient(poisonQueueName);
+
+        if (_options.CreateIfNotExists)
+        {
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Creating poison queue {QueueName} if not exists", poisonQueueName);
+            }
+
+            await client.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+
+            if (_logger.IsEnabled(LogLevel.Information))
+            {
+                _logger.LogInformation("Poison queue {QueueName} ready", poisonQueueName);
+            }
+        }
+
+        return client;
     }
 
     /// <summary>

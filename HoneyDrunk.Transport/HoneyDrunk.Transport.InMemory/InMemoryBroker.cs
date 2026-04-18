@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -56,7 +57,7 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
                         {
                             await handler(envelope, cancellationToken);
                         }
-                        catch (Exception ex)
+                        catch (Exception ex) when (!ex.IsFatal())
                         {
                             if (_logger.IsEnabled(LogLevel.Error))
                             {
@@ -118,7 +119,7 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
             {
                 await handler(envelope, cancellationToken);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 if (_logger.IsEnabled(LogLevel.Error))
                 {

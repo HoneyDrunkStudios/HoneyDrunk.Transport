@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
@@ -80,7 +81,7 @@ public sealed class MessagePipeline(
 
             return ex.Result;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
@@ -166,7 +167,7 @@ public sealed class MessagePipeline(
         {
             message = _serializer.Deserialize(envelope.Payload, messageType);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             throw new MessageHandlerException(
                 $"Failed to deserialize message: {ex.Message}",

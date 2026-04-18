@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Health;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -167,7 +168,7 @@ public sealed partial class TransportRuntimeHost(
             await consumer.StopAsync(cancellationToken);
             LogConsumerStopped(logger, consumer.GetType().Name);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             LogConsumerStopError(logger, consumer.GetType().Name, ex);
 

@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -57,7 +58,7 @@ public sealed partial class DefaultOutboxDispatcher(
 
                 LogMessageDispatched(logger, message.Id);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 failureCount++;
 
@@ -119,7 +120,7 @@ public sealed partial class DefaultOutboxDispatcher(
                 // Expected during shutdown
                 break;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 LogDispatcherLoopError(logger, ex);
 

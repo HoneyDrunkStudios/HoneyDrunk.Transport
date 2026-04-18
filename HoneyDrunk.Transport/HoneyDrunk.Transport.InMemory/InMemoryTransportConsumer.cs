@@ -1,5 +1,6 @@
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Configuration;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -143,10 +144,15 @@ public sealed class InMemoryTransportConsumer(
         {
             await StopAsync();
         }
-        finally
+        catch (Exception ex) when (!ex.IsFatal())
         {
-            _startStopLock.Dispose();
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Error stopping consumer during dispose");
+            }
         }
+
+        _startStopLock.Dispose();
     }
 
     private async Task ConsumeMessagesAsync(int consumerId, CancellationToken cancellationToken)
@@ -170,7 +176,7 @@ public sealed class InMemoryTransportConsumer(
         {
             // Expected when stopping
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
@@ -226,7 +232,7 @@ public sealed class InMemoryTransportConsumer(
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {

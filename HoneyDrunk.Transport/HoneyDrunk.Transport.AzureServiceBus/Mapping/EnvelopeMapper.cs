@@ -180,7 +180,7 @@ public static class EnvelopeMapper
     /// <returns>The delivery count.</returns>
     public static int GetDeliveryCount(ServiceBusReceivedMessage message)
     {
-        return (int)message.DeliveryCount;
+        return message.DeliveryCount;
     }
 
     /// <summary>

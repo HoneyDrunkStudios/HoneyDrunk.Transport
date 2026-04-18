@@ -1,4 +1,5 @@
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 
 namespace HoneyDrunk.Transport.Health;
 
@@ -33,7 +34,7 @@ public sealed class PublisherHealthContributor(ITransportPublisher publisher) : 
                     ["PublisherType"] = _publisher.GetType().Name
                 });
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             return TransportHealthResult.Unhealthy(
                 "Publisher health check failed",

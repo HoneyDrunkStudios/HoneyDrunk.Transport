@@ -2,6 +2,7 @@ using Azure;
 using Azure.Storage.Queues;
 using Azure.Storage.Queues.Models;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Pipeline;
 using HoneyDrunk.Transport.Primitives;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
@@ -176,11 +177,16 @@ internal sealed class StorageQueueProcessor(
         {
             await StopAsync();
         }
-        finally
+        catch (Exception ex) when (!ex.IsFatal())
         {
-            _startStopLock.Dispose();
-            await _queueClientFactory.DisposeAsync();
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Error stopping Storage Queue consumer during dispose");
+            }
         }
+
+        _startStopLock.Dispose();
+        await _queueClientFactory.DisposeAsync();
     }
 
     /// <summary>
@@ -312,7 +318,7 @@ internal sealed class StorageQueueProcessor(
                     // Expected when stopping
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ex.IsFatal())
                 {
                     if (_logger.IsEnabled(LogLevel.Error))
                     {
@@ -330,7 +336,7 @@ internal sealed class StorageQueueProcessor(
         {
             // Expected when stopping
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
@@ -440,7 +446,7 @@ internal sealed class StorageQueueProcessor(
 
                         TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
                     }
-                    catch (Exception poisonEx)
+                    catch (Exception poisonEx) when (!poisonEx.IsFatal())
                     {
                         if (_logger.IsEnabled(LogLevel.Error))
                         {
@@ -482,7 +488,7 @@ internal sealed class StorageQueueProcessor(
 
                             TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
                         }
-                        catch (Exception poisonEx)
+                        catch (Exception poisonEx) when (!poisonEx.IsFatal())
                         {
                             if (_logger.IsEnabled(LogLevel.Error))
                             {
@@ -512,13 +518,13 @@ internal sealed class StorageQueueProcessor(
                     }
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 TransportTelemetry.RecordError(activity, ex);
                 throw;
             }
         }
-        catch (Exception processingError)
+        catch (Exception processingError) when (!processingError.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
@@ -542,7 +548,7 @@ internal sealed class StorageQueueProcessor(
 
                     await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
                 }
-                catch (Exception poisonEx)
+                catch (Exception poisonEx) when (!poisonEx.IsFatal())
                 {
                     if (_logger.IsEnabled(LogLevel.Error))
                     {

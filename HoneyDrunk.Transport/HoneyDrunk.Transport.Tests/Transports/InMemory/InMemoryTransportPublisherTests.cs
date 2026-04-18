@@ -1,4 +1,3 @@
-using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.InMemory;
 using HoneyDrunk.Transport.Tests.Support;
 
@@ -44,7 +43,7 @@ public sealed class InMemoryTransportPublisherTests
         var destination = TestData.Address("test", "queue3");
 
         await Assert.ThrowsAsync<ArgumentNullException>(
-            () => publisher.PublishAsync((ITransportEnvelope)null!, destination));
+            () => publisher.PublishAsync(null!, destination));
     }
 
     /// <summary>
