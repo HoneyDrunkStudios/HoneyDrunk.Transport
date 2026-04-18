@@ -131,7 +131,7 @@ internal sealed class StorageQueueSender(
                 TransportTelemetry.RecordError(activity, ex);
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 if (_logger.IsEnabled(LogLevel.Error))
                 {

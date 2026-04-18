@@ -112,7 +112,7 @@ public sealed class ServiceBusTransportPublisher(
                     envelope.MessageId);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             TransportTelemetry.RecordError(activity, ex);
 
@@ -226,7 +226,7 @@ public sealed class ServiceBusTransportPublisher(
                 _logger.LogDebug("Successfully published batch");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {

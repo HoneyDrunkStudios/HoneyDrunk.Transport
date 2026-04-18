@@ -153,7 +153,7 @@ public sealed partial class TransportRuntimeHost(
             await consumer.StartAsync(cancellationToken);
             LogConsumerStarted(logger, consumer.GetType().Name);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             LogConsumerStartFailed(logger, consumer.GetType().Name, ex);
             throw;

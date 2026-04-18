@@ -47,7 +47,7 @@ public sealed class ExceptionTypeMapStrategy(
         // Check for base type match
         var inherited = typeMap
             .Where(kvp => kvp.Key.IsAssignableFrom(exceptionType))
-            .Cast<KeyValuePair<Type, ErrorHandlingAction>?>()
+            .Select(kvp => (KeyValuePair<Type, ErrorHandlingAction>?)kvp)
             .FirstOrDefault();
         if (inherited is { } match)
         {
