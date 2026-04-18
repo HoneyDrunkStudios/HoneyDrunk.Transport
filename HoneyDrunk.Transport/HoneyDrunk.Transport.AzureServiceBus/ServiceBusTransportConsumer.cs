@@ -2,6 +2,7 @@ using Azure.Messaging.ServiceBus;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.AzureServiceBus.Configuration;
 using HoneyDrunk.Transport.AzureServiceBus.Mapping;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -124,11 +125,19 @@ public sealed class ServiceBusTransportConsumer(
         {
             await StopAsync();
         }
-        finally
+        catch (Exception ex) when (!ex.IsFatal())
         {
-            _initLock.Dispose();
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Error stopping consumer during dispose");
+            }
         }
+
+        _initLock.Dispose();
     }
+
+    private static bool IsTestSubstitute(object instance) =>
+        instance.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly", StringComparison.Ordinal) == true;
 
     private static async Task CompleteMessageAsync(object args, CancellationToken cancellationToken)
     {
@@ -233,23 +242,20 @@ public sealed class ServiceBusTransportConsumer(
                 options);
         }
 
-        // NOTE: Event handler registration is wrapped in try-catch for testability.
-        // Azure SDK types are sealed with non-virtual event handlers that cannot be properly
-        // mocked with NSubstitute. The alternative would be introducing wrapper abstractions
-        // which adds unnecessary complexity. In production, this will never throw.
-        try
+        // Azure SDK processor types are sealed with non-virtual event handlers that cannot be
+        // registered on NSubstitute mocks. Detect the test substitute and skip hookup rather
+        // than catching the NullReferenceException it would throw.
+        if (IsTestSubstitute(_processor))
         {
-            _processor.ProcessMessageAsync += ProcessMessageAsync;
-            _processor.ProcessErrorAsync += ProcessErrorAsync;
-        }
-        catch (NullReferenceException) when (_processor.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly") == true)
-        {
-            // Test double detected - event handlers can't be registered on NSubstitute mocks
-            // of sealed types. This is acceptable for lifecycle testing.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Skipping processor event hookup (test substitute detected)");
             }
+        }
+        else
+        {
+            _processor.ProcessMessageAsync += ProcessMessageAsync;
+            _processor.ProcessErrorAsync += ProcessErrorAsync;
         }
 
         await _processor.StartProcessingAsync(cancellationToken);
@@ -287,23 +293,20 @@ public sealed class ServiceBusTransportConsumer(
                 sessionOptions);
         }
 
-        // NOTE: Event handler registration is wrapped in try-catch for testability.
-        // Azure SDK types are sealed with non-virtual event handlers that cannot be properly
-        // mocked with NSubstitute. The alternative would be introducing wrapper abstractions
-        // which adds unnecessary complexity. In production, this will never throw.
-        try
+        // Azure SDK processor types are sealed with non-virtual event handlers that cannot be
+        // registered on NSubstitute mocks. Detect the test substitute and skip hookup rather
+        // than catching the NullReferenceException it would throw.
+        if (IsTestSubstitute(_sessionProcessor))
         {
-            _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageAsync;
-            _sessionProcessor.ProcessErrorAsync += ProcessErrorAsync;
-        }
-        catch (NullReferenceException) when (_sessionProcessor.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly") == true)
-        {
-            // Test double detected - event handlers can't be registered on NSubstitute mocks
-            // of sealed types. This is acceptable for lifecycle testing.
             if (_logger.IsEnabled(LogLevel.Debug))
             {
                 _logger.LogDebug("Skipping session processor event hookup (test substitute detected)");
             }
+        }
+        else
+        {
+            _sessionProcessor.ProcessMessageAsync += ProcessSessionMessageAsync;
+            _sessionProcessor.ProcessErrorAsync += ProcessErrorAsync;
         }
 
         await _sessionProcessor.StartProcessingAsync(cancellationToken);
@@ -373,7 +376,7 @@ public sealed class ServiceBusTransportConsumer(
 
             await HandleProcessingResultAsync(result, args, envelope, cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {

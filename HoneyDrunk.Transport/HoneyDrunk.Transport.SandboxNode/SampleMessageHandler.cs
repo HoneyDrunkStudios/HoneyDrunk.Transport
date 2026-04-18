@@ -1,5 +1,6 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -123,7 +124,7 @@ public sealed class SampleMessageHandler(
 
             return Task.CompletedTask;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             result.Exception = ex;
             logger.LogError(ex, "Exception during invariant verification");

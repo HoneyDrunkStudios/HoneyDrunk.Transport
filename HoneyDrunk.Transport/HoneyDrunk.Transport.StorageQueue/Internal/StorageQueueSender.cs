@@ -131,7 +131,7 @@ internal sealed class StorageQueueSender(
                 TransportTelemetry.RecordError(activity, ex);
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (!ex.IsFatal())
             {
                 if (_logger.IsEnabled(LogLevel.Error))
                 {
@@ -199,7 +199,7 @@ internal sealed class StorageQueueSender(
                 {
                     await PublishAsync(envelope, destination, ct);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (!ex.IsFatal())
                 {
                     failures.Add(new MessagePublishFailure(envelope, ex));
 
@@ -262,8 +262,9 @@ internal sealed class StorageQueueSender(
         finally
         {
             _disposalLock.Release();
-            _disposalLock.Dispose();
         }
+
+        _disposalLock.Dispose();
     }
 
     /// <summary>

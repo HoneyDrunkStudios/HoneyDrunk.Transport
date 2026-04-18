@@ -374,7 +374,7 @@ public sealed class EnvelopeFactoryTests
         var factory = new EnvelopeFactory(timeProvider);
         var gridContext = Substitute.For<IGridContext>();
         gridContext.IsInitialized.Returns(true);
-        gridContext.CorrelationId.Returns((string?)null);
+        gridContext.CorrelationId.Returns(default(string));
 
         // Act & Assert
         var ex = Assert.Throws<EnvelopeValidationException>(() =>

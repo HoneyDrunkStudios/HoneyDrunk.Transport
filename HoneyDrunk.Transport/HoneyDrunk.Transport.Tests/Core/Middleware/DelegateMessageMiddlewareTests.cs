@@ -37,7 +37,7 @@ public sealed class DelegateMessageMiddlewareTests
 
         async Task Del(ITransportEnvelope env, MessageContext ctx, Func<Task> next, CancellationToken ct)
         {
-            delegateCalled = env == envelope && ctx == context;
+            delegateCalled = ReferenceEquals(env, envelope) && ReferenceEquals(ctx, context);
             await next();
         }
 

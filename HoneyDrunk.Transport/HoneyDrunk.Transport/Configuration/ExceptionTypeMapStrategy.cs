@@ -45,15 +45,16 @@ public sealed class ExceptionTypeMapStrategy(
         }
 
         // Check for base type match
-        foreach (var kvp in typeMap)
+        var inherited = typeMap
+            .Where(kvp => kvp.Key.IsAssignableFrom(exceptionType))
+            .Select(kvp => (KeyValuePair<Type, ErrorHandlingAction>?)kvp)
+            .FirstOrDefault();
+        if (inherited is { } match)
         {
-            if (kvp.Key.IsAssignableFrom(exceptionType))
-            {
-                return Task.FromResult(CreateDecision(
-                    kvp.Value,
-                    deliveryCount,
-                    $"Inherited action from {kvp.Key.Name}"));
-            }
+            return Task.FromResult(CreateDecision(
+                match.Value,
+                deliveryCount,
+                $"Inherited action from {match.Key.Name}"));
         }
 
         // Use default action

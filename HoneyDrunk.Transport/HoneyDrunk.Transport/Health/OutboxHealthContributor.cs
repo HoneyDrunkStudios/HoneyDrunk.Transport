@@ -1,3 +1,4 @@
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Outbox;
 
 namespace HoneyDrunk.Transport.Health;
@@ -55,7 +56,7 @@ public sealed class OutboxHealthContributor(IOutboxStore outboxStore) : ITranspo
                     : "Outbox operational with no pending messages",
                 metadata: metadata);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             return TransportHealthResult.Unhealthy(
                 "Outbox health check failed - unable to query pending messages",

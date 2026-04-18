@@ -3,6 +3,7 @@ using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Kernel.Context;
 using HoneyDrunk.Kernel.Hosting;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.InMemory;
 using HoneyDrunk.Transport.InMemory.DependencyInjection;
 using HoneyDrunk.Transport.SandboxNode;
@@ -50,7 +51,7 @@ try
         await RunNormalModeAsync();
     }
 }
-catch (Exception ex)
+catch (Exception ex) when (!ex.IsFatal())
 {
     Console.WriteLine();
     Console.WriteLine("╔═══════════════════════════════════════════════════════════════════════════════╗");
@@ -309,7 +310,7 @@ static async Task RunNegativeModeAsync()
             testsFailed++;
         }
     }
-    catch (Exception ex)
+    catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"✅ PASSED: Got expected exception: {ex.Message}");
         testsPassed++;
@@ -361,7 +362,7 @@ static async Task RunNegativeModeAsync()
         Console.WriteLine($"✅ PASSED: Got expected InvalidOperationException: {ex.Message}");
         testsPassed++;
     }
-    catch (Exception ex)
+    catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception type: {ex.GetType().Name}: {ex.Message}");
         testsFailed++;
@@ -405,7 +406,7 @@ static async Task RunNegativeModeAsync()
         Console.WriteLine($"✅ PASSED: Got expected exception: {ex.Message}");
         testsPassed++;
     }
-    catch (Exception ex)
+    catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception type: {ex.GetType().Name}: {ex.Message}");
         testsFailed++;
@@ -464,7 +465,7 @@ static async Task RunNegativeModeAsync()
             testsFailed++;
         }
     }
-    catch (Exception ex)
+    catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception: {ex.GetType().Name}: {ex.Message}");
         testsFailed++;

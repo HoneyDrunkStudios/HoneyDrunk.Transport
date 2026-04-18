@@ -60,12 +60,13 @@ public sealed class ConfigurableErrorHandlingStrategy(int maxDeliveryCount = 5) 
         }
 
         // Check for base type match
-        foreach (var kvp in _exceptionMap)
+        var inherited = _exceptionMap
+            .Where(kvp => kvp.Key.IsAssignableFrom(exceptionType))
+            .Select(kvp => kvp.Value)
+            .FirstOrDefault();
+        if (inherited is not null)
         {
-            if (kvp.Key.IsAssignableFrom(exceptionType))
-            {
-                return Task.FromResult(kvp.Value);
-            }
+            return Task.FromResult(inherited);
         }
 
         // Default: retry unknown exceptions with exponential backoff

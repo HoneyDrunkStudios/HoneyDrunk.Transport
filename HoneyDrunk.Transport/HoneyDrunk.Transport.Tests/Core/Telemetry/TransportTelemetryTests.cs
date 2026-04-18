@@ -55,15 +55,13 @@ public sealed class TransportTelemetryTests
     {
         using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
+        using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
         if (activity != null)
         {
             TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
 
             Assert.NotEqual(ActivityStatusCode.Error, activity.Status);
-
-            activity.Dispose();
         }
     }
 
@@ -75,7 +73,7 @@ public sealed class TransportTelemetryTests
     {
         using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
+        using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
         if (activity != null)
         {
@@ -83,8 +81,6 @@ public sealed class TransportTelemetryTests
             TransportTelemetry.RecordError(activity, exception);
 
             Assert.Equal(ActivityStatusCode.Error, activity.Status);
-
-            activity.Dispose();
         }
     }
 
@@ -96,15 +92,13 @@ public sealed class TransportTelemetryTests
     {
         using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
+        using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
         if (activity != null)
         {
             TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Retry);
 
             Assert.Equal(ActivityStatusCode.Error, activity.Status);
-
-            activity.Dispose();
         }
     }
 
@@ -116,15 +110,13 @@ public sealed class TransportTelemetryTests
     {
         using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
+        using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
         if (activity != null)
         {
             TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
 
             Assert.Equal(ActivityStatusCode.Error, activity.Status);
-
-            activity.Dispose();
         }
     }
 
@@ -136,7 +128,7 @@ public sealed class TransportTelemetryTests
     {
         using var listener = CreateActivityListener();
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
+        using var activity = TransportTelemetry.StartProcessActivity(envelope, "test-source");
 
         if (activity != null)
         {
@@ -146,8 +138,6 @@ public sealed class TransportTelemetryTests
             var deliveryCountTag = activity.GetTagItem(TransportTelemetry.Tags.DeliveryCount);
             Assert.NotNull(deliveryCountTag);
             Assert.Equal(3, deliveryCountTag);
-
-            activity.Dispose();
         }
     }
 

@@ -112,7 +112,7 @@ public sealed class ServiceBusTransportPublisher(
                     envelope.MessageId);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             TransportTelemetry.RecordError(activity, ex);
 
@@ -142,7 +142,7 @@ public sealed class ServiceBusTransportPublisher(
                     // Swallow the publish exception since the message is durably stored
                     return;
                 }
-                catch (Exception blobEx)
+                catch (Exception blobEx) when (!blobEx.IsFatal())
                 {
                     if (_logger.IsEnabled(LogLevel.Error))
                     {
@@ -226,7 +226,7 @@ public sealed class ServiceBusTransportPublisher(
                 _logger.LogDebug("Successfully published batch");
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (!ex.IsFatal())
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
@@ -243,7 +243,7 @@ public sealed class ServiceBusTransportPublisher(
                     {
                         await SaveToBlobFallbackAsync(env, destination, ex, cancellationToken);
                     }
-                    catch (Exception blobEx)
+                    catch (Exception blobEx) when (!blobEx.IsFatal())
                     {
                         attempts.Add(blobEx);
                     }
@@ -293,65 +293,47 @@ public sealed class ServiceBusTransportPublisher(
         finally
         {
             _initLock.Release();
-            _initLock.Dispose();
         }
+
+        _initLock.Dispose();
     }
 
     private async Task SendMessageBatchesAsync(List<ServiceBusMessage> messages, CancellationToken cancellationToken)
     {
-        ServiceBusMessageBatch? currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-        try
+        var index = 0;
+        while (index < messages.Count)
         {
-            foreach (var message in messages)
+            using var batch = await _sender!.CreateMessageBatchAsync(cancellationToken);
+
+            // Pack as many messages as fit into the current batch
+            while (index < messages.Count && batch.TryAddMessage(messages[index]))
             {
-                // Try to add message to current batch
-                if (!currentBatch.TryAddMessage(message))
+                index++;
+            }
+
+            // If nothing fit into an empty batch, the message itself exceeds the limit
+            if (batch.Count == 0)
+            {
+                var offending = messages[index];
+                var error = new MessageTooLargeException(
+                    offending.MessageId,
+                    offending.Body.Length,
+                    batch.MaxSizeInBytes,
+                    "Azure Service Bus");
+
+                if (_logger.IsEnabled(LogLevel.Error))
                 {
-                    // Current batch is full, send and dispose it
-                    if (currentBatch.Count > 0)
-                    {
-                        await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-                    }
-
-                    currentBatch.Dispose();
-
-                    // Create a new batch for the message that didn't fit
-                    currentBatch = await _sender!.CreateMessageBatchAsync(cancellationToken);
-
-                    // If message still doesn't fit in empty batch, it's too large
-                    if (!currentBatch.TryAddMessage(message))
-                    {
-                        var error = new MessageTooLargeException(
-                            message.MessageId,
-                            message.Body.Length,
-                            currentBatch.MaxSizeInBytes,
-                            "Azure Service Bus");
-
-                        if (_logger.IsEnabled(LogLevel.Error))
-                        {
-                            _logger.LogError(
-                                error,
-                                "Message {MessageId} exceeds maximum batch size ({MaxSize} bytes) and cannot be sent",
-                                message.MessageId,
-                                currentBatch.MaxSizeInBytes);
-                        }
-
-                        throw error;
-                    }
+                    _logger.LogError(
+                        error,
+                        "Message {MessageId} exceeds maximum batch size ({MaxSize} bytes) and cannot be sent",
+                        offending.MessageId,
+                        batch.MaxSizeInBytes);
                 }
+
+                throw error;
             }
 
-            // Send any remaining messages in the final batch
-            if (currentBatch.Count > 0)
-            {
-                await _sender!.SendMessagesAsync(currentBatch, cancellationToken);
-            }
-        }
-        finally
-        {
-            // Ensure batch is disposed even if an exception occurs
-            currentBatch?.Dispose();
+            await _sender!.SendMessagesAsync(batch, cancellationToken);
         }
     }
 
@@ -368,25 +350,30 @@ public sealed class ServiceBusTransportPublisher(
             // Check disposal flag after acquiring lock
             ObjectDisposedException.ThrowIf(_disposed, this);
 
-            if (_sender != null)
-            {
-                return;
-            }
-
-            var queueOrTopicName = _options.Value.Address;
-            _sender = _client.CreateSender(queueOrTopicName);
-
-            if (_logger.IsEnabled(LogLevel.Information))
-            {
-                _logger.LogInformation(
-                    "Initialized Service Bus sender for {Entity}",
-                    queueOrTopicName);
-            }
+            // The fast path above may have seen a null sender while another thread
+            // was initializing. Re-read the field after acquiring the lock so the
+            // second thread doesn't create a duplicate sender.
+            _sender ??= CreateAndLogSender();
         }
         finally
         {
             _initLock.Release();
         }
+    }
+
+    private ServiceBusSender CreateAndLogSender()
+    {
+        var queueOrTopicName = _options.Value.Address;
+        var sender = _client.CreateSender(queueOrTopicName);
+
+        if (_logger.IsEnabled(LogLevel.Information))
+        {
+            _logger.LogInformation(
+                "Initialized Service Bus sender for {Entity}",
+                queueOrTopicName);
+        }
+
+        return sender;
     }
 
     private Task<Uri> SaveToBlobFallbackAsync(
