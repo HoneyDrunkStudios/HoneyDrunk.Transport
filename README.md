@@ -1,6 +1,6 @@
 # HoneyDrunk.Transport
 
-[![Validate PR](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/validate-pr.yml/badge.svg)](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/validate-pr.yml)
+[![PR](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml/badge.svg)](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
 
