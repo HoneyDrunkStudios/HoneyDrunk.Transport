@@ -1,4 +1,5 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.DependencyInjection;
 using HoneyDrunk.Transport.Primitives;
@@ -77,7 +78,7 @@ public sealed class MessagePublisherTests
             causationId: "cause-456",
             nodeId: "node-789",
             studioId: "studio-abc",
-            tenantId: "tenant-def",
+            tenantId: "01BX5ZZKBKACTAV9WEVGEMMVRZ",
             projectId: "project-ghi",
             environment: "production");
 
@@ -91,7 +92,7 @@ public sealed class MessagePublisherTests
                 env.CausationId == "cause-456" &&
                 env.NodeId == "node-789" &&
                 env.StudioId == "studio-abc" &&
-                env.TenantId == "tenant-def" &&
+                env.TenantId == "01BX5ZZKBKACTAV9WEVGEMMVRZ" &&
                 env.ProjectId == "project-ghi" &&
                 env.Environment == "production"),
             Arg.Any<IEndpointAddress>(),
@@ -303,7 +304,7 @@ public sealed class MessagePublisherTests
         };
         var gridContext = CreateTestGridContext(
             correlationId: "shared-corr",
-            tenantId: "shared-tenant");
+            tenantId: "01ARYZ6S41YYYYYYYYYYYYYYYY");
 
         // Act
         await publisher.PublishBatchAsync("test-queue", messages, gridContext, CancellationToken.None);
@@ -313,7 +314,7 @@ public sealed class MessagePublisherTests
             Arg.Is<IEnumerable<ITransportEnvelope>>(envelopes =>
                 envelopes.All(env =>
                     env.CorrelationId == "shared-corr" &&
-                    env.TenantId == "shared-tenant")),
+                    env.TenantId == "01ARYZ6S41YYYYYYYYYYYYYYYY")),
             Arg.Any<IEndpointAddress>(),
             Arg.Any<CancellationToken>());
     }
@@ -479,7 +480,7 @@ public sealed class MessagePublisherTests
         string? causationId = "test-causation",
         string nodeId = "test-node",
         string studioId = "test-studio",
-        string? tenantId = "test-tenant",
+        string? tenantId = "01B7X6S41YYYYYYYYYYYYYYYY",
         string? projectId = "test-project",
         string environment = "test")
     {
@@ -488,13 +489,20 @@ public sealed class MessagePublisherTests
         context.CausationId.Returns(causationId);
         context.NodeId.Returns(nodeId);
         context.StudioId.Returns(studioId);
-        context.TenantId.Returns(tenantId);
+        context.TenantId.Returns(ParseTenantIdOrInternal(tenantId));
         context.ProjectId.Returns(projectId);
         context.Environment.Returns(environment);
         context.CreatedAtUtc.Returns(FixedTime);
         context.Baggage.Returns(new Dictionary<string, string>());
         context.IsInitialized.Returns(true);
         return context;
+    }
+
+    private static TenantId ParseTenantIdOrInternal(string? tenantId)
+    {
+        return tenantId is not null && TenantId.TryParse(tenantId, out var parsedTenantId)
+            ? parsedTenantId
+            : TenantId.Internal;
     }
 
     /// <summary>

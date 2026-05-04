@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,10 +9,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
-    <PackageReleaseNotes>v0.4.0: Kernel v0.4.0 upgrade with IGridContext.AddBaggage() API change, fail-fast envelope validation, and updated Azure.Storage.Queues to 12.25.0.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.5.0: Kernel v0.5.0 upgrade with IGridContext.AddBaggage() API change, fail-fast envelope validation, and updated Azure.Storage.Queues to 12.25.0.</PackageReleaseNotes>
     <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

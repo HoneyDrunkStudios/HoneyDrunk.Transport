@@ -1,4 +1,5 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Primitives;
 using NSubstitute;
@@ -120,7 +121,7 @@ public sealed class EnvelopeFactoryTests
         var timeProvider = new TestTimeProvider(FixedTime);
         var factory = new EnvelopeFactory(timeProvider);
         var gridContext = CreateTestGridContext(
-            tenantId: "tenant-abc-123",
+            tenantId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
             projectId: "project-xyz-789");
 
         // Act
@@ -129,15 +130,15 @@ public sealed class EnvelopeFactoryTests
             gridContext);
 
         // Assert
-        Assert.Equal("tenant-abc-123", envelope.TenantId);
+        Assert.Equal("01ARZ3NDEKTSV4RRFFQ69G5FAV", envelope.TenantId);
         Assert.Equal("project-xyz-789", envelope.ProjectId);
     }
 
     /// <summary>
-    /// Verifies CreateEnvelopeWithGridContext handles null TenantId and ProjectId correctly.
+    /// Verifies CreateEnvelopeWithGridContext maps an absent tenant to the Kernel Internal sentinel.
     /// </summary>
     [Fact]
-    public void CreateEnvelopeWithGridContext_HandlesNullTenantIdAndProjectId()
+    public void CreateEnvelopeWithGridContext_WithAbsentTenant_MapsInternalTenantAndNullProject()
     {
         // Arrange
         var timeProvider = new TestTimeProvider(FixedTime);
@@ -152,7 +153,7 @@ public sealed class EnvelopeFactoryTests
             gridContext);
 
         // Assert
-        Assert.Null(envelope.TenantId);
+        Assert.Equal(TenantId.Internal.ToString(), envelope.TenantId);
         Assert.Null(envelope.ProjectId);
     }
 
@@ -170,7 +171,7 @@ public sealed class EnvelopeFactoryTests
             causationId: "cause-456",
             nodeId: "node-789",
             studioId: "studio-abc",
-            tenantId: "tenant-def",
+            tenantId: "01BX5ZZKBKACTAV9WEVGEMMVRZ",
             projectId: "project-ghi",
             environment: "production");
 
@@ -184,7 +185,7 @@ public sealed class EnvelopeFactoryTests
         Assert.Equal("cause-456", envelope.CausationId);
         Assert.Equal("node-789", envelope.NodeId);
         Assert.Equal("studio-abc", envelope.StudioId);
-        Assert.Equal("tenant-def", envelope.TenantId);
+        Assert.Equal("01BX5ZZKBKACTAV9WEVGEMMVRZ", envelope.TenantId);
         Assert.Equal("project-ghi", envelope.ProjectId);
         Assert.Equal("production", envelope.Environment);
     }
@@ -259,7 +260,7 @@ public sealed class EnvelopeFactoryTests
         var timeProvider = new TestTimeProvider(FixedTime);
         var factory = new EnvelopeFactory(timeProvider);
         var gridContext = CreateTestGridContext(
-            tenantId: "original-tenant",
+            tenantId: "01ARYZ6S41TSV4RRFFQ69G5FAV",
             projectId: "original-project");
 
         var original = factory.CreateEnvelopeWithGridContext<EnvelopeFactoryTests>(
@@ -273,7 +274,7 @@ public sealed class EnvelopeFactoryTests
             new ReadOnlyMemory<byte>([4, 5, 6]));
 
         // Assert
-        Assert.Equal("original-tenant", reply.TenantId);
+        Assert.Equal("01ARYZ6S41TSV4RRFFQ69G5FAV", reply.TenantId);
         Assert.Equal("original-project", reply.ProjectId);
     }
 
@@ -290,7 +291,7 @@ public sealed class EnvelopeFactoryTests
             correlationId: "corr-123",
             nodeId: "node-789",
             studioId: "studio-abc",
-            tenantId: "tenant-def",
+            tenantId: "01BX5ZZKBKACTAV9WEVGEMMVRZ",
             projectId: "project-ghi",
             environment: "production");
 
@@ -315,10 +316,10 @@ public sealed class EnvelopeFactoryTests
     }
 
     /// <summary>
-    /// Verifies CreateReply handles null TenantId and ProjectId in original envelope.
+    /// Verifies CreateReply propagates the Internal tenant sentinel and null project from the original envelope.
     /// </summary>
     [Fact]
-    public void CreateReply_HandlesNullTenantIdAndProjectIdInOriginal()
+    public void CreateReply_WithInternalTenantAndNullProjectInOriginal_PropagatesValues()
     {
         // Arrange
         var timeProvider = new TestTimeProvider(FixedTime);
@@ -338,7 +339,7 @@ public sealed class EnvelopeFactoryTests
             new ReadOnlyMemory<byte>([4, 5, 6]));
 
         // Assert
-        Assert.Null(reply.TenantId);
+        Assert.Equal(TenantId.Internal.ToString(), reply.TenantId);
         Assert.Null(reply.ProjectId);
     }
 
@@ -579,13 +580,20 @@ public sealed class EnvelopeFactoryTests
         context.CausationId.Returns(causationId);
         context.NodeId.Returns(nodeId);
         context.StudioId.Returns(studioId);
-        context.TenantId.Returns(tenantId);
+        context.TenantId.Returns(ParseTenantIdOrInternal(tenantId));
         context.ProjectId.Returns(projectId);
         context.Environment.Returns(environment);
         context.Baggage.Returns(baggage ?? []);
         context.CreatedAtUtc.Returns(FixedTime);
         context.IsInitialized.Returns(true);
         return context;
+    }
+
+    private static TenantId ParseTenantIdOrInternal(string? tenantId)
+    {
+        return tenantId is not null && TenantId.TryParse(tenantId, out var parsedTenantId)
+            ? parsedTenantId
+            : TenantId.Internal;
     }
 
     /// <summary>

@@ -134,7 +134,7 @@ static async Task RunNormalModeAsync()
         kernelContext.Initialize(
             correlationId: "sandbox-correlation-001",
             causationId: "sandbox-causation-root",
-            tenantId: "tenant-acme",
+            tenantId: new TenantId("01ARZ3NDEKTSV4RRFFQ69G5FAV"),
             projectId: "project-alpha",
             baggage: new Dictionary<string, string>
             {

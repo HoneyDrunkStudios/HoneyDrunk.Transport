@@ -1,5 +1,7 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
+using Microsoft.Extensions.Logging;
 
 using KernelGridContext = HoneyDrunk.Kernel.Context.GridContext;
 
@@ -17,6 +19,17 @@ namespace HoneyDrunk.Transport.Context;
 /// </remarks>
 public sealed class GridContextFactory : IGridContextFactory
 {
+    private readonly ILogger<GridContextFactory>? _logger;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="GridContextFactory"/> class.
+    /// </summary>
+    /// <param name="logger">Optional logger used for non-fatal envelope metadata warnings.</param>
+    public GridContextFactory(ILogger<GridContextFactory>? logger = null)
+    {
+        _logger = logger;
+    }
+
     /// <inheritdoc/>
     public void InitializeFromEnvelope(
         IGridContext gridContext,
@@ -37,6 +50,7 @@ public sealed class GridContextFactory : IGridContextFactory
         // Use messageId as fallback for correlation and causation if not provided
         var correlationId = envelope.CorrelationId ?? envelope.MessageId;
         var causationId = envelope.CausationId ?? envelope.MessageId;
+        var tenantId = ParseTenantIdOrInternal(envelope.TenantId, envelope.MessageId);
 
         // Copy headers as baggage
         var baggage = envelope.Headers != null
@@ -47,9 +61,28 @@ public sealed class GridContextFactory : IGridContextFactory
         kernelContext.Initialize(
             correlationId: correlationId,
             causationId: causationId,
-            tenantId: envelope.TenantId,
+            tenantId: tenantId,
             projectId: envelope.ProjectId,
             baggage: baggage,
             cancellation: cancellationToken);
+    }
+
+    private TenantId ParseTenantIdOrInternal(string? value, string messageId)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return TenantId.Internal;
+        }
+
+        if (TenantId.TryParse(value, out var tenantId))
+        {
+            return tenantId;
+        }
+
+        _logger?.LogWarning(
+            "Malformed tenant id on transport envelope {MessageId}; using internal tenant.",
+            messageId);
+
+        return TenantId.Internal;
     }
 }
