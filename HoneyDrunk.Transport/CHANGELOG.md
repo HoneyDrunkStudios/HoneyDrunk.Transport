@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.5.0] - 2026-05-04
+
+### Changed
+
+- Aligned solution package versions with Kernel v0.5.0.
+- Updated `HoneyDrunk.Transport` Grid context initialization for Kernel's typed `TenantId` primitive.
+
 ## [0.4.0] - 2026-01-20
 
 ### Breaking Changes
@@ -82,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fluent builder pattern for service registration
 - Metrics collection abstractions
 
+[0.5.0]: https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/releases/tag/v0.5.0
 [0.4.0]: https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/releases/tag/v0.4.0
 [0.3.0]: https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/releases/tag/v0.3.0
 [0.2.0]: https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/releases/tag/v0.2.0

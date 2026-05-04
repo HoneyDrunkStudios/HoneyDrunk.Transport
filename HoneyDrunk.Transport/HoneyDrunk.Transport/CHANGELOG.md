@@ -5,6 +5,13 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-05-04
+
+### Changed
+
+- **Kernel v0.5.0 Upgrade**: Transport now targets HoneyDrunk.Kernel v0.5.0.
+- **Typed TenantId Adoption**: `GridContextFactory.InitializeFromEnvelope()` now converts envelope `TenantId` strings to Kernel's typed `TenantId` primitive, defaults missing or malformed values to `TenantId.Internal`, and logs malformed values without throwing or leaking the raw tenant value.
+
 ## [0.4.0] - 2026-01-20
 
 ### Breaking Changes

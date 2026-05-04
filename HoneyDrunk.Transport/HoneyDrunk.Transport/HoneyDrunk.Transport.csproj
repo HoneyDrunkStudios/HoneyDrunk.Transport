@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.4.0</Version>
+    <Version>0.5.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support. Integrated with HoneyDrunk.Kernel for Grid-aware context propagation.</Description>
-    <PackageReleaseNotes>v0.4.0: Kernel vNext integration - Transport now initializes Kernel's DI-scoped IGridContext via IGridContextFactory.InitializeFromEnvelope(). Removed TransportGridContext and CorrelationMiddleware. Added fail-fast envelope validation.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.5.0: Kernel vNext integration - Transport now initializes Kernel's DI-scoped IGridContext via IGridContextFactory.InitializeFromEnvelope(). Removed TransportGridContext and CorrelationMiddleware. Added fail-fast envelope validation.</PackageReleaseNotes>
     <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,9 +30,9 @@
 
   <ItemGroup>
     <!-- Core abstractions only - no runtime dependencies -->
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.4.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.5.0" />
     <!-- Full Kernel for GridContext.Initialize() method needed by Kernel vNext integration -->
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.4.0" />
+    <PackageReference Include="HoneyDrunk.Kernel" Version="0.5.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.7">
       <PrivateAssets>all</PrivateAssets>
