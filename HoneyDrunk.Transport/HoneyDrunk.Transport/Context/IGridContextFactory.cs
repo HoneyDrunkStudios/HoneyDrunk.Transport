@@ -4,7 +4,7 @@ using HoneyDrunk.Transport.Abstractions;
 namespace HoneyDrunk.Transport.Context;
 
 /// <summary>
-/// Factory interface for initializing Grid context instances from transport envelopes.
+/// Factory interface for creating Grid context instances from transport envelopes.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -13,32 +13,23 @@ namespace HoneyDrunk.Transport.Context;
 /// the middleware pipeline and message handlers.
 /// </para>
 /// <para>
-/// <b>Kernel vNext Pattern (v0.4.0+):</b> The factory INITIALIZES an existing DI-scoped
-/// <see cref="IGridContext"/> rather than creating a new instance. This ensures exactly
-/// one GridContext per DI scope, owned by Kernel.
+/// The factory creates an abstractions-only initialized context so Transport does not depend
+/// on Kernel runtime implementation types.
 /// </para>
 /// </remarks>
 public interface IGridContextFactory
 {
     /// <summary>
-    /// Initializes a Grid context from transport envelope metadata.
+    /// Creates an initialized Grid context from transport envelope metadata.
     /// </summary>
-    /// <param name="gridContext">The DI-scoped Grid context to initialize.</param>
     /// <param name="envelope">The transport envelope containing context metadata.</param>
     /// <param name="cancellationToken">Cancellation token for the operation.</param>
+    /// <returns>An initialized Grid context carrying envelope propagation metadata.</returns>
     /// <remarks>
-    /// <para>
     /// Called by <c>GridContextPropagationMiddleware</c> during message processing
-    /// to initialize the DI-owned GridContext with envelope metadata.
-    /// </para>
-    /// <para>
-    /// <b>Important:</b> The <paramref name="gridContext"/> must be resolved from the
-    /// current DI scope. This method calls <c>GridContext.Initialize()</c> to set
-    /// correlation, causation, tenant, project, baggage, and cancellation token.
-    /// </para>
+    /// to populate <c>MessageContext.GridContext</c> without requiring a runtime Kernel reference.
     /// </remarks>
-    void InitializeFromEnvelope(
-        IGridContext gridContext,
+    IGridContext CreateFromEnvelope(
         ITransportEnvelope envelope,
         CancellationToken cancellationToken);
 }

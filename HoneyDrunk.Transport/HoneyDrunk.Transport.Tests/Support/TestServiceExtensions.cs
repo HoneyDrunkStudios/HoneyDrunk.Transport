@@ -1,5 +1,4 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
-using HoneyDrunk.Kernel.Context;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace HoneyDrunk.Transport.Tests.Support;
@@ -22,7 +21,7 @@ public static class TestServiceExtensions
     public static IServiceCollection AddTestKernelServices(this IServiceCollection services)
     {
         // Register IGridContext as scoped (Kernel vNext pattern)
-        services.AddScoped<IGridContext>(_ => new GridContext(TestNodeId, TestStudioId, TestEnvironment));
+        services.AddScoped<IGridContext>(_ => new GridContextSnapshot(TestNodeId, TestStudioId, TestEnvironment));
         return services;
     }
 
@@ -40,7 +39,7 @@ public static class TestServiceExtensions
         string studioId,
         string environment)
     {
-        services.AddScoped<IGridContext>(_ => new GridContext(nodeId, studioId, environment));
+        services.AddScoped<IGridContext>(_ => new GridContextSnapshot(nodeId, studioId, environment));
         return services;
     }
 }

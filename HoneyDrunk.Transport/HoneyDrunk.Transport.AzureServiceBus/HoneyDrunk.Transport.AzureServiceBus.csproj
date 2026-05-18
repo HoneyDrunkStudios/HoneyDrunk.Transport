@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.5.0: Kernel v0.5.0 upgrade with IGridContext.AddBaggage() API change, fail-fast envelope validation, and updated Azure SDK dependencies.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.6.0: Kernel Abstractions v0.7.0 alignment and Service Bus consumer orchestration consolidation.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

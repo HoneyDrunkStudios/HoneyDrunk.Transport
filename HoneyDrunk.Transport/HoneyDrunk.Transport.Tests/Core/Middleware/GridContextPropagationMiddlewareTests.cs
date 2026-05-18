@@ -1,5 +1,4 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
-using HoneyDrunk.Kernel.Context;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Pipeline.Middleware;
 using HoneyDrunk.Transport.Tests.Support;
@@ -13,8 +12,7 @@ namespace HoneyDrunk.Transport.Tests.Core.Middleware;
 /// Tests for Grid context propagation middleware.
 /// </summary>
 /// <remarks>
-/// These tests verify the Kernel vNext pattern where the middleware INITIALIZES
-/// a DI-scoped GridContext rather than creating a new one.
+/// These tests verify the abstractions-only pattern where the middleware creates an initialized GridContextSnapshot.
 /// </remarks>
 public sealed class GridContextPropagationMiddlewareTests
 {
@@ -75,10 +73,6 @@ public sealed class GridContextPropagationMiddlewareTests
         Assert.NotNull(context.GridContext);
         Assert.Equal("corr-123", context.GridContext!.CorrelationId);
         Assert.Equal("cause-456", context.GridContext.CausationId);
-
-        // Verify it's the same instance as DI's
-        var diGridContext = serviceProvider.GetRequiredService<IGridContext>();
-        Assert.Same(context.GridContext, diGridContext);
     }
 
     /// <summary>
@@ -275,37 +269,6 @@ public sealed class GridContextPropagationMiddlewareTests
     }
 
     /// <summary>
-    /// Verifies middleware throws when ServiceProvider is null (Kernel vNext invariant).
-    /// </summary>
-    /// <returns>A task representing the asynchronous test.</returns>
-    [Fact]
-    public async Task InvokeAsync_WithNullServiceProvider_ThrowsInvalidOperationException()
-    {
-        // Arrange
-        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
-        var context = new MessageContext
-        {
-            Envelope = envelope,
-            Transaction = NoOpTransportTransaction.Instance,
-            DeliveryCount = 1,
-            ServiceProvider = null // No DI scope
-        };
-
-        var gridContextFactory = new TransportGridContextFactory();
-        var middleware = new GridContextPropagationMiddleware(gridContextFactory);
-
-        // Act & Assert
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => middleware.InvokeAsync(
-                envelope,
-                context,
-                () => Task.CompletedTask,
-                CancellationToken.None));
-
-        Assert.Contains("ServiceProvider is null", ex.Message);
-    }
-
-    /// <summary>
     /// Creates a service provider with a scoped GridContext.
     /// </summary>
     /// <remarks>
@@ -316,7 +279,7 @@ public sealed class GridContextPropagationMiddlewareTests
     private static IServiceProvider CreateServiceProvider()
     {
         var services = new ServiceCollection();
-        services.AddScoped<IGridContext>(_ => new GridContext(TestNodeId, TestStudioId, TestEnvironment));
+        services.AddScoped<IGridContext>(_ => new GridContextSnapshot(TestNodeId, TestStudioId, TestEnvironment));
         return services.BuildServiceProvider().CreateScope().ServiceProvider;
     }
 #pragma warning restore CA2000

@@ -22,8 +22,8 @@
 
   <ItemGroup>
     <!-- Kernel packages for node identity and context -->
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.5.0" />
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.5.0" />
+    <PackageReference Include="HoneyDrunk.Kernel" Version="0.7.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
     
     <!-- Generic Host -->
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
