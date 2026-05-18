@@ -44,9 +44,9 @@ public sealed class GridContextFactory : IGridContextFactory
             : [];
 
         return new GridContextSnapshot(
-            nodeId: NormalizeRequiredEnvelopeValue(envelope.NodeId, DefaultNodeId),
-            studioId: NormalizeRequiredEnvelopeValue(envelope.StudioId, DefaultStudioId),
-            environment: NormalizeRequiredEnvelopeValue(envelope.Environment, DefaultEnvironment),
+            nodeId: NormalizeRequiredEnvelopeValue(envelope.NodeId, DefaultNodeId, nameof(envelope.NodeId), envelope.MessageId),
+            studioId: NormalizeRequiredEnvelopeValue(envelope.StudioId, DefaultStudioId, nameof(envelope.StudioId), envelope.MessageId),
+            environment: NormalizeRequiredEnvelopeValue(envelope.Environment, DefaultEnvironment, nameof(envelope.Environment), envelope.MessageId),
             correlationId: correlationId,
             causationId: causationId,
             tenantId: tenantId,
@@ -56,8 +56,24 @@ public sealed class GridContextFactory : IGridContextFactory
             createdAtUtc: envelope.Timestamp);
     }
 
-    private static string NormalizeRequiredEnvelopeValue(string? value, string fallback) =>
-        string.IsNullOrWhiteSpace(value) ? fallback : value;
+    private string NormalizeRequiredEnvelopeValue(
+        string? value,
+        string fallback,
+        string fieldName,
+        string messageId)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        _logger?.LogWarning(
+            "Missing required Grid identity field {FieldName} on transport envelope {MessageId}; using fallback value.",
+            fieldName,
+            messageId);
+
+        return fallback;
+    }
 
     private TenantId ParseTenantIdOrInternal(string? value, string messageId)
     {

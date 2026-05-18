@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace HoneyDrunk.Transport.AzureServiceBus;
 
@@ -356,6 +357,9 @@ public sealed class ServiceBusTransportConsumer(
 
     private sealed class ServiceBusReceivedMessageContext
     {
+        private const string DeadLetterReason = "Message processing failed";
+        private const string DeadLetterDescriptionFormat = "Message {0} could not be processed";
+
         private ServiceBusReceivedMessageContext(
             ITransportEnvelope envelope,
             ITransportTransaction transaction,
@@ -388,40 +392,52 @@ public sealed class ServiceBusTransportConsumer(
 
         public Func<Task> DeadLetterAsync { get; }
 
-        public static ServiceBusReceivedMessageContext Create(ProcessMessageEventArgs args)
+        public static ServiceBusReceivedMessageContext Create(ProcessMessageEventArgs args) =>
+            Create(
+                args.Message,
+                args.CancellationToken,
+                () => args.CompleteMessageAsync(args.Message, CancellationToken.None),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None),
+                (reason, description) => args.DeadLetterMessageAsync(
+                    args.Message,
+                    reason,
+                    description,
+                    CancellationToken.None));
+
+        public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args) =>
+            Create(
+                args.Message,
+                args.CancellationToken,
+                () => args.CompleteMessageAsync(args.Message, CancellationToken.None),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None),
+                (reason, description) => args.DeadLetterMessageAsync(
+                    args.Message,
+                    reason,
+                    description,
+                    CancellationToken.None));
+
+        private static ServiceBusReceivedMessageContext Create(
+            ServiceBusReceivedMessage message,
+            CancellationToken processingCancellationToken,
+            Func<Task> completeAsync,
+            Func<Task> abandonAsync,
+            Func<string, string, Task> deadLetterAsync)
         {
-            var envelope = EnvelopeMapper.FromServiceBusMessage(args.Message);
+            var envelope = EnvelopeMapper.FromServiceBusMessage(message);
 
             return new ServiceBusReceivedMessageContext(
                 envelope,
-                EnvelopeMapper.CreateTransaction(args.Message),
-                EnvelopeMapper.GetDeliveryCount(args.Message),
-                args.CancellationToken,
-                () => args.CompleteMessageAsync(args.Message, args.CancellationToken),
-                () => args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken),
-                () => args.DeadLetterMessageAsync(
-                    args.Message,
-                    "Message processing failed",
-                    $"Message {envelope.MessageId} could not be processed",
-                    args.CancellationToken));
-        }
-
-        public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args)
-        {
-            var envelope = EnvelopeMapper.FromServiceBusMessage(args.Message);
-
-            return new ServiceBusReceivedMessageContext(
-                envelope,
-                EnvelopeMapper.CreateTransaction(args.Message),
-                EnvelopeMapper.GetDeliveryCount(args.Message),
-                args.CancellationToken,
-                () => args.CompleteMessageAsync(args.Message, args.CancellationToken),
-                () => args.AbandonMessageAsync(args.Message, cancellationToken: args.CancellationToken),
-                () => args.DeadLetterMessageAsync(
-                    args.Message,
-                    "Message processing failed",
-                    $"Message {envelope.MessageId} could not be processed",
-                    args.CancellationToken));
+                EnvelopeMapper.CreateTransaction(message),
+                EnvelopeMapper.GetDeliveryCount(message),
+                processingCancellationToken,
+                completeAsync,
+                abandonAsync,
+                () => deadLetterAsync(
+                    DeadLetterReason,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        DeadLetterDescriptionFormat,
+                        envelope.MessageId)));
         }
     }
 }

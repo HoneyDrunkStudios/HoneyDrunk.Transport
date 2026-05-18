@@ -264,6 +264,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-bad-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = malformedTenant,
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,

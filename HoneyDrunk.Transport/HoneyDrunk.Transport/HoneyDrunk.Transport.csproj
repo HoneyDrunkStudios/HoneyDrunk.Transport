@@ -31,8 +31,7 @@
   <ItemGroup>
     <!-- Core abstractions only - no runtime dependencies -->
     <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
-    <!-- Full Kernel for GridContext.Initialize() method needed by Kernel vNext integration -->
-        <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.7">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
