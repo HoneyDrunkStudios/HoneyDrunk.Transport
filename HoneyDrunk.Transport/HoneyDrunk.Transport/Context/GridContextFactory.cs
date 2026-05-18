@@ -1,21 +1,17 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.Logging;
-
-using KernelGridContext = HoneyDrunk.Kernel.Context.GridContext;
 
 namespace HoneyDrunk.Transport.Context;
 
 /// <summary>
-/// Factory for initializing Grid context instances from transport envelope metadata.
+/// Factory for creating Grid context snapshots from transport envelope metadata.
 /// </summary>
 /// <remarks>
-/// <para>
-/// <b>Kernel vNext Pattern (v0.4.0+):</b> This factory INITIALIZES an existing DI-scoped
-/// <see cref="KernelGridContext"/> rather than creating a new instance. This ensures exactly
-/// one GridContext per DI scope, owned by Kernel.
-/// </para>
+/// Creates initialized, abstractions-only <see cref="IGridContext"/> snapshots so Transport can
+/// propagate Grid context without depending on the concrete Kernel runtime package.
 /// </remarks>
 public sealed class GridContextFactory : IGridContextFactory
 {
@@ -31,40 +27,44 @@ public sealed class GridContextFactory : IGridContextFactory
     }
 
     /// <inheritdoc/>
-    public void InitializeFromEnvelope(
-        IGridContext gridContext,
+    public IGridContext CreateFromEnvelope(
         ITransportEnvelope envelope,
         CancellationToken cancellationToken)
     {
-        ArgumentNullException.ThrowIfNull(gridContext);
         ArgumentNullException.ThrowIfNull(envelope);
 
-        // gridContext must be Kernel's GridContext for Initialize() to work
-        if (gridContext is not KernelGridContext kernelContext)
-        {
-            throw new InvalidOperationException(
-                $"Expected GridContext from Kernel DI scope, but got {gridContext.GetType().FullName}. " +
-                "Ensure IGridContext is registered as scoped and resolves to HoneyDrunk.Kernel.Context.GridContext.");
-        }
-
-        // Use messageId as fallback for correlation and causation if not provided
         var correlationId = envelope.CorrelationId ?? envelope.MessageId;
         var causationId = envelope.CausationId ?? envelope.MessageId;
         var tenantId = ParseTenantIdOrInternal(envelope.TenantId, envelope.MessageId);
-
-        // Copy headers as baggage
-        var baggage = envelope.Headers != null
+        var baggage = envelope.Headers is { Count: > 0 }
             ? new Dictionary<string, string>(envelope.Headers)
             : [];
 
-        // Initialize the DI-owned GridContext with envelope metadata
-        kernelContext.Initialize(
+        return new GridContextSnapshot(
+            nodeId: ValidateRequiredEnvelopeValue(envelope.NodeId, nameof(envelope.NodeId), envelope.MessageId),
+            studioId: ValidateRequiredEnvelopeValue(envelope.StudioId, nameof(envelope.StudioId), envelope.MessageId),
+            environment: ValidateRequiredEnvelopeValue(envelope.Environment, nameof(envelope.Environment), envelope.MessageId),
             correlationId: correlationId,
             causationId: causationId,
             tenantId: tenantId,
             projectId: envelope.ProjectId,
             baggage: baggage,
-            cancellation: cancellationToken);
+            cancellation: cancellationToken,
+            createdAtUtc: envelope.Timestamp);
+    }
+
+    private static string ValidateRequiredEnvelopeValue(
+        string? value,
+        string fieldName,
+        string messageId)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        throw new EnvelopeValidationException(
+            $"Transport envelope '{messageId}' is missing required Grid identity field '{fieldName}'.");
     }
 
     private TenantId ParseTenantIdOrInternal(string? value, string messageId)

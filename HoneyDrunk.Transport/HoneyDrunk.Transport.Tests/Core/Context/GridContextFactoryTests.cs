@@ -1,6 +1,6 @@
 using HoneyDrunk.Kernel.Abstractions.Identity;
-using HoneyDrunk.Kernel.Context;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Primitives;
 using Microsoft.Extensions.Logging;
 
@@ -12,25 +12,18 @@ namespace HoneyDrunk.Transport.Tests.Core.Context;
 /// Tests for Grid context factory.
 /// </summary>
 /// <remarks>
-/// These tests verify the Kernel vNext pattern where the factory INITIALIZES
-/// an existing DI-scoped GridContext rather than creating a new one.
+/// These tests verify that the factory creates initialized Kernel Abstractions context snapshots without referencing Kernel runtime types.
 /// </remarks>
 public sealed class GridContextFactoryTests
 {
-    private const string TestNodeId = "test-node";
-    private const string TestStudioId = "test-studio";
-    private const string TestEnvironment = "test-env";
-
     /// <summary>
     /// Verifies factory initializes Grid context from envelope with all fields populated.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithAllFields_InitializesGridContext()
+    public void CreateFromEnvelope_WithAllFields_CreatesGridContext()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
@@ -52,7 +45,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.True(gridContext.IsInitialized);
@@ -69,23 +62,24 @@ public sealed class GridContextFactoryTests
     /// Verifies factory falls back to messageId when correlationId is missing.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithMissingCorrelationId_FallsBackToMessageId()
+    public void CreateFromEnvelope_WithMissingCorrelationId_FallsBackToMessageId()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-abc",
             CorrelationId = null, // Missing
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal("msg-abc", gridContext.CorrelationId);
@@ -95,23 +89,24 @@ public sealed class GridContextFactoryTests
     /// Verifies factory falls back to messageId when causationId is missing.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithMissingCausationId_FallsBackToMessageId()
+    public void CreateFromEnvelope_WithMissingCausationId_FallsBackToMessageId()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-xyz",
             CausationId = null, // Missing
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal("msg-xyz", gridContext.CausationId);
@@ -121,17 +116,18 @@ public sealed class GridContextFactoryTests
     /// Verifies factory creates empty baggage when headers are null.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithNullHeaders_CreatesEmptyBaggage()
+    public void CreateFromEnvelope_WithNullHeaders_CreatesEmptyBaggage()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         IReadOnlyDictionary<string, string>? nullHeaders = null;
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
             CorrelationId = "corr-456",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             Headers = nullHeaders!, // No headers
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -139,7 +135,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.NotNull(gridContext.Baggage);
@@ -150,23 +146,25 @@ public sealed class GridContextFactoryTests
     /// Verifies factory propagates cancellation token to Grid context.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithCancellationToken_PropagatesToken()
+    public void CreateFromEnvelope_WithCancellationToken_PropagatesToken()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
         using var cts = new CancellationTokenSource();
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, cts.Token);
+        var gridContext = factory.CreateFromEnvelope(envelope, cts.Token);
 
         // Assert
         Assert.Equal(cts.Token, gridContext.Cancellation);
@@ -176,53 +174,31 @@ public sealed class GridContextFactoryTests
     /// Verifies factory throws when envelope is null.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithNullEnvelope_ThrowsArgumentNullException()
+    public void CreateFromEnvelope_WithNullEnvelope_ThrowsArgumentNullException()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
         ITransportEnvelope? nullEnvelope = null;
 
         // Act & Assert
         Assert.Throws<ArgumentNullException>(() =>
-            factory.InitializeFromEnvelope(gridContext, nullEnvelope!, CancellationToken.None));
-    }
-
-    /// <summary>
-    /// Verifies factory throws when gridContext is null.
-    /// </summary>
-    [Fact]
-    public void InitializeFromEnvelope_WithNullGridContext_ThrowsArgumentNullException()
-    {
-        // Arrange
-        var factory = new TransportGridContextFactory();
-
-        var envelope = new TransportEnvelope
-        {
-            MessageId = "msg-123",
-            MessageType = "TestMessage",
-            Payload = ReadOnlyMemory<byte>.Empty,
-            Timestamp = DateTimeOffset.UtcNow
-        };
-
-        // Act & Assert
-        Assert.Throws<ArgumentNullException>(() =>
-            factory.InitializeFromEnvelope(null!, envelope, CancellationToken.None));
+            factory.CreateFromEnvelope(nullEnvelope!, CancellationToken.None));
     }
 
     /// <summary>
     /// Verifies factory handles optional tenant and project IDs.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithTenantAndProjectIds_SetsMultiTenantProperties()
+    public void CreateFromEnvelope_WithTenantAndProjectIds_SetsMultiTenantProperties()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = "01BX5ZZKBKACTAV9WEVGEMMVRZ",
             ProjectId = "project-xyz",
             MessageType = "TestMessage",
@@ -231,7 +207,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal("01BX5ZZKBKACTAV9WEVGEMMVRZ", gridContext.TenantId.ToString());
@@ -242,15 +218,16 @@ public sealed class GridContextFactoryTests
     /// Verifies factory handles null tenant and project IDs gracefully.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithNullTenantAndProject_UsesInternalTenant()
+    public void CreateFromEnvelope_WithNullTenantAndProject_UsesInternalTenant()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = null,
             ProjectId = null,
             MessageType = "TestMessage",
@@ -259,7 +236,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal(TenantId.Internal, gridContext.TenantId);
@@ -270,16 +247,18 @@ public sealed class GridContextFactoryTests
     /// Verifies factory parses valid ULID tenant IDs.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithValidUlidTenant_ParsesTenantId()
+    public void CreateFromEnvelope_WithValidUlidTenant_ParsesTenantId()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
         var tenantId = TenantId.NewId();
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-valid-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = tenantId.ToString(),
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -287,27 +266,54 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal(tenantId, gridContext.TenantId);
     }
 
     /// <summary>
+    /// Verifies missing Grid identity fields fail fast instead of fabricating producer identity.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_WithMissingGridIdentityFields_ThrowsEnvelopeValidationException()
+    {
+        // Arrange
+        var factory = new TransportGridContextFactory();
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-missing-grid-identity",
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateFromEnvelope(envelope, CancellationToken.None));
+
+        // Assert
+        Assert.Contains("msg-missing-grid-identity", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("NodeId", ex.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Verifies malformed tenant IDs fall back to Internal and log without leaking the raw value in the template.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithMalformedTenant_UsesInternalTenantAndLogsWarning()
+    public void CreateFromEnvelope_WithMalformedTenant_UsesInternalTenantAndLogsWarning()
     {
         // Arrange
         var logger = new CapturingLogger();
         var factory = new TransportGridContextFactory(logger);
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
         const string malformedTenant = "not-a-tenant-ulid";
 
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-bad-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = malformedTenant,
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -315,7 +321,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal(TenantId.Internal, gridContext.TenantId);
@@ -331,15 +337,16 @@ public sealed class GridContextFactoryTests
     /// Verifies the serialized Internal sentinel maps back to Internal.
     /// </summary>
     [Fact]
-    public void InitializeFromEnvelope_WithInternalTenantString_UsesInternalTenant()
+    public void CreateFromEnvelope_WithInternalTenantString_UsesInternalTenant()
     {
         // Arrange
         var factory = new TransportGridContextFactory();
-        var gridContext = new GridContext(TestNodeId, TestStudioId, TestEnvironment);
-
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-internal-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = TenantId.Internal.ToString(),
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -347,7 +354,7 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        factory.InitializeFromEnvelope(gridContext, envelope, CancellationToken.None);
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
 
         // Assert
         Assert.Equal(TenantId.Internal, gridContext.TenantId);

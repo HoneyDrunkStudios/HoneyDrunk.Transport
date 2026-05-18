@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 
 namespace HoneyDrunk.Transport.AzureServiceBus;
 
@@ -96,7 +97,6 @@ public sealed class ServiceBusTransportConsumer(
                 _logger.LogInformation("Stopping Service Bus consumer");
             }
 
-            // Stop and dispose processors
             await StopAndDisposeProcessorsAsync(cancellationToken);
 
             if (_logger.IsEnabled(LogLevel.Information))
@@ -113,9 +113,6 @@ public sealed class ServiceBusTransportConsumer(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        // Thread-safe disposal check using Interlocked.CompareExchange
-        // Atomically sets _disposed to true and returns the previous value
-        // If previous value was true, we've already disposed
         if (Interlocked.Exchange(ref _disposed, true))
         {
             return;
@@ -139,59 +136,8 @@ public sealed class ServiceBusTransportConsumer(
     private static bool IsTestSubstitute(object instance) =>
         instance.GetType().Assembly.FullName?.Contains("DynamicProxyGenAssembly", StringComparison.Ordinal) == true;
 
-    private static async Task CompleteMessageAsync(object args, CancellationToken cancellationToken)
-    {
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.CompleteMessageAsync(msgArgs.Message, cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.CompleteMessageAsync(sessionArgs.Message, cancellationToken);
-        }
-    }
-
-    private static async Task AbandonMessageAsync(object args, CancellationToken cancellationToken)
-    {
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.AbandonMessageAsync(msgArgs.Message, cancellationToken: cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.AbandonMessageAsync(sessionArgs.Message, cancellationToken: cancellationToken);
-        }
-    }
-
-    private static async Task DeadLetterMessageAsync(
-        object args,
-        ITransportEnvelope envelope,
-        CancellationToken cancellationToken)
-    {
-        var reason = "Message processing failed";
-        var description = $"Message {envelope.MessageId} could not be processed";
-
-        if (args is ProcessMessageEventArgs msgArgs)
-        {
-            await msgArgs.DeadLetterMessageAsync(
-                msgArgs.Message,
-                reason,
-                description,
-                cancellationToken);
-        }
-        else if (args is ProcessSessionMessageEventArgs sessionArgs)
-        {
-            await sessionArgs.DeadLetterMessageAsync(
-                sessionArgs.Message,
-                reason,
-                description,
-                cancellationToken);
-        }
-    }
-
     private async Task StopAndDisposeProcessorsAsync(CancellationToken cancellationToken)
     {
-        // Stop and dispose standard processor
         if (_processor != null)
         {
             try
@@ -205,7 +151,6 @@ public sealed class ServiceBusTransportConsumer(
             }
         }
 
-        // Stop and dispose session processor
         if (_sessionProcessor != null)
         {
             try
@@ -242,9 +187,6 @@ public sealed class ServiceBusTransportConsumer(
                 options);
         }
 
-        // Azure SDK processor types are sealed with non-virtual event handlers that cannot be
-        // registered on NSubstitute mocks. Detect the test substitute and skip hookup rather
-        // than catching the NullReferenceException it would throw.
         if (IsTestSubstitute(_processor))
         {
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -293,9 +235,6 @@ public sealed class ServiceBusTransportConsumer(
                 sessionOptions);
         }
 
-        // Azure SDK processor types are sealed with non-virtual event handlers that cannot be
-        // registered on NSubstitute mocks. Detect the test substitute and skip hookup rather
-        // than catching the NullReferenceException it would throw.
         if (IsTestSubstitute(_sessionProcessor))
         {
             if (_logger.IsEnabled(LogLevel.Debug))
@@ -324,41 +263,21 @@ public sealed class ServiceBusTransportConsumer(
         };
     }
 
-    private async Task ProcessMessageAsync(ProcessMessageEventArgs args)
+    private Task ProcessMessageAsync(ProcessMessageEventArgs args) =>
+        ProcessReceivedMessageAsync(ServiceBusReceivedMessageContext.Create(args));
+
+    private Task ProcessSessionMessageAsync(ProcessSessionMessageEventArgs args) =>
+        ProcessReceivedMessageAsync(ServiceBusReceivedMessageContext.Create(args));
+
+    private async Task ProcessReceivedMessageAsync(ServiceBusReceivedMessageContext receivedMessage)
     {
-        var envelope = EnvelopeMapper.FromServiceBusMessage(args.Message);
-        var deliveryCount = EnvelopeMapper.GetDeliveryCount(args.Message);
-        var transaction = EnvelopeMapper.CreateTransaction(args.Message);
-
-        await ProcessMessageCoreAsync(envelope, transaction, deliveryCount, args, args.CancellationToken);
-    }
-
-    private async Task ProcessSessionMessageAsync(ProcessSessionMessageEventArgs args)
-    {
-        var envelope = EnvelopeMapper.FromServiceBusMessage(args.Message);
-        var deliveryCount = EnvelopeMapper.GetDeliveryCount(args.Message);
-        var transaction = EnvelopeMapper.CreateTransaction(args.Message);
-
-        await ProcessMessageCoreAsync(envelope, transaction, deliveryCount, args, args.CancellationToken);
-    }
-
-    private async Task ProcessMessageCoreAsync(
-        ITransportEnvelope envelope,
-        ITransportTransaction transaction,
-        int deliveryCount,
-        object args,
-        CancellationToken cancellationToken)
-    {
-        // Create a scope for each message - this is critical for Kernel vNext's
-        // one-GridContext-per-scope invariant. The scoped IGridContext from Kernel
-        // will be resolved within this scope.
         await using var scope = _serviceScopeFactory.CreateAsyncScope();
 
         var context = new MessageContext
         {
-            Envelope = envelope,
-            Transaction = transaction,
-            DeliveryCount = deliveryCount,
+            Envelope = receivedMessage.Envelope,
+            Transaction = receivedMessage.Transaction,
+            DeliveryCount = receivedMessage.DeliveryCount,
             ServiceProvider = scope.ServiceProvider
         };
 
@@ -368,13 +287,16 @@ public sealed class ServiceBusTransportConsumer(
             {
                 _logger.LogDebug(
                     "Processing message {MessageId} (Delivery count: {DeliveryCount})",
-                    envelope.MessageId,
-                    deliveryCount);
+                    receivedMessage.Envelope.MessageId,
+                    receivedMessage.DeliveryCount);
             }
 
-            var result = await _pipeline.ProcessAsync(envelope, context, cancellationToken);
+            var result = await _pipeline.ProcessAsync(
+                receivedMessage.Envelope,
+                context,
+                receivedMessage.CancellationToken);
 
-            await HandleProcessingResultAsync(result, args, envelope, cancellationToken);
+            await HandleProcessingResultAsync(result, receivedMessage);
         }
         catch (Exception ex) when (!ex.IsFatal())
         {
@@ -383,46 +305,38 @@ public sealed class ServiceBusTransportConsumer(
                 _logger.LogError(
                     ex,
                     "Unhandled error processing message {MessageId}",
-                    envelope.MessageId);
+                    receivedMessage.Envelope.MessageId);
             }
 
-            // Let Service Bus retry mechanism handle it
-            if (args is ProcessMessageEventArgs msgArgs && !_options.Value.AutoComplete)
+            if (!_options.Value.AutoComplete)
             {
-                await msgArgs.AbandonMessageAsync(msgArgs.Message, cancellationToken: cancellationToken);
-            }
-            else if (args is ProcessSessionMessageEventArgs sessionArgs && !_options.Value.AutoComplete)
-            {
-                await sessionArgs.AbandonMessageAsync(sessionArgs.Message, cancellationToken: cancellationToken);
+                await receivedMessage.AbandonAsync();
             }
         }
     }
 
     private async Task HandleProcessingResultAsync(
         MessageProcessingResult result,
-        object args,
-        ITransportEnvelope envelope,
-        CancellationToken cancellationToken)
+        ServiceBusReceivedMessageContext receivedMessage)
     {
         if (_options.Value.AutoComplete)
         {
-            // Auto-complete is enabled; Service Bus handles it
             return;
         }
 
         switch (result)
         {
             case MessageProcessingResult.Success:
-                await CompleteMessageAsync(args, cancellationToken);
+                await receivedMessage.CompleteAsync();
                 break;
 
             case MessageProcessingResult.Retry:
             case MessageProcessingResult.Abandon:
-                await AbandonMessageAsync(args, cancellationToken);
+                await receivedMessage.AbandonAsync();
                 break;
 
             case MessageProcessingResult.DeadLetter:
-                await DeadLetterMessageAsync(args, envelope, cancellationToken);
+                await receivedMessage.DeadLetterAsync();
                 break;
         }
     }
@@ -439,5 +353,103 @@ public sealed class ServiceBusTransportConsumer(
         }
 
         return Task.CompletedTask;
+    }
+
+    private sealed class ServiceBusReceivedMessageContext
+    {
+        private const string DeadLetterReason = "Message processing failed";
+        private const string DeadLetterDescriptionFormat = "Message {0} could not be processed";
+
+        private ServiceBusReceivedMessageContext(
+            ITransportEnvelope envelope,
+            ITransportTransaction transaction,
+            int deliveryCount,
+            CancellationToken cancellationToken,
+            Func<Task> completeAsync,
+            Func<Task> abandonAsync,
+            Func<Task> deadLetterAsync)
+        {
+            Envelope = envelope;
+            Transaction = transaction;
+            DeliveryCount = deliveryCount;
+            CancellationToken = cancellationToken;
+            CompleteAsync = completeAsync;
+            AbandonAsync = abandonAsync;
+            DeadLetterAsync = deadLetterAsync;
+        }
+
+        public ITransportEnvelope Envelope { get; }
+
+        public ITransportTransaction Transaction { get; }
+
+        public int DeliveryCount { get; }
+
+        public CancellationToken CancellationToken { get; }
+
+        public Func<Task> CompleteAsync { get; }
+
+        public Func<Task> AbandonAsync { get; }
+
+        public Func<Task> DeadLetterAsync { get; }
+
+        public static ServiceBusReceivedMessageContext Create(ProcessMessageEventArgs args)
+        {
+            // Settlement should still reach the broker when processing cancellation is already signaled.
+            // The processing token remains on the message context for user pipeline cancellation.
+            var settlementCancellationToken = CancellationToken.None;
+
+            return Create(
+                args.Message,
+                args.CancellationToken,
+                () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
+                (reason, description) => args.DeadLetterMessageAsync(
+                    args.Message,
+                    reason,
+                    description,
+                    settlementCancellationToken));
+        }
+
+        public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args)
+        {
+            // Settlement should still reach the broker when processing cancellation is already signaled.
+            // The processing token remains on the message context for user pipeline cancellation.
+            var settlementCancellationToken = CancellationToken.None;
+
+            return Create(
+                args.Message,
+                args.CancellationToken,
+                () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
+                (reason, description) => args.DeadLetterMessageAsync(
+                    args.Message,
+                    reason,
+                    description,
+                    settlementCancellationToken));
+        }
+
+        private static ServiceBusReceivedMessageContext Create(
+            ServiceBusReceivedMessage message,
+            CancellationToken processingCancellationToken,
+            Func<Task> completeAsync,
+            Func<Task> abandonAsync,
+            Func<string, string, Task> deadLetterAsync)
+        {
+            var envelope = EnvelopeMapper.FromServiceBusMessage(message);
+
+            return new ServiceBusReceivedMessageContext(
+                envelope,
+                EnvelopeMapper.CreateTransaction(message),
+                EnvelopeMapper.GetDeliveryCount(message),
+                processingCancellationToken,
+                completeAsync,
+                abandonAsync,
+                () => deadLetterAsync(
+                    DeadLetterReason,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        DeadLetterDescriptionFormat,
+                        envelope.MessageId)));
+        }
     }
 }

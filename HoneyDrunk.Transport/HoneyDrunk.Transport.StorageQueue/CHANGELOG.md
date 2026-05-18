@@ -1,9 +1,15 @@
-﻿# Changelog
+# Changelog
 
 All notable changes to HoneyDrunk.Transport.StorageQueue will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.6.0] - 2026-05-18
+
+### Changed
+
+- **Kernel Abstractions v0.7.0 Alignment**: Uses the core Transport `GridContextSnapshot` propagation model and receives Kernel Abstractions through the core Transport package dependency.
 
 ## [0.4.0] - 2026-01-20
 

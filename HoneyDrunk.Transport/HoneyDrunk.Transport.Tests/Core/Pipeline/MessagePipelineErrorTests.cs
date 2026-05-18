@@ -112,6 +112,9 @@ public sealed class MessagePipelineErrorTests
         var badEnvelope = new HoneyDrunk.Transport.Primitives.TransportEnvelope
         {
             MessageId = Guid.NewGuid().ToString("N"),
+            NodeId = "test-node",
+            StudioId = "test-studio",
+            Environment = "test-env",
             MessageType = typeof(SampleMessage).AssemblyQualifiedName!,
             Payload = System.Text.Encoding.UTF8.GetBytes("not valid json {{{"),
             Headers = new Dictionary<string, string>(),
@@ -255,6 +258,9 @@ public sealed class MessagePipelineErrorTests
         var badEnvelope = new HoneyDrunk.Transport.Primitives.TransportEnvelope
         {
             MessageId = Guid.NewGuid().ToString("N"),
+            NodeId = "test-node",
+            StudioId = "test-studio",
+            Environment = "test-env",
             MessageType = "NonExistent.InvalidType.ThatDoesNotExist, NonExistent.Assembly",
             Payload = new byte[] { 1, 2, 3 },
             Headers = new Dictionary<string, string>(),
