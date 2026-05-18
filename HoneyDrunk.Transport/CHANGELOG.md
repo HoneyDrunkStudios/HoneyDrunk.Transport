@@ -13,6 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.6.0] - 2026-05-18
+
+### Changed
+
+- Aligned all Transport packages with `HoneyDrunk.Kernel.Abstractions` v0.7.0.
+- Removed runtime `HoneyDrunk.Kernel` package dependency from core Transport and InMemory packages.
+- Switched inbound Grid context propagation to abstractions-only `GridContextSnapshot` creation.
+- Consolidated Azure Service Bus standard and session consumer message-processing orchestration.
+- Clarified Azure Service Bus and Storage Queue provider release notes for inherited core Transport dependency behavior.
+
+### Fixed
+
+- Added fail-fast validation for inbound envelopes missing required Grid identity fields instead of fabricating default producer identity.
+- Covered null `MessageContext.ServiceProvider` middleware behavior with tests.
+
 ## [0.5.0] - 2026-05-04
 
 ### Changed
