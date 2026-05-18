@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Kernel Abstractions v0.7.0 Alignment**: Inherits the core Transport runtime dependency cleanup.
+- **Kernel Abstractions v0.7.0 Alignment**: Uses the core Transport abstractions-only Grid context model and receives Kernel Abstractions through the core Transport package dependency.
 - **Service Bus Consumer Consolidation**: Standard and session processors now adapt SDK event args at the edge and share one message-processing orchestration path for pipeline execution, completion, abandon, dead-letter, and exception handling.
 
 ## [0.4.0] - 2026-01-20

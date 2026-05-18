@@ -37,7 +37,7 @@ public sealed class GridContextPropagationMiddleware(TransportGridContextFactory
 
         context.GridContext = gridContext;
         context.Properties["GridContext"] = gridContext;
-        context.Properties["CorrelationId"] = gridContext.CorrelationId;
+        context.Properties["CorrelationId"] = gridContext.CorrelationId ?? string.Empty;
         context.Properties["CausationId"] = gridContext.CausationId ?? string.Empty;
         context.Properties["NodeId"] = gridContext.NodeId;
         context.Properties["StudioId"] = gridContext.StudioId;

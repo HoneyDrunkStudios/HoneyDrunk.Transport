@@ -192,6 +192,38 @@ public sealed class GridContextPropagationMiddlewareTests
     }
 
     /// <summary>
+    /// Verifies middleware no longer requires MessageContext.ServiceProvider.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task InvokeAsync_WithNullServiceProvider_InitializesGridContext()
+    {
+        // Arrange
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
+        var context = new MessageContext
+        {
+            Envelope = envelope,
+            Transaction = NoOpTransportTransaction.Instance,
+            DeliveryCount = 1,
+            ServiceProvider = null
+        };
+
+        var gridContextFactory = new TransportGridContextFactory();
+        var middleware = new GridContextPropagationMiddleware(gridContextFactory);
+
+        // Act
+        await middleware.InvokeAsync(
+            envelope,
+            context,
+            () => Task.CompletedTask,
+            CancellationToken.None);
+
+        // Assert
+        Assert.NotNull(context.GridContext);
+        Assert.Equal("test-node", context.GridContext!.NodeId);
+    }
+
+    /// <summary>
     /// Verifies middleware propagates exceptions from next delegate.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
@@ -235,6 +267,9 @@ public sealed class GridContextPropagationMiddlewareTests
             MessageType = envelope.MessageType,
             Payload = envelope.Payload,
             CorrelationId = "corr-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             Headers = new Dictionary<string, string>
             {
                 ["baggage-key1"] = "value1",

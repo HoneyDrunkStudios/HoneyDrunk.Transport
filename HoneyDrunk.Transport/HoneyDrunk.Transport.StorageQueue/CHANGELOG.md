@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Kernel Abstractions v0.7.0 Alignment**: Inherits the core Transport runtime dependency cleanup and `GridContextSnapshot` propagation model.
+- **Kernel Abstractions v0.7.0 Alignment**: Uses the core Transport `GridContextSnapshot` propagation model and receives Kernel Abstractions through the core Transport package dependency.
 
 ## [0.4.0] - 2026-01-20
 

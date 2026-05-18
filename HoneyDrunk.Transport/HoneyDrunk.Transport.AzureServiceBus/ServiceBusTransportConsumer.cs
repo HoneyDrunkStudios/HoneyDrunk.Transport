@@ -392,29 +392,41 @@ public sealed class ServiceBusTransportConsumer(
 
         public Func<Task> DeadLetterAsync { get; }
 
-        public static ServiceBusReceivedMessageContext Create(ProcessMessageEventArgs args) =>
-            Create(
-                args.Message,
-                args.CancellationToken,
-                () => args.CompleteMessageAsync(args.Message, CancellationToken.None),
-                () => args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None),
-                (reason, description) => args.DeadLetterMessageAsync(
-                    args.Message,
-                    reason,
-                    description,
-                    CancellationToken.None));
+        public static ServiceBusReceivedMessageContext Create(ProcessMessageEventArgs args)
+        {
+            // Settlement should still reach the broker when processing cancellation is already signaled.
+            // The processing token remains on the message context for user pipeline cancellation.
+            var settlementCancellationToken = CancellationToken.None;
 
-        public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args) =>
-            Create(
+            return Create(
                 args.Message,
                 args.CancellationToken,
-                () => args.CompleteMessageAsync(args.Message, CancellationToken.None),
-                () => args.AbandonMessageAsync(args.Message, cancellationToken: CancellationToken.None),
+                () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
                 (reason, description) => args.DeadLetterMessageAsync(
                     args.Message,
                     reason,
                     description,
-                    CancellationToken.None));
+                    settlementCancellationToken));
+        }
+
+        public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args)
+        {
+            // Settlement should still reach the broker when processing cancellation is already signaled.
+            // The processing token remains on the message context for user pipeline cancellation.
+            var settlementCancellationToken = CancellationToken.None;
+
+            return Create(
+                args.Message,
+                args.CancellationToken,
+                () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
+                () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
+                (reason, description) => args.DeadLetterMessageAsync(
+                    args.Message,
+                    reason,
+                    description,
+                    settlementCancellationToken));
+        }
 
         private static ServiceBusReceivedMessageContext Create(
             ServiceBusReceivedMessage message,

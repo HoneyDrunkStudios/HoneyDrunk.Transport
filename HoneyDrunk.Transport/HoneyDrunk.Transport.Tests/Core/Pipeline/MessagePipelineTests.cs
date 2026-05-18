@@ -98,6 +98,9 @@ public sealed class MessagePipelineTests
         var badEnvelope = new Primitives.TransportEnvelope
         {
             MessageId = Guid.NewGuid().ToString("N"),
+            NodeId = "test-node",
+            StudioId = "test-studio",
+            Environment = "test-env",
             MessageType = typeof(string).AssemblyQualifiedName!,
             Payload = new byte[] { 0x01, 0x02, 0x03 },
             Headers = new Dictionary<string, string>(),

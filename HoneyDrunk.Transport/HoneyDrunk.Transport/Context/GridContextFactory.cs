@@ -1,6 +1,7 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
 using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.Logging;
 
 namespace HoneyDrunk.Transport.Context;
@@ -14,10 +15,6 @@ namespace HoneyDrunk.Transport.Context;
 /// </remarks>
 public sealed class GridContextFactory : IGridContextFactory
 {
-    private const string DefaultNodeId = "honeydrunk-transport";
-    private const string DefaultStudioId = "honeydrunk";
-    private const string DefaultEnvironment = "local";
-
     private readonly ILogger<GridContextFactory>? _logger;
 
     /// <summary>
@@ -44,9 +41,9 @@ public sealed class GridContextFactory : IGridContextFactory
             : [];
 
         return new GridContextSnapshot(
-            nodeId: NormalizeRequiredEnvelopeValue(envelope.NodeId, DefaultNodeId, nameof(envelope.NodeId), envelope.MessageId),
-            studioId: NormalizeRequiredEnvelopeValue(envelope.StudioId, DefaultStudioId, nameof(envelope.StudioId), envelope.MessageId),
-            environment: NormalizeRequiredEnvelopeValue(envelope.Environment, DefaultEnvironment, nameof(envelope.Environment), envelope.MessageId),
+            nodeId: ValidateRequiredEnvelopeValue(envelope.NodeId, nameof(envelope.NodeId), envelope.MessageId),
+            studioId: ValidateRequiredEnvelopeValue(envelope.StudioId, nameof(envelope.StudioId), envelope.MessageId),
+            environment: ValidateRequiredEnvelopeValue(envelope.Environment, nameof(envelope.Environment), envelope.MessageId),
             correlationId: correlationId,
             causationId: causationId,
             tenantId: tenantId,
@@ -56,9 +53,8 @@ public sealed class GridContextFactory : IGridContextFactory
             createdAtUtc: envelope.Timestamp);
     }
 
-    private string NormalizeRequiredEnvelopeValue(
+    private static string ValidateRequiredEnvelopeValue(
         string? value,
-        string fallback,
         string fieldName,
         string messageId)
     {
@@ -67,12 +63,8 @@ public sealed class GridContextFactory : IGridContextFactory
             return value;
         }
 
-        _logger?.LogWarning(
-            "Missing required Grid identity field {FieldName} on transport envelope {MessageId}; using fallback value.",
-            fieldName,
-            messageId);
-
-        return fallback;
+        throw new EnvelopeValidationException(
+            $"Transport envelope '{messageId}' is missing required Grid identity field '{fieldName}'.");
     }
 
     private TenantId ParseTenantIdOrInternal(string? value, string messageId)

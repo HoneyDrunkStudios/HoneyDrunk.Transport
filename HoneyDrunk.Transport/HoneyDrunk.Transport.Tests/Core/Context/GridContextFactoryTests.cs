@@ -1,5 +1,6 @@
 using HoneyDrunk.Kernel.Abstractions.Identity;
 using HoneyDrunk.Transport.Abstractions;
+using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.Primitives;
 using Microsoft.Extensions.Logging;
 
@@ -69,6 +70,9 @@ public sealed class GridContextFactoryTests
         {
             MessageId = "msg-abc",
             CorrelationId = null, // Missing
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
@@ -93,6 +97,9 @@ public sealed class GridContextFactoryTests
         {
             MessageId = "msg-xyz",
             CausationId = null, // Missing
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
@@ -118,6 +125,9 @@ public sealed class GridContextFactoryTests
         {
             MessageId = "msg-123",
             CorrelationId = "corr-456",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             Headers = nullHeaders!, // No headers
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -145,6 +155,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
             Timestamp = DateTimeOffset.UtcNow
@@ -183,6 +196,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = "01BX5ZZKBKACTAV9WEVGEMMVRZ",
             ProjectId = "project-xyz",
             MessageType = "TestMessage",
@@ -209,6 +225,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-123",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = null,
             ProjectId = null,
             MessageType = "TestMessage",
@@ -237,6 +256,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-valid-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = tenantId.ToString(),
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,
@@ -251,14 +273,13 @@ public sealed class GridContextFactoryTests
     }
 
     /// <summary>
-    /// Verifies missing Grid identity fields use defaults and emit one warning per missing field.
+    /// Verifies missing Grid identity fields fail fast instead of fabricating producer identity.
     /// </summary>
     [Fact]
-    public void CreateFromEnvelope_WithMissingGridIdentityFields_UsesDefaultsAndLogsWarnings()
+    public void CreateFromEnvelope_WithMissingGridIdentityFields_ThrowsEnvelopeValidationException()
     {
         // Arrange
-        var logger = new CapturingLogger();
-        var factory = new TransportGridContextFactory(logger);
+        var factory = new TransportGridContextFactory();
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-missing-grid-identity",
@@ -268,25 +289,12 @@ public sealed class GridContextFactoryTests
         };
 
         // Act
-        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+        var ex = Assert.Throws<EnvelopeValidationException>(() =>
+            factory.CreateFromEnvelope(envelope, CancellationToken.None));
 
         // Assert
-        Assert.Equal("honeydrunk-transport", gridContext.NodeId);
-        Assert.Equal("honeydrunk", gridContext.StudioId);
-        Assert.Equal("local", gridContext.Environment);
-
-        Assert.Equal(3, logger.Entries.Count);
-        Assert.All(logger.Entries, entry =>
-        {
-            Assert.Equal(LogLevel.Warning, entry.Level);
-            Assert.Equal(
-                "Missing required Grid identity field {FieldName} on transport envelope {MessageId}; using fallback value.",
-                entry.Template);
-            Assert.Equal("msg-missing-grid-identity", entry.Properties["MessageId"]);
-        });
-        Assert.Contains(logger.Entries, entry => Equals("NodeId", entry.Properties["FieldName"]));
-        Assert.Contains(logger.Entries, entry => Equals("StudioId", entry.Properties["FieldName"]));
-        Assert.Contains(logger.Entries, entry => Equals("Environment", entry.Properties["FieldName"]));
+        Assert.Contains("msg-missing-grid-identity", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("NodeId", ex.Message, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -336,6 +344,9 @@ public sealed class GridContextFactoryTests
         var envelope = new TransportEnvelope
         {
             MessageId = "msg-internal-tenant",
+            NodeId = "node-1",
+            StudioId = "studio-1",
+            Environment = "production",
             TenantId = TenantId.Internal.ToString(),
             MessageType = "TestMessage",
             Payload = ReadOnlyMemory<byte>.Empty,

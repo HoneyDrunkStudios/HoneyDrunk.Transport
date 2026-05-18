@@ -22,6 +22,9 @@ internal static class TestData
             Payload = payload.ToArray(),
             CorrelationId = null,
             CausationId = null,
+            NodeId = "test-node",
+            StudioId = "test-studio",
+            Environment = "test-env",
             Timestamp = DateTimeOffset.UtcNow
         };
     }
