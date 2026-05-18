@@ -251,6 +251,45 @@ public sealed class GridContextFactoryTests
     }
 
     /// <summary>
+    /// Verifies missing Grid identity fields use defaults and emit one warning per missing field.
+    /// </summary>
+    [Fact]
+    public void CreateFromEnvelope_WithMissingGridIdentityFields_UsesDefaultsAndLogsWarnings()
+    {
+        // Arrange
+        var logger = new CapturingLogger();
+        var factory = new TransportGridContextFactory(logger);
+        var envelope = new TransportEnvelope
+        {
+            MessageId = "msg-missing-grid-identity",
+            MessageType = "TestMessage",
+            Payload = ReadOnlyMemory<byte>.Empty,
+            Timestamp = DateTimeOffset.UtcNow
+        };
+
+        // Act
+        var gridContext = factory.CreateFromEnvelope(envelope, CancellationToken.None);
+
+        // Assert
+        Assert.Equal("honeydrunk-transport", gridContext.NodeId);
+        Assert.Equal("honeydrunk", gridContext.StudioId);
+        Assert.Equal("local", gridContext.Environment);
+
+        Assert.Equal(3, logger.Entries.Count);
+        Assert.All(logger.Entries, entry =>
+        {
+            Assert.Equal(LogLevel.Warning, entry.Level);
+            Assert.Equal(
+                "Missing required Grid identity field {FieldName} on transport envelope {MessageId}; using fallback value.",
+                entry.Template);
+            Assert.Equal("msg-missing-grid-identity", entry.Properties["MessageId"]);
+        });
+        Assert.Contains(logger.Entries, entry => Equals("NodeId", entry.Properties["FieldName"]));
+        Assert.Contains(logger.Entries, entry => Equals("StudioId", entry.Properties["FieldName"]));
+        Assert.Contains(logger.Entries, entry => Equals("Environment", entry.Properties["FieldName"]));
+    }
+
+    /// <summary>
     /// Verifies malformed tenant IDs fall back to Internal and log without leaking the raw value in the template.
     /// </summary>
     [Fact]
