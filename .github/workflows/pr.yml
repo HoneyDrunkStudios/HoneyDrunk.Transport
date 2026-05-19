@@ -3,6 +3,8 @@ name: PR
 on:
   pull_request:
     branches: [ main ]
+  push:
+    branches: [ main ]
 
 permissions:
   contents: read
@@ -11,7 +13,7 @@ jobs:
   pr-core:
     name: PR Core
     permissions:
-      contents: read
+      contents: write
       checks: write
       pull-requests: write
       security-events: write  # CodeQL SARIF upload
@@ -24,6 +26,8 @@ jobs:
       enable-secret-scan: true
       enable-accessibility-check: false
       post-pr-summary: true
+      patch-coverage-threshold: 75
+      absolute-coverage-floor: 70
       actions-ref: 'main'
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -235,6 +235,31 @@ public sealed class ServiceBusTransportConsumerTests
     }
 
     /// <summary>
+    /// Start on topic with sessions requires a subscription name.
+    /// </summary>
+    /// <returns>A task.</returns>
+    [Fact]
+    public async Task StartAsync_TopicWithSessionsWithoutSubscription_Throws()
+    {
+        var asb = new AzureServiceBusOptions
+        {
+            Address = "orders-topic",
+            EntityType = ServiceBusEntityType.Topic,
+            SessionEnabled = true,
+        };
+        var options = new TestOptions(asb);
+
+        var client = Substitute.For<ServiceBusClient>();
+        var pipeline = Substitute.For<IMessagePipeline>();
+        var scopeFactory = Substitute.For<IServiceScopeFactory>();
+        var logger = Substitute.For<ILogger<ServiceBusTransportConsumer>>();
+
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, scopeFactory, options, logger);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => consumer.StartAsync());
+    }
+
+    /// <summary>
     /// DisposeAsync can be called multiple times safely (idempotent).
     /// </summary>
     /// <returns>A task.</returns>

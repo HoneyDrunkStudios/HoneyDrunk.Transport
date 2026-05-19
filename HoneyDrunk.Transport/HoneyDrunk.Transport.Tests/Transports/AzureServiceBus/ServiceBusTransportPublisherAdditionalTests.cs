@@ -95,6 +95,73 @@ public sealed class ServiceBusTransportPublisherAdditionalTests
     }
 
     /// <summary>
+    /// Verifies typed endpoint metadata is applied to outgoing Service Bus messages.
+    /// </summary>
+    /// <returns>A task.</returns>
+    [Fact]
+    public async Task PublishAsync_AppliesTypedEndpointMetadata()
+    {
+        var options = new AzureServiceBusOptions { FullyQualifiedNamespace = "ns", Address = "q" };
+        var client = Substitute.For<ServiceBusClient>();
+        var sender = Substitute.For<ServiceBusSender>();
+        client.CreateSender(Arg.Any<string>()).Returns(sender);
+        var logger = Substitute.For<ILogger<ServiceBusTransportPublisher>>();
+
+        var iopts = Substitute.For<IOptions<AzureServiceBusOptions>>();
+        iopts.Value.Returns(options);
+
+        ServiceBusMessage? captured = null;
+        sender
+            .SendMessageAsync(Arg.Any<ServiceBusMessage>(), Arg.Any<CancellationToken>())
+            .Returns(ci =>
+            {
+                captured = ci.Arg<ServiceBusMessage>();
+                return Task.CompletedTask;
+            });
+
+        await using var publisher = new ServiceBusTransportPublisher(client, iopts, logger);
+
+        var scheduled = DateTimeOffset.UtcNow.AddMinutes(5);
+        var env = TestData.CreateEnvelope(new SampleMessage { Value = "x" });
+        var dest = EndpointAddress.Create(
+            name: "q",
+            address: "q",
+            sessionId: "session-1",
+            scheduledEnqueueTime: scheduled,
+            timeToLive: TimeSpan.FromMinutes(10));
+
+        await publisher.PublishAsync(env, dest);
+
+        Assert.NotNull(captured);
+        Assert.Equal("session-1", captured!.SessionId);
+        Assert.Equal(scheduled, captured.ScheduledEnqueueTime);
+        Assert.Equal(TimeSpan.FromMinutes(10), captured.TimeToLive);
+    }
+
+    /// <summary>
+    /// Empty batch publish initializes the sender and completes without sending a batch.
+    /// </summary>
+    /// <returns>A task.</returns>
+    [Fact]
+    public async Task PublishBatchAsync_WhenEmpty_CompletesWithoutSending()
+    {
+        var options = new AzureServiceBusOptions { FullyQualifiedNamespace = "ns", Address = "q" };
+        var client = Substitute.For<ServiceBusClient>();
+        var sender = Substitute.For<ServiceBusSender>();
+        client.CreateSender(Arg.Any<string>()).Returns(sender);
+        var logger = Substitute.For<ILogger<ServiceBusTransportPublisher>>();
+
+        var iopts = Substitute.For<IOptions<AzureServiceBusOptions>>();
+        iopts.Value.Returns(options);
+
+        await using var publisher = new ServiceBusTransportPublisher(client, iopts, logger);
+
+        await publisher.PublishBatchAsync([], EndpointAddress.Create("q", "q"));
+
+        await sender.DidNotReceive().SendMessagesAsync(Arg.Any<ServiceBusMessageBatch>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>
     /// Ensures original publish exception is rethrown if fallback store also fails.
     /// </summary>
     /// <returns>A task.</returns>

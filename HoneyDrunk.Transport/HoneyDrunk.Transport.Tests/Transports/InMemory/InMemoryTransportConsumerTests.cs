@@ -132,10 +132,10 @@ public sealed class InMemoryTransportConsumerTests
         services.AddTestKernelServices();
         services.AddHoneyDrunkTransportCore();
 
-        var handled = false;
+        var handled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         services.AddMessageHandler<SampleMessage>((msg, ctx, ct) =>
         {
-            handled = true;
+            handled.TrySetResult();
             return Task.CompletedTask;
         });
 
@@ -161,12 +161,9 @@ public sealed class InMemoryTransportConsumerTests
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "test" });
         await broker.PublishAsync("test-queue4", envelope);
 
-        // Wait for processing
-        await Task.Delay(200);
+        await handled.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
         await consumer.StopAsync();
-
-        Assert.True(handled);
     }
 
     // Place helper after methods to satisfy SA1201
