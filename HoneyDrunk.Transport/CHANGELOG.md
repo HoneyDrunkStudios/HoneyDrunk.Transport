@@ -13,6 +13,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Backfilled focused unit coverage across core, Azure Service Bus, InMemory, and Storage Queue transport surfaces to seed the 70% repository coverage baseline.
+- Added PR coverage gate baseline wiring with 75% patch coverage and 70% absolute coverage thresholds.
+
 ## [0.6.0] - 2026-05-18
 
 ### Changed
