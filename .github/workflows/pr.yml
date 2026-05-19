@@ -12,8 +12,9 @@ permissions:
 jobs:
   pr-core:
     name: PR Core
+    if: github.event_name == 'pull_request'
     permissions:
-      contents: write
+      contents: read
       checks: write
       pull-requests: write
       security-events: write  # CodeQL SARIF upload
@@ -28,6 +29,22 @@ jobs:
       post-pr-summary: true
       patch-coverage-threshold: 75
       absolute-coverage-floor: 70
+      actions-ref: 'main'
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  coverage-baseline-ratchet:
+    name: Coverage Baseline Ratchet
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
+      checks: write
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/coverage-baseline-ratchet.yml@main
+    with:
+      dotnet-version: '10.0.x'
+      configuration: 'Release'
+      runs-on: 'ubuntu-latest'
+      working-directory: 'HoneyDrunk.Transport'
       actions-ref: 'main'
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
