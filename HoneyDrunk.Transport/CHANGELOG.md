@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Aligned Transport test tooling with ADR-0047 by adopting HoneyDrunk.Standards.Tests 0.2.9 and refreshing HoneyDrunk.Standards to 0.2.9 across package projects.
+
 ### Added
 
 - Backfilled focused unit coverage across core, Azure Service Bus, InMemory, and Storage Queue transport surfaces to seed the 70% repository coverage baseline.

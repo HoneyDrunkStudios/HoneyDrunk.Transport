@@ -36,7 +36,7 @@
   <ItemGroup>
     <PackageReference Include="Azure.Storage.Queues" Version="12.25.0" />
     <!-- HoneyDrunk.Kernel.Abstractions comes transitively from HoneyDrunk.Transport -->
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.7">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>

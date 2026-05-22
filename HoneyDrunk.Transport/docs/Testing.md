@@ -69,8 +69,8 @@ public class OrderCreatedHandlerTests
     public async Task HandleAsync_ValidMessage_ReturnsSuccess()
     {
         // Arrange - pure unit test, no DI
-        var repository = new Mock<IOrderRepository>();
-        var handler = new OrderCreatedHandler(repository.Object);
+        var repository = Substitute.For<IOrderRepository>();
+        var handler = new OrderCreatedHandler(repository);
         
         var message = new OrderCreated(OrderId: 123, CustomerId: 456);
         var context = new MessageContext
@@ -85,19 +85,19 @@ public class OrderCreatedHandlerTests
         
         // Assert
         Assert.Equal(MessageProcessingResult.Success, result);
-        repository.Verify(r => r.ProcessOrderAsync(123, It.IsAny<CancellationToken>()), Times.Once);
+        await repository.Received(1).ProcessOrderAsync(123, Arg.Any<CancellationToken>());
     }
     
     [Fact]
     public async Task HandleAsync_RepositoryThrows_ReturnsRetry()
     {
         // Arrange
-        var repository = new Mock<IOrderRepository>();
+        var repository = Substitute.For<IOrderRepository>();
         repository
-            .Setup(r => r.ProcessOrderAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ProcessOrderAsync(Arg.Any<int>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new TimeoutException());
         
-        var handler = new OrderCreatedHandler(repository.Object);
+        var handler = new OrderCreatedHandler(repository);
         var message = new OrderCreated(123, 456);
         var context = TestMessageContext.Create(message);
         
@@ -112,8 +112,8 @@ public class OrderCreatedHandlerTests
     public async Task HandleAsync_ValidationFails_ReturnsDeadLetter()
     {
         // Arrange
-        var repository = new Mock<IOrderRepository>();
-        var handler = new OrderCreatedHandler(repository.Object);
+        var repository = Substitute.For<IOrderRepository>();
+        var handler = new OrderCreatedHandler(repository);
         var invalidMessage = new OrderCreated(OrderId: -1, CustomerId: 456);
         var context = TestMessageContext.Create(invalidMessage);
         
@@ -122,7 +122,7 @@ public class OrderCreatedHandlerTests
         
         // Assert
         Assert.Equal(MessageProcessingResult.DeadLetter, result);
-        repository.Verify(r => r.ProcessOrderAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()), Times.Never);
+        await repository.DidNotReceive().ProcessOrderAsync(Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 }
 ```
@@ -142,10 +142,10 @@ public class ValidationMiddlewareTests
     public async Task InvokeAsync_ValidMessage_CallsNext()
     {
         // Arrange
-        var validator = new Mock<IValidator>();
-        validator.Setup(v => v.ValidateAsync(It.IsAny<object>())).ReturnsAsync(true);
+        var validator = Substitute.For<IValidator>();
+        validator.ValidateAsync(Arg.Any<object>()).Returns(Task.FromResult(true));
         
-        var middleware = new ValidationMiddleware(validator.Object);
+        var middleware = new ValidationMiddleware(validator);
         var envelope = TestEnvelopeFactory.CreateEnvelope(new OrderCreated(123, 456));
         var context = TestMessageContext.Create<OrderCreated>();
         var nextCalled = false;
@@ -165,10 +165,10 @@ public class ValidationMiddlewareTests
     public async Task InvokeAsync_InvalidMessage_ThrowsWithoutCallingNext()
     {
         // Arrange
-        var validator = new Mock<IValidator>();
-        validator.Setup(v => v.ValidateAsync(It.IsAny<object>())).ReturnsAsync(false);
+        var validator = Substitute.For<IValidator>();
+        validator.ValidateAsync(Arg.Any<object>()).Returns(Task.FromResult(false));
         
-        var middleware = new ValidationMiddleware(validator.Object);
+        var middleware = new ValidationMiddleware(validator);
         var envelope = TestEnvelopeFactory.CreateEnvelope(new OrderCreated(123, 456));
         var context = TestMessageContext.Create<OrderCreated>();
         var nextCalled = false;
@@ -622,7 +622,7 @@ public class OutboxIntegrationTests
         // Arrange
         using var db = CreateTestDatabase();
         var outbox = new EfCoreOutboxStore(db);
-        var publisher = new Mock<ITransportPublisher>();
+        var publisher = Substitute.For<ITransportPublisher>();
         var logger = NullLogger<DefaultOutboxDispatcher>.Instance;
         var options = Options.Create(new OutboxDispatcherOptions
         {
@@ -631,7 +631,7 @@ public class OutboxIntegrationTests
         });
         
         // Create dispatcher directly (not as hosted service)
-        var dispatcher = new DefaultOutboxDispatcher(outbox, publisher.Object, options, logger);
+        var dispatcher = new DefaultOutboxDispatcher(outbox, publisher, options, logger);
         
         // Save a message
         var destination = EndpointAddress.Create("orders", "orders");
@@ -643,11 +643,11 @@ public class OutboxIntegrationTests
         await dispatcher.DispatchPendingAsync(CancellationToken.None);
         
         // Assert
-        publisher.Verify(p => p.PublishAsync(
-            It.IsAny<ITransportEnvelope>(),
-            It.Is<IEndpointAddress>(d => d.Name == "orders"),
-            It.IsAny<PublishOptions?>(),
-            It.IsAny<CancellationToken>()), Times.Once);
+        await publisher.Received(1).PublishAsync(
+            Arg.Any<ITransportEnvelope>(),
+            Arg.Is<IEndpointAddress>(d => d.Name == "orders"),
+            Arg.Any<PublishOptions?>(),
+            Arg.Any<CancellationToken>());
     }
 }
 ```
