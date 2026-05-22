@@ -32,7 +32,7 @@
     <!-- Core abstractions only - no runtime dependencies -->
     <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.7">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
