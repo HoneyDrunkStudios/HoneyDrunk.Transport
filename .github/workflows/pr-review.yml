@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   request-grid-review:
+    if: ${{ !github.event.pull_request.head.repo.fork && vars.OPENCLAW_GRID_REVIEW_WEBHOOK_URL != '' }}
     uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/job-review-request.yml@main
     with:
       openclaw-webhook-url: ${{ vars.OPENCLAW_GRID_REVIEW_WEBHOOK_URL || '' }}
