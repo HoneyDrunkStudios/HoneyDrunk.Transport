@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Enabled ADR-0044 OpenClaw/Codex Grid Review Runner request generation for Transport PRs.
 - Aligned Transport test tooling with ADR-0047 by adopting HoneyDrunk.Standards.Tests 0.2.9 and refreshing HoneyDrunk.Standards to 0.2.9 across package projects.
 
 ### Added
