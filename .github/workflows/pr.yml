@@ -16,6 +16,7 @@ jobs:
     permissions:
       contents: read
       checks: write
+      issues: write
       pull-requests: write
       security-events: write  # CodeQL SARIF upload
     uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/pr-core.yml@main
