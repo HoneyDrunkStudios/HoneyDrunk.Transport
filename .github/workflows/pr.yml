@@ -36,8 +36,17 @@ jobs:
 
   sonarcloud:
     name: SonarQube Cloud
-    # Skip on fork PRs — SONAR_TOKEN isn't available to pull_request workflows from forks.
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    # Runs on:
+    #   - pull_request (same-repo, after pr-core succeeds) for PR-time analysis
+    #   - push to main (standalone) for main-branch analysis that populates the
+    #     SonarCloud Overview dashboard and leak-period baseline.
+    # `always()` is required because pr-core is skipped on push events; without
+    # it, GitHub Actions skips downstream jobs whose declared `needs:` was skipped.
+    if: |
+      always() && (
+        (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.pr-core.result == 'success') ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      )
     needs: pr-core
     permissions:
       contents: read
