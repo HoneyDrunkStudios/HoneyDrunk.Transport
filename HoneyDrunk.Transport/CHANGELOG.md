@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Internal
 
-- Onboarded Transport to SonarQube Cloud (ADR-0011 D11). Added `sonar-project.properties` at the inner project subdir and wired a `sonarcloud` job in `pr.yml` that calls `HoneyDrunk.Actions/.github/workflows/job-sonarcloud.yml` after `pr-core`. SonarQube Cloud quality gate runs against PRs; branch-protection requirement added separately after the first successful run lands.
+- Onboarded Transport to SonarQube Cloud (ADR-0011 D11). Wired a `sonarcloud` job in `pr.yml` that calls `HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/job-sonarcloud.yml` after `pr-core`. Per-project source/test classification is discovered automatically from MSBuild `IsTestProject` properties; per-repo Sonar overrides can be added later via `Directory.Build.props` `<SonarQubeSetting>` items or as new inputs to `job-sonarcloud.yml`. SonarQube Cloud quality gate runs against PRs; branch-protection requirement added separately after the first successful run lands.
 
 ### Changed
 
