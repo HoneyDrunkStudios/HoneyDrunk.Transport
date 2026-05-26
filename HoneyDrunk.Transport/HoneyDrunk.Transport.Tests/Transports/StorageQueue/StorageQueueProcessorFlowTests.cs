@@ -4,6 +4,7 @@ using HoneyDrunk.Transport.StorageQueue.Configuration;
 using HoneyDrunk.Transport.StorageQueue.Internal;
 using HoneyDrunk.Transport.Tests.Support;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using System.Diagnostics.CodeAnalysis;
@@ -354,6 +355,104 @@ public sealed class StorageQueueProcessorFlowTests
     }
 
     /// <summary>
+    /// With every log level enabled (via <see cref="CapturingLogger{T}"/>) the
+    /// processor exercises the structured-logging branches that are skipped under
+    /// the default <see cref="NullLogger{T}"/>: <c>LogDebug</c> on success,
+    /// <c>LogWarning</c> on max-dequeue escalation, <c>LogError</c> on poison-send
+    /// failure, and the <c>LogDebug</c> retry-path entry.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_WithLoggingEnabled_EmitsExpectedLogBranches()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+
+        // Three messages — one of each path: success → log Debug on completion;
+        // dequeue >= max → log Warning + Poison; retry → log Debug.
+        primary.EnqueueReceivable(BuildMessage("log-success", dequeueCount: 1));
+        primary.EnqueueReceivable(BuildMessage("log-max-dequeue", dequeueCount: 5));
+        primary.EnqueueReceivable(BuildMessage("log-retry", dequeueCount: 1));
+
+        var pipeline = new StubMessagePipeline((env, _, _) =>
+        {
+            // Map messageId → desired result so a single test exercises all paths.
+            return env.MessageId switch
+            {
+                "log-success" => Task.FromResult(MessageProcessingResult.Success),
+                _ => Task.FromResult(MessageProcessingResult.Retry),
+            };
+        });
+
+        var capturing = new CapturingLogger<StorageQueueProcessor>();
+        var harness = BuildProcessorWith(
+            primary,
+            poison,
+            pipeline,
+            opts =>
+            {
+                opts.MaxDequeueCount = 5;
+                opts.PrefetchMaxMessages = 32;
+            },
+            capturing);
+
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+            await WaitForAsync(() => primary.DeletedMessageIds.Count >= 2 && pipeline.ProcessedCount >= 3);
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            // log-success → deleted from primary; log-max-dequeue → moved to poison +
+            // deleted from primary; log-retry → no delete, no poison.
+            Assert.Contains("log-success", primary.DeletedMessageIds);
+            Assert.Contains("log-max-dequeue", primary.DeletedMessageIds);
+            Assert.DoesNotContain("log-retry", primary.DeletedMessageIds);
+            Assert.Single(poison.SentMessageBodies);
+
+            // Verify the gated log-emission branches actually ran.
+            Assert.Contains(capturing.Entries, e => e.level == LogLevel.Warning && e.message.Contains("exceeded max dequeue count"));
+            Assert.Contains(capturing.Entries, e => e.level == LogLevel.Debug && e.message.Contains("Successfully processed message"));
+            Assert.Contains(capturing.Entries, e => e.level == LogLevel.Debug && e.message.Contains("will be retried"));
+        }
+    }
+
+    /// <summary>
+    /// When pushing to the poison queue fails AND the logger has <c>Error</c>
+    /// enabled, the processor takes the <c>LogError</c> branch with the
+    /// dueToMaxDequeue-aware message template. Combined with
+    /// <c>Processor_OnPoisonSendFailure_KeepsPrimaryMessageForRetry</c> this also
+    /// exercises the <c>dueToMaxDequeue == false</c> arm of the conditional template.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_PoisonFailure_WithLoggingEnabled_LogsErrorTemplate()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+        poison.OnSend = _ => throw new InvalidOperationException("poison send broken");
+
+        primary.EnqueueReceivable(BuildMessage("log-poison-fail", dequeueCount: 1));
+
+        var capturing = new CapturingLogger<StorageQueueProcessor>();
+        var harness = BuildProcessorWith(
+            primary,
+            poison,
+            new StubMessagePipeline(MessageProcessingResult.DeadLetter),
+            configure: null,
+            capturing);
+
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+            await WaitForAsync(() => capturing.Entries.Any(e => e.level == LogLevel.Error && e.message.Contains("dead-letter operation")));
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            Assert.Empty(primary.DeletedMessageIds);
+            Assert.Contains(capturing.Entries, e => e.level == LogLevel.Error && e.message.Contains("dead-letter operation"));
+        }
+    }
+
+    /// <summary>
     /// After disposal further <see cref="StorageQueueProcessor.StartAsync"/> calls
     /// must throw <see cref="ObjectDisposedException"/>.
     /// </summary>
@@ -386,7 +485,8 @@ public sealed class StorageQueueProcessorFlowTests
         FakeQueueClient primary,
         FakeQueueClient poison,
         StubMessagePipeline pipeline,
-        Action<StorageQueueOptions>? configure = null)
+        Action<StorageQueueOptions>? configure = null,
+        ILogger<StorageQueueProcessor>? logger = null)
     {
         var queueOptions = new StorageQueueOptions
         {
@@ -415,7 +515,7 @@ public sealed class StorageQueueProcessorFlowTests
             scopeFactory,
             poisonMover,
             options,
-            NullLogger<StorageQueueProcessor>.Instance);
+            logger ?? NullLogger<StorageQueueProcessor>.Instance);
 
         return new ProcessorHarness(processor, pipeline, factory, services);
     }
