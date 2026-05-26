@@ -59,7 +59,10 @@ public sealed class ServiceBusTransportPublisher(
 
         try
         {
-            LogIfEnabled(LogLevel.Debug, "Publishing message {MessageId} to {Destination}", envelope.MessageId, destination.Address);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Publishing message {MessageId} to {Destination}", envelope.MessageId, destination.Address);
+            }
 
             var serviceBusMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
             ApplyEndpointMetadata(serviceBusMessage, destination);
@@ -68,12 +71,19 @@ public sealed class ServiceBusTransportPublisher(
 
             TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
 
-            LogIfEnabled(LogLevel.Debug, "Successfully published message {MessageId}", envelope.MessageId);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Successfully published message {MessageId}", envelope.MessageId);
+            }
         }
         catch (Exception ex) when (!ex.IsFatal())
         {
             TransportTelemetry.RecordError(activity, ex);
-            LogIfEnabled(LogLevel.Error, ex, "Failed to publish message {MessageId}", envelope.MessageId);
+
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Failed to publish message {MessageId}", envelope.MessageId);
+            }
 
             if (await TryFallbackToBlobAsync(envelope, destination, ex, cancellationToken).ConfigureAwait(false))
             {
@@ -106,15 +116,24 @@ public sealed class ServiceBusTransportPublisher(
 
         try
         {
-            LogIfEnabled(LogLevel.Debug, "Publishing batch of {Count} messages to {Destination}", messages.Count, destination.Address);
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Publishing batch of {Count} messages to {Destination}", messages.Count, destination.Address);
+            }
 
             await SendMessageBatchesAsync(messages, cancellationToken);
 
-            LogIfEnabled(LogLevel.Debug, "Successfully published batch");
+            if (_logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("Successfully published batch");
+            }
         }
         catch (Exception ex) when (!ex.IsFatal())
         {
-            LogIfEnabled(LogLevel.Error, ex, "Failed to publish batch");
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Failed to publish batch");
+            }
 
             if (await TryFallbackBatchToBlobAsync(envelopeList, destination, ex, cancellationToken).ConfigureAwait(false))
             {
@@ -297,13 +316,22 @@ public sealed class ServiceBusTransportPublisher(
         try
         {
             var blobUri = await SaveToBlobFallbackAsync(envelope, destination, publishException, cancellationToken).ConfigureAwait(false);
-            LogIfEnabled(LogLevel.Warning, "Message {MessageId} persisted to Blob fallback at {BlobUri}", envelope.MessageId, blobUri);
+
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("Message {MessageId} persisted to Blob fallback at {BlobUri}", envelope.MessageId, blobUri);
+            }
+
             return true;
         }
         catch (Exception blobEx) when (!blobEx.IsFatal())
         {
             // Caller re-throws the original publish exception when this returns false.
-            LogIfEnabled(LogLevel.Error, blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
+            }
+
             return false;
         }
     }
@@ -334,31 +362,19 @@ public sealed class ServiceBusTransportPublisher(
 
         if (failures.Count == 0)
         {
-            LogIfEnabled(LogLevel.Warning, "Batch persisted to Blob fallback");
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("Batch persisted to Blob fallback");
+            }
+
             return true;
         }
 
-        LogIfEnabled(LogLevel.Error, "One or more blob fallback uploads failed for the batch");
+        if (_logger.IsEnabled(LogLevel.Error))
+        {
+            _logger.LogError("One or more blob fallback uploads failed for the batch");
+        }
+
         return false;
-    }
-
-    private void LogIfEnabled(LogLevel level, string template, params object?[] args)
-    {
-        if (_logger.IsEnabled(level))
-        {
-#pragma warning disable CA2254 // Template is a const string per call site.
-            _logger.Log(level, template, args);
-#pragma warning restore CA2254
-        }
-    }
-
-    private void LogIfEnabled(LogLevel level, Exception exception, string template, params object?[] args)
-    {
-        if (_logger.IsEnabled(level))
-        {
-#pragma warning disable CA2254 // Template is a const string per call site.
-            _logger.Log(level, exception, template, args);
-#pragma warning restore CA2254
-        }
     }
 }

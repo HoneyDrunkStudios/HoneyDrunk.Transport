@@ -68,7 +68,7 @@ internal sealed class FakeQueueClient(string queueName = "test-queue")
     }
 
     /// <inheritdoc />
-    public override Task<Response> DeleteMessageAsync(
+    public override async Task<Response> DeleteMessageAsync(
         string messageId,
         string popReceipt,
         CancellationToken cancellationToken = default)
@@ -77,30 +77,36 @@ internal sealed class FakeQueueClient(string queueName = "test-queue")
 
         if (OnDelete is not null)
         {
-            return OnDelete(messageId, popReceipt).ContinueWith(_ => FakeResponse.Ok, TaskScheduler.Default);
+            // `await` (not `ContinueWith`) so a faulted callback task surfaces as the
+            // expected exception instead of being silently masked by a fake OK response.
+            await OnDelete(messageId, popReceipt).ConfigureAwait(false);
         }
 
-        return Task.FromResult(FakeResponse.Ok);
+        return FakeResponse.Ok;
     }
 
     /// <inheritdoc />
-    public override Task<Response<SendReceipt>> SendMessageAsync(
+    public override async Task<Response<SendReceipt>> SendMessageAsync(
         string messageText,
         CancellationToken cancellationToken = default)
     {
         _sentMessageBodies.Add(messageText);
 
-        Task sendTask = OnSend is null ? Task.CompletedTask : OnSend(messageText);
-        return sendTask.ContinueWith(
-            _ => Response.FromValue(
-                QueuesModelFactory.SendReceipt(
-                    messageId: Guid.NewGuid().ToString("N"),
-                    insertionTime: DateTimeOffset.UtcNow,
-                    expirationTime: DateTimeOffset.UtcNow.AddDays(7),
-                    popReceipt: Guid.NewGuid().ToString("N"),
-                    timeNextVisible: DateTimeOffset.UtcNow),
-                FakeResponse.Created),
-            TaskScheduler.Default);
+        if (OnSend is not null)
+        {
+            // See DeleteMessageAsync: await so OnSend's faulted task propagates the
+            // exception instead of being swallowed by a continuation.
+            await OnSend(messageText).ConfigureAwait(false);
+        }
+
+        return Response.FromValue(
+            QueuesModelFactory.SendReceipt(
+                messageId: Guid.NewGuid().ToString("N"),
+                insertionTime: DateTimeOffset.UtcNow,
+                expirationTime: DateTimeOffset.UtcNow.AddDays(7),
+                popReceipt: Guid.NewGuid().ToString("N"),
+                timeNextVisible: DateTimeOffset.UtcNow),
+            FakeResponse.Created);
     }
 
     private static async Task<Response<QueueMessage[]>> WrapAsync(Task<QueueMessage[]> source)

@@ -227,6 +227,25 @@ internal sealed class StorageQueueProcessor(
     }
 
     /// <summary>
+    /// Waits for the given delay and reports cancellation as a return-value rather
+    /// than an exception. Honors the caller's bool contract (e.g.
+    /// <c>RunReceiveAndProcessIterationAsync</c>) which uses <c>false</c> to signal
+    /// "exit the consumer loop without bubbling <see cref="OperationCanceledException"/>".
+    /// </summary>
+    private static async Task<bool> DelayWithCancellationAsync(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Background consumer loop for receiving and processing messages.
     /// </summary>
     private async Task ConsumeMessagesAsync(int consumerId, CancellationToken cancellationToken)
@@ -309,8 +328,10 @@ internal sealed class StorageQueueProcessor(
                 _logger.LogWarning(ex, "Consumer {ConsumerId} encountered transient error, will retry", consumerId);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
-            return true;
+            // Cancellation during the backoff is a graceful stop, not a failure to
+            // propagate. Honor the method's bool contract: `false` => caller exits the
+            // loop without bubbling `OperationCanceledException` through the consumer.
+            return await DelayWithCancellationAsync(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -324,8 +345,7 @@ internal sealed class StorageQueueProcessor(
                 _logger.LogError(ex, "Consumer {ConsumerId} encountered unexpected error", consumerId);
             }
 
-            await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
-            return true;
+            return await DelayWithCancellationAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
         }
     }
 

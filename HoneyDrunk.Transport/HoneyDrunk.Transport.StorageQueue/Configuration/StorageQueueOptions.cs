@@ -20,9 +20,10 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// Gets or sets the storage account endpoint URI (for managed identity).
     /// </summary>
     /// <remarks>
-    /// Required if <see cref="ConnectionString"/> is not specified. Token-credential resolution
-    /// (e.g. <c>Azure.Identity.DefaultAzureCredential</c>) is handled by the factory layer
-    /// rather than here so options stay POCO-shaped and serialization-friendly.
+    /// Reserved for managed-identity / <c>TokenCredential</c> connections. <strong>Not yet
+    /// implemented</strong>: <c>QueueClientFactory</c> currently throws
+    /// <see cref="NotImplementedException"/> when this is set and <see cref="ConnectionString"/>
+    /// is empty. Use <see cref="ConnectionString"/> until the credential pipeline lands.
     /// </remarks>
     public Uri? AccountEndpoint { get; set; }
 
@@ -136,7 +137,7 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// <strong>Concurrency Model:</strong>
     /// - MaxConcurrency = number of concurrent fetch loops (default: 5).
     /// - BatchProcessingConcurrency = concurrent messages per fetch loop (default: 1).
-    /// - Total concurrent processing = MaxConcurrency � BatchProcessingConcurrency.
+    /// - Total concurrent processing = MaxConcurrency x BatchProcessingConcurrency.
     /// </para>
     /// <para>
     /// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 total concurrent message processing.

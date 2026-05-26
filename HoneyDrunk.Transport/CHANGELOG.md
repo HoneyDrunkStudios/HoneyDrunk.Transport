@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (breaking)
 
-- **`EndpointAddress.Create(string name, string address)` 2-arg overload removed** (Sonar S3427 blocker — overlapped with the 7-arg overload that defaults the optional metadata). **Migration:** call sites continue to compile against the remaining `Create(name, address, sessionId?, partitionKey?, ...)` overload (defaults fill the rest).
+- **`EndpointAddress.Create(string name, string address)` 2-arg overload removed** (Sonar S3427 blocker — overlapped with the 7-arg overload that defaults the optional metadata). **Migration:** direct positional invocations like `EndpointAddress.Create(name, address)` continue to compile against the remaining 7-arg `Create(name, address, sessionId?, partitionKey?, ...)` overload, but method-group/delegate assignments that specifically captured the 2-arg shape (e.g. `Func<string,string,IEndpointAddress> f = EndpointAddress.Create;`) no longer compile and must switch to `(n, a) => EndpointAddress.Create(n, a)` or the explicit 7-arg call. This is also a binary-incompatible change for already-compiled consumers — downstream packages must be rebuilt against 0.7.0.
 - **`MessageHandlerInvoker.InvokeHandlerAsync` (internal) renamed to `TryInvokeHandler`** with a `bool` return + `out Task handlerTask` — eliminates the `Task?` null sentinel (Sonar S4144). Internal type, only Transport runtime + tests consume it.
 - **`ServiceBusReceivedMessageContext` private ctor + `Create` overloads reorder `CancellationToken` to be last** (CA1068). All in-file.
 - **Package versions bumped** to `HoneyDrunk.Transport* 0.7.0` per pre-1.0 semver.
