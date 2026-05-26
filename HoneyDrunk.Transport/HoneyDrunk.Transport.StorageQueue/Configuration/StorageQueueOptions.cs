@@ -166,7 +166,7 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// <para>
     /// <strong>Tuning Guidelines:</strong>
     /// - Start with 1 (sequential) and increase if throughput insufficient.
-    /// - Must be ? PrefetchMaxMessages (no benefit processing more than fetched).
+    /// - Must be &lt;= PrefetchMaxMessages (no benefit processing more than fetched).
     /// - Consider message processing time: longer processing = more benefit from parallelism.
     /// - Monitor CPU, memory, and thread pool when increasing.
     /// </para>
