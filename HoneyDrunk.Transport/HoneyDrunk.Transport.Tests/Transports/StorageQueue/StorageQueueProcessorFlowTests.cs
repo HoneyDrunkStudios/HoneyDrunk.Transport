@@ -235,7 +235,7 @@ public sealed class StorageQueueProcessorFlowTests
 
     /// <summary>
     /// Calling <see cref="StorageQueueProcessor.StopAsync"/> without a prior start
-    /// is a no-op.
+    /// is a no-op — the processor does not throw and never receives from the queue.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
@@ -248,6 +248,108 @@ public sealed class StorageQueueProcessorFlowTests
         await using (harness.ConfigureAwait(false))
         {
             await harness.Processor.StopAsync(CancellationToken.None);
+
+            Assert.Equal(0, primary.ReceiveCallCount);
+            Assert.Empty(primary.DeletedMessageIds);
+            Assert.Empty(poison.SentMessageBodies);
+        }
+    }
+
+    /// <summary>
+    /// With <c>BatchProcessingConcurrency &gt; 1</c> the processor parallel-processes
+    /// the batch via the semaphore-gated path. All messages must still be deleted on
+    /// success and the pipeline invoked once per message.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_OnBatchWithConcurrency_ProcessesAllMessagesInParallel()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+        for (var i = 0; i < 3; i++)
+        {
+            primary.EnqueueReceivable(BuildMessage($"batch-{i}", dequeueCount: 1));
+        }
+
+        var harness = BuildProcessor(
+            primary,
+            poison,
+            MessageProcessingResult.Success,
+            opts =>
+            {
+                opts.BatchProcessingConcurrency = 4;
+                opts.PrefetchMaxMessages = 32;
+            });
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+            await WaitForAsync(() => primary.DeletedMessageIds.Count >= 3);
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            Assert.Equal(3, primary.DeletedMessageIds.Count);
+            Assert.Empty(poison.SentMessageBodies);
+            Assert.Equal(3, harness.Pipeline.ProcessedCount);
+        }
+    }
+
+    /// <summary>
+    /// A transient HTTP 5xx <see cref="Azure.RequestFailedException"/> from the
+    /// receive call is caught by <c>RunReceiveAndProcessIterationAsync</c>, the loop
+    /// backs off briefly, and the next iteration succeeds — so the eventual
+    /// success-path message is still processed.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_OnTransientReceiveError_RecoversOnNextIteration()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+        var followUp = BuildMessage("after-transient", dequeueCount: 1);
+
+        primary.ReceiveOverride = index => index == 0
+            ? Task.FromException<QueueMessage[]>(new Azure.RequestFailedException(503, "Service unavailable"))
+            : Task.FromResult(index == 1 ? new[] { followUp } : Array.Empty<QueueMessage>());
+
+        var harness = BuildProcessor(primary, poison, MessageProcessingResult.Success);
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+
+            // The transient-error branch sleeps a hardcoded 5 seconds before the
+            // next iteration, so this test must tolerate that worst case.
+            await WaitForAsync(() => primary.DeletedMessageIds.Contains("after-transient"), timeoutMs: 8000);
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            Assert.Contains("after-transient", primary.DeletedMessageIds);
+            Assert.Empty(poison.SentMessageBodies);
+        }
+    }
+
+    /// <summary>
+    /// When pushing to the poison queue fails the processor logs and does NOT
+    /// rethrow — the primary message stays so it can be retried (Storage Queue
+    /// reappear-after-visibility-timeout semantics).
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_OnPoisonSendFailure_KeepsPrimaryMessageForRetry()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+        poison.OnSend = _ => throw new InvalidOperationException("poison send broken");
+
+        primary.EnqueueReceivable(BuildMessage("msg-poison-fail", dequeueCount: 1));
+
+        var harness = BuildProcessor(primary, poison, MessageProcessingResult.DeadLetter);
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+            await WaitForAsync(() => harness.Pipeline.ProcessedCount >= 1);
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            // The pipeline ran (so PoisonAsync executed), the poison send threw, and
+            // therefore the primary delete was skipped — message will resurface.
+            Assert.Empty(primary.DeletedMessageIds);
         }
     }
 
