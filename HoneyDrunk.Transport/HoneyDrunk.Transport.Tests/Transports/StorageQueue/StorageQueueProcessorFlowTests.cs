@@ -417,6 +417,43 @@ public sealed class StorageQueueProcessorFlowTests
     }
 
     /// <summary>
+    /// When pushing to the poison queue fails on the <c>MaxDequeue</c> escalation
+    /// path (<c>dueToMaxDequeue: true</c>) the processor takes the corresponding
+    /// branch of the now-split <c>LogError</c> emission with the
+    /// "poison queue operation" wording.
+    /// </summary>
+    /// <returns>A task representing the asynchronous test.</returns>
+    [Fact]
+    public async Task Processor_PoisonFailure_AtMaxDequeue_LogsPoisonOperationTemplate()
+    {
+        var primary = new FakeQueueClient(PrimaryQueue);
+        var poison = new FakeQueueClient(PoisonQueue);
+        poison.OnSend = _ => throw new InvalidOperationException("poison send broken");
+
+        // dequeueCount == MaxDequeueCount triggers ScheduleRetryOrPoisonAsync's
+        // escalation path (dueToMaxDequeue: true).
+        primary.EnqueueReceivable(BuildMessage("log-poison-max-dequeue", dequeueCount: 5));
+
+        var capturing = new CapturingLogger<StorageQueueProcessor>();
+        var harness = BuildProcessorWith(
+            primary,
+            poison,
+            new StubMessagePipeline(MessageProcessingResult.Retry),
+            opts => opts.MaxDequeueCount = 5,
+            capturing);
+
+        await using (harness.ConfigureAwait(false))
+        {
+            await harness.Processor.StartAsync(CancellationToken.None);
+            await WaitForAsync(() => capturing.Entries.Any(e => e.level == LogLevel.Error && e.message.Contains("poison queue operation")));
+            await harness.Processor.StopAsync(CancellationToken.None);
+
+            Assert.Empty(primary.DeletedMessageIds);
+            Assert.Contains(capturing.Entries, e => e.level == LogLevel.Error && e.message.Contains("poison queue operation"));
+        }
+    }
+
+    /// <summary>
     /// When pushing to the poison queue fails AND the logger has <c>Error</c>
     /// enabled, the processor takes the <c>LogError</c> branch with the
     /// dueToMaxDequeue-aware message template. Combined with
