@@ -113,15 +113,24 @@ public sealed class InMemoryTransportConsumerTests
         var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
+        var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
-        await consumer.StartAsync();
+        try
+        {
+            await consumer.StartAsync();
 
-        // Act
-        await consumer.DisposeAsync();
+            // Act — explicit single dispose (no `await using` shadow-cleanup) so the
+            // test exercises the post-dispose path without relying on idempotence.
+            await consumer.DisposeAsync();
 
-        // Assert — second Start surfaces ObjectDisposedException, proving the dispose completed.
-        await Assert.ThrowsAsync<ObjectDisposedException>(() => consumer.StartAsync());
+            // Assert — second Start surfaces ObjectDisposedException, proving the dispose completed.
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => consumer.StartAsync());
+        }
+        finally
+        {
+            // Defensive: idempotent (Interlocked sentinel) so the happy-path second call is a no-op.
+            await consumer.DisposeAsync();
+        }
     }
 
     /// <summary>

@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [0.7.0] - 2026-05-26
 
+### Added
+
+- `StorageQueueOptions.TransientErrorRetryDelay` and `UnexpectedErrorRetryDelay` (defaults 5s / 10s) — make the previously-hardcoded `Task.Delay` backoffs in `StorageQueueProcessor.RunReceiveAndProcessIterationAsync` tunable. Operators can lower these in test/sandbox configs without changing source, and unit tests no longer pay multi-second sleeps to exercise the error-retry branches.
+
 ### Changed
 
 - Sonar gate-cleanup (ADR-0011 D11). Refactored `StorageQueueProcessor.ConsumeMessagesAsync` and `ProcessMessageAsync` into smaller helpers (`RunReceiveAndProcessIterationAsync`, `ProcessBatchAsync`, `HandlePipelineResultAsync`, `CompleteSuccessAsync`, `PoisonAsync`, `ScheduleRetryOrPoisonAsync`) — cognitive complexity 27 / 41 → under 15.

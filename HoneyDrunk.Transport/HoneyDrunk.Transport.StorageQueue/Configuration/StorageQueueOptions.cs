@@ -116,6 +116,27 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     public TimeSpan MaxPollingInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Gets or sets the backoff applied after a transient (HTTP 5xx)
+    /// <see cref="Azure.RequestFailedException"/> from the Storage Queue API,
+    /// before the consumer retries its receive loop.
+    /// </summary>
+    /// <remarks>
+    /// Default is 5 seconds. Tests that exercise this branch can lower this so
+    /// the suite doesn't pay multi-second sleeps.
+    /// </remarks>
+    public TimeSpan TransientErrorRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets or sets the backoff applied after an unexpected non-fatal exception
+    /// in the consumer loop, before the next receive iteration.
+    /// </summary>
+    /// <remarks>
+    /// Default is 10 seconds. Tests that exercise this branch can lower this so
+    /// the suite doesn't pay multi-second sleeps.
+    /// </remarks>
+    public TimeSpan UnexpectedErrorRetryDelay { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Gets or sets the maximum concurrent publish operations for batch publishing.
     /// </summary>
     /// <remarks>

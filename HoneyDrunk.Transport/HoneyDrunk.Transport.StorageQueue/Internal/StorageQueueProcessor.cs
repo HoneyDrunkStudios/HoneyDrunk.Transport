@@ -331,7 +331,7 @@ internal sealed class StorageQueueProcessor(
             // Cancellation during the backoff is a graceful stop, not a failure to
             // propagate. Honor the method's bool contract: `false` => caller exits the
             // loop without bubbling `OperationCanceledException` through the consumer.
-            return await DelayWithCancellationAsync(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+            return await DelayWithCancellationAsync(_options.TransientErrorRetryDelay, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -345,7 +345,7 @@ internal sealed class StorageQueueProcessor(
                 _logger.LogError(ex, "Consumer {ConsumerId} encountered unexpected error", consumerId);
             }
 
-            return await DelayWithCancellationAsync(TimeSpan.FromSeconds(10), cancellationToken).ConfigureAwait(false);
+            return await DelayWithCancellationAsync(_options.UnexpectedErrorRetryDelay, cancellationToken).ConfigureAwait(false);
         }
     }
 

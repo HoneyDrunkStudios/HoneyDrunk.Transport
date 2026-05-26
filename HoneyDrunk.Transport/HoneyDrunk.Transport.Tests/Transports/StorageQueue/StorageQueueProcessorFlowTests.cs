@@ -311,14 +311,16 @@ public sealed class StorageQueueProcessorFlowTests
             ? Task.FromException<QueueMessage[]>(new Azure.RequestFailedException(503, "Service unavailable"))
             : Task.FromResult<QueueMessage[]>(index == 1 ? [followUp] : []);
 
-        var harness = BuildProcessor(primary, poison, MessageProcessingResult.Success);
+        // Shorten the transient-error backoff so the test doesn't sleep 5s.
+        var harness = BuildProcessor(
+            primary,
+            poison,
+            MessageProcessingResult.Success,
+            opts => opts.TransientErrorRetryDelay = TimeSpan.FromMilliseconds(50));
         await using (harness.ConfigureAwait(false))
         {
             await harness.Processor.StartAsync(CancellationToken.None);
-
-            // The transient-error branch sleeps a hardcoded 5 seconds before the
-            // next iteration, so this test must tolerate that worst case.
-            await WaitForAsync(() => primary.DeletedMessageIds.Contains("after-transient"), timeoutMs: 8000);
+            await WaitForAsync(() => primary.DeletedMessageIds.Contains("after-transient"));
             await harness.Processor.StopAsync(CancellationToken.None);
 
             Assert.Contains("after-transient", primary.DeletedMessageIds);
