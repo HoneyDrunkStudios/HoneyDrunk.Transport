@@ -587,12 +587,14 @@ internal sealed class StorageQueueProcessor(
         {
             if (_logger.IsEnabled(LogLevel.Error))
             {
-                var template = dueToMaxDequeue
-                    ? "Failed to complete poison queue operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue."
-                    : "Failed to complete dead-letter operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.";
-#pragma warning disable CA2254 // Template is a const string per branch.
-                _logger.LogError(poisonEx, template, envelope.MessageId);
-#pragma warning restore CA2254
+                if (dueToMaxDequeue)
+                {
+                    _logger.LogError(poisonEx, "Failed to complete poison queue operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.", envelope.MessageId);
+                }
+                else
+                {
+                    _logger.LogError(poisonEx, "Failed to complete dead-letter operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.", envelope.MessageId);
+                }
             }
 
             // Don't rethrow - let message become visible again for retry.
