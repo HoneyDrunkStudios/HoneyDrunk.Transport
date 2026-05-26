@@ -297,7 +297,7 @@ public static class ServiceCollectionExtensions
     /// <remarks>
     /// <para>
     /// Controls parallelism within each fetch loop. Default is 1 (sequential).
-    /// Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency.
+    /// Total concurrent processing = MaxConcurrency x BatchProcessingConcurrency.
     /// </para>
     /// <para>
     /// <strong>Example:</strong> WithConcurrency(5).WithBatchProcessingConcurrency(4) = 20 total concurrent operations.
