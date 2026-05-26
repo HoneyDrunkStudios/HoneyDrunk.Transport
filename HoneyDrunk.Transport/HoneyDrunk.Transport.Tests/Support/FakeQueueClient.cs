@@ -18,8 +18,8 @@ internal sealed class FakeQueueClient(string queueName = "test-queue")
     : QueueClient("UseDevelopmentStorage=true", queueName)
 {
     private readonly ConcurrentQueue<QueueMessage> _pendingReceives = new();
-    private readonly ConcurrentBag<string> _deletedMessageIds = new();
-    private readonly ConcurrentBag<string> _sentMessageBodies = new();
+    private readonly ConcurrentBag<string> _deletedMessageIds = [];
+    private readonly ConcurrentBag<string> _sentMessageBodies = [];
     private int _receiveCount;
 
     /// <summary>Gets the ids of messages that have been deleted from this fake.</summary>

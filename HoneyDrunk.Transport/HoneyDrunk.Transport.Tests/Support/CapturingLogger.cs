@@ -12,7 +12,7 @@ namespace HoneyDrunk.Transport.Tests.Support;
 /// <typeparam name="T">The category type used by the logger.</typeparam>
 internal sealed class CapturingLogger<T> : ILogger<T>
 {
-    private readonly ConcurrentBag<(LogLevel level, string message)> _entries = new();
+    private readonly ConcurrentBag<(LogLevel level, string message)> _entries = [];
 
     /// <summary>Gets the recorded log entries.</summary>
     public IReadOnlyCollection<(LogLevel level, string message)> Entries => [.. _entries];

@@ -309,7 +309,7 @@ public sealed class StorageQueueProcessorFlowTests
 
         primary.ReceiveOverride = index => index == 0
             ? Task.FromException<QueueMessage[]>(new Azure.RequestFailedException(503, "Service unavailable"))
-            : Task.FromResult(index == 1 ? new[] { followUp } : Array.Empty<QueueMessage>());
+            : Task.FromResult<QueueMessage[]>(index == 1 ? [followUp] : []);
 
         var harness = BuildProcessor(primary, poison, MessageProcessingResult.Success);
         await using (harness.ConfigureAwait(false))
