@@ -16,7 +16,7 @@ namespace HoneyDrunk.Transport.StorageQueue.Internal;
 /// <param name="logger">The logger instance.</param>
 /// <exception cref="InvalidOperationException">Thrown when neither ConnectionString nor AccountEndpoint is configured.</exception>
 [SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes", Justification = "Instantiated by dependency injection")]
-internal sealed class QueueClientFactory(
+internal class QueueClientFactory(
     IOptions<StorageQueueOptions> options,
     ILogger<QueueClientFactory> logger) : IAsyncDisposable
 {
@@ -30,7 +30,7 @@ internal sealed class QueueClientFactory(
     /// <summary>
     /// Gets or creates the primary queue client.
     /// </summary>
-    public async Task<QueueClient> GetOrCreatePrimaryQueueClientAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<QueueClient> GetOrCreatePrimaryQueueClientAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -58,7 +58,7 @@ internal sealed class QueueClientFactory(
     /// <summary>
     /// Gets or creates the poison queue client.
     /// </summary>
-    public async Task<QueueClient> GetOrCreatePoisonQueueClientAsync(CancellationToken cancellationToken = default)
+    public virtual async Task<QueueClient> GetOrCreatePoisonQueueClientAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
@@ -84,7 +84,7 @@ internal sealed class QueueClientFactory(
     /// <summary>
     /// Disposes resources used by the factory.
     /// </summary>
-    public async ValueTask DisposeAsync()
+    public virtual async ValueTask DisposeAsync()
     {
         // Thread-safe disposal check using Interlocked.Exchange
         // Atomically sets _disposed to true and returns the previous value
