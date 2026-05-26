@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.InMemory</PackageId>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>In-memory transport implementation for HoneyDrunk.Transport. Provides observable queues and pub/sub subscriptions for testing without external dependencies.</Description>
-    <PackageReleaseNotes>v0.6.0: Kernel Abstractions v0.7.0 alignment and runtime Kernel dependency cleanup.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.0: Sonar gate-cleanup. Use lambda parameter instead of captured variable in InMemoryBroker.GetOrCreateQueue. Aligns to HoneyDrunk.Kernel.Abstractions 0.8.0.</PackageReleaseNotes>
     <PackageTags>messaging;transport;inmemory;testing;broker;queue;pubsub;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -30,12 +30,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.8.0" />
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup>

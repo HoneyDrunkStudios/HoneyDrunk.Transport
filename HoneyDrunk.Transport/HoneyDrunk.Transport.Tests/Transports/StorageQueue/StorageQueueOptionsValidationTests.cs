@@ -203,6 +203,6 @@ public sealed class StorageQueueOptionsValidationTests
     /// <returns>The validation results.</returns>
     private static List<ValidationResult> Validate(StorageQueueOptions options)
     {
-        return options.Validate(new ValidationContext(options)).ToList();
+        return [.. options.Validate(new ValidationContext(options))];
     }
 }

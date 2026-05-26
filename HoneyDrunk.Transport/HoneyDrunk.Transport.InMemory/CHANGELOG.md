@@ -7,9 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-26
+
 ### Changed
 
-- Refreshed HoneyDrunk.Standards to 0.2.9 for ADR-0047 testing tooling alignment.
+- Sonar gate-cleanup (ADR-0011 D11). `InMemoryBroker.GetOrCreateQueue` uses the lambda parameter instead of capturing `address`.
+- `HoneyDrunk.Kernel.Abstractions` `0.7.0` → `0.8.0`.
+- `Microsoft.Extensions.Logging.Abstractions` `10.0.5` → `10.0.8`.
 
 ## [0.6.0] - 2026-05-18
 

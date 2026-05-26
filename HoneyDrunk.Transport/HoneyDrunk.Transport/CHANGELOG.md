@@ -7,9 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-26
+
+### Changed (breaking)
+
+- **`EndpointAddress.Create(string name, string address)` 2-arg overload removed.** It overlapped with the 7-arg `Create(...)` whose first two parameters are the same and the rest default to null, so the simple form was effectively unreachable for callers using named arguments (Sonar S3427 blocker). **Migration:** direct positional invocations like `EndpointAddress.Create(name, address)` continue to compile against the remaining 7-arg overload (defaults fill in the optional metadata). However: (a) method-group/delegate assignments that specifically captured the 2-arg shape — e.g. `Func<string, string, IEndpointAddress> f = EndpointAddress.Create;` — no longer compile and must switch to `(n, a) => EndpointAddress.Create(n, a)` or the explicit 7-arg call; (b) this is a binary-incompatible change for already-compiled consumers that bound to the 2-arg overload, so downstream packages must be rebuilt against 0.7.0.
+- **`MessageHandlerInvoker.InvokeHandlerAsync` (internal) renamed to `TryInvokeHandler` with a `bool` return + `out Task handlerTask`.** Eliminates the `Task?` null sentinel return (Sonar S4144 high-reliability finding). Internal class — only the `HoneyDrunk.Transport` runtime and `HoneyDrunk.Transport.Tests` consume it.
+- **`ServiceBusReceivedMessageContext` private ctor + `Create` overloads reorder `CancellationToken` to be last** (Roslyn CA1068). All call sites are inside the file.
+
 ### Changed
 
-- Refreshed HoneyDrunk.Standards to 0.2.9 for ADR-0047 testing tooling alignment.
+- Sonar gate-cleanup (ADR-0011 D11). Refactored `ServiceBusTransportPublisher.PublishAsync` and `PublishBatchAsync` to extract `ApplyEndpointMetadata`, `TryFallbackToBlobAsync`, `TryFallbackBatchToBlobAsync`, and `LogIfEnabled` helpers — cognitive complexity 23 / 36 → under 15.
+- Refactored `StorageQueueProcessor.ConsumeMessagesAsync` and `ProcessMessageAsync` to extract `RunReceiveAndProcessIterationAsync`, `ProcessBatchAsync`, `HandlePipelineResultAsync`, `CompleteSuccessAsync`, `PoisonAsync`, and `ScheduleRetryOrPoisonAsync` helpers — cognitive complexity 27 / 41 → under 15.
+- Extracted nested ternary in `DefaultBlobFallbackStore.SaveAsync` into a `CreateBlobServiceClient` helper.
+- `EnvelopeMapper.FromServiceBusMessage` now passes `CultureInfo.InvariantCulture` + `DateTimeStyles.RoundtripKind` to `DateTimeOffset.TryParse` so envelope timestamps survive round-tripping across cultures.
+- `InMemoryBroker.GetOrCreateQueue` uses the lambda parameter instead of capturing `address`.
+- `MessageHandlerInvoker` returns a non-nullable `Task` via the new `TryInvokeHandler` API (no more `null` Task returns from a method declared to return `Task`).
+- `GridContextFactory` converted to a primary constructor.
+- `HoneyDrunk.Kernel.Abstractions` `0.7.0` → `0.8.0` (Transport uses `GridContextSnapshot` via named arguments, unaffected by the Kernel param-order change).
+- `Microsoft.Extensions.Logging.Abstractions` `10.0.5` → `10.0.8`.
 
 ## [0.6.0] - 2026-05-18
 

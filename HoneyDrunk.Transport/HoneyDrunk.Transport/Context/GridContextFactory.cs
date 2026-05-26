@@ -13,18 +13,10 @@ namespace HoneyDrunk.Transport.Context;
 /// Creates initialized, abstractions-only <see cref="IGridContext"/> snapshots so Transport can
 /// propagate Grid context without depending on the concrete Kernel runtime package.
 /// </remarks>
-public sealed class GridContextFactory : IGridContextFactory
+/// <param name="logger">Optional logger used for non-fatal envelope metadata warnings.</param>
+public sealed class GridContextFactory(ILogger<GridContextFactory>? logger = null) : IGridContextFactory
 {
-    private readonly ILogger<GridContextFactory>? _logger;
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="GridContextFactory"/> class.
-    /// </summary>
-    /// <param name="logger">Optional logger used for non-fatal envelope metadata warnings.</param>
-    public GridContextFactory(ILogger<GridContextFactory>? logger = null)
-    {
-        _logger = logger;
-    }
+    private readonly ILogger<GridContextFactory>? _logger = logger;
 
     /// <inheritdoc/>
     public IGridContext CreateFromEnvelope(

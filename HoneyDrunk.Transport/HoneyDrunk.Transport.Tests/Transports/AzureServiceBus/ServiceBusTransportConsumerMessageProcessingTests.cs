@@ -234,8 +234,8 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var transaction = EnvelopeMapper.CreateTransaction(message);
 
-        // Should not throw
-        await transaction.CommitAsync();
+        var ex = await Record.ExceptionAsync(() => transaction.CommitAsync());
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -251,8 +251,8 @@ public sealed class ServiceBusTransportConsumerMessageProcessingTests
 
         var transaction = EnvelopeMapper.CreateTransaction(message);
 
-        // Should not throw
-        await transaction.RollbackAsync();
+        var ex = await Record.ExceptionAsync(() => transaction.RollbackAsync());
+        Assert.Null(ex);
     }
 
     /// <summary>

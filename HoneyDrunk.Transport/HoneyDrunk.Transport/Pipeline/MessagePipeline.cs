@@ -176,9 +176,7 @@ public sealed class MessagePipeline(
         }
 
         // Invoke the handler using the optimized invoker
-        var task = _handlerInvoker.InvokeHandlerAsync(message, messageType, context, cancellationToken);
-
-        if (task == null)
+        if (!_handlerInvoker.TryInvokeHandler(message, messageType, context, cancellationToken, out var handlerTask))
         {
             if (_logger.IsEnabled(LogLevel.Warning))
             {
@@ -190,6 +188,6 @@ public sealed class MessagePipeline(
             return;
         }
 
-        await task;
+        await handlerTask;
     }
 }

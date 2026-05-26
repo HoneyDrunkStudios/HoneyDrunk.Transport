@@ -25,41 +25,43 @@ internal sealed class MessageHandlerInvoker(IServiceProvider rootServiceProvider
     private readonly ConcurrentDictionary<Type, Func<object, object, MessageContext, CancellationToken, Task>> _invokerCache = new();
 
     /// <summary>
-    /// Invokes the message handler for the specified message type.
+    /// Attempts to invoke the message handler for the specified message type.
     /// </summary>
     /// <param name="message">The message instance to handle.</param>
     /// <param name="messageType">The message type.</param>
     /// <param name="context">The message context.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A task representing the asynchronous operation, or null if no handler is registered.</returns>
+    /// <param name="handlerTask">When this method returns <c>true</c>, the task representing the
+    /// handler's asynchronous work; otherwise <see cref="Task.CompletedTask"/>.</param>
+    /// <returns><c>true</c> when a handler was registered and invoked; <c>false</c> when no handler
+    /// is registered for <paramref name="messageType"/>.</returns>
     /// <exception cref="ArgumentNullException">Thrown when message or messageType is null.</exception>
-    public Task? InvokeHandlerAsync(
+    public bool TryInvokeHandler(
         object message,
         Type messageType,
         MessageContext context,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        out Task handlerTask)
     {
         ArgumentNullException.ThrowIfNull(message);
         ArgumentNullException.ThrowIfNull(messageType);
 
-        // Get or compile the invoker for this message type
-        var invoker = _invokerCache.GetOrAdd(messageType, BuildInvoker);
-
         // Kernel vNext: Resolve handler from scoped provider to share DI scope with middleware
         // This ensures IGridContext injected into handler is the same instance as middleware used
         var scopedProvider = context.ServiceProvider ?? _rootServiceProvider;
-
         var handlerType = typeof(IMessageHandler<>).MakeGenericType(messageType);
         var handler = scopedProvider.GetService(handlerType);
 
-        // Return null if no handler is registered
-        if (handler == null)
+        if (handler is null)
         {
-            return null;
+            handlerTask = Task.CompletedTask;
+            return false;
         }
 
-        // Invoke the handler using the compiled delegate
-        return invoker(handler, message, context, cancellationToken);
+        // Get or compile the invoker for this message type, then invoke via the compiled delegate.
+        var invoker = _invokerCache.GetOrAdd(messageType, BuildInvoker);
+        handlerTask = invoker(handler, message, context, cancellationToken);
+        return true;
     }
 
     /// <summary>

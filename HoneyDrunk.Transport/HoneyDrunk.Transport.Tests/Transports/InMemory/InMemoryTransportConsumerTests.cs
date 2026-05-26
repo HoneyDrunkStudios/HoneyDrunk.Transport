@@ -47,7 +47,8 @@ public sealed class InMemoryTransportConsumerTests
         // Consumer should be running
         await Task.Delay(50);
 
-        await consumer.StopAsync();
+        var stopEx = await Record.ExceptionAsync(() => consumer.StopAsync());
+        Assert.Null(stopEx);
     }
 
     /// <summary>
@@ -79,7 +80,8 @@ public sealed class InMemoryTransportConsumerTests
         await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
-        await consumer.StopAsync();
+        var ex = await Record.ExceptionAsync(() => consumer.StopAsync());
+        Assert.Null(ex);
 
         // Should be stopped
         await Task.Delay(50);
@@ -113,11 +115,22 @@ public sealed class InMemoryTransportConsumerTests
 
         var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
-        await consumer.StartAsync();
-        await consumer.DisposeAsync();
+        try
+        {
+            await consumer.StartAsync();
 
-        // Should be disposed
-        await Task.Delay(50);
+            // Act — explicit single dispose (no `await using` shadow-cleanup) so the
+            // test exercises the post-dispose path without relying on idempotence.
+            await consumer.DisposeAsync();
+
+            // Assert — second Start surfaces ObjectDisposedException, proving the dispose completed.
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => consumer.StartAsync());
+        }
+        finally
+        {
+            // Defensive: idempotent (Interlocked sentinel) so the happy-path second call is a no-op.
+            await consumer.DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -162,6 +175,7 @@ public sealed class InMemoryTransportConsumerTests
         await broker.PublishAsync("test-queue4", envelope);
 
         await handled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(handled.Task.IsCompletedSuccessfully);
 
         await consumer.StopAsync();
     }

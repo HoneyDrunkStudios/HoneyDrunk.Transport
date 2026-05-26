@@ -5,13 +5,21 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    
+
     <!-- Exclude from packaging -->
     <IsPackable>false</IsPackable>
     <IsPublishable>true</IsPublishable>
-    
+
     <!-- Root namespace -->
     <RootNamespace>HoneyDrunk.Transport.SandboxNode</RootNamespace>
+
+    <!--
+      Exclude from SonarQube Cloud analysis. The SandboxNode is a console
+      sample/demo app that exercises the transport stack end-to-end during
+      local development; it is not production code and is intentionally not
+      unit-tested. SonarScanner for .NET honors this project-level switch.
+    -->
+    <SonarQubeExclude>true</SonarQubeExclude>
   </PropertyGroup>
 
   <ItemGroup>
@@ -22,14 +30,14 @@
 
   <ItemGroup>
     <!-- Kernel packages for node identity and context -->
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.7.0" />
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
-    
+    <PackageReference Include="HoneyDrunk.Kernel" Version="0.8.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.8.0" />
+
     <!-- Generic Host -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
-    
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+
     <!-- Console logging for readable output -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.8" />
   </ItemGroup>
 
 </Project>

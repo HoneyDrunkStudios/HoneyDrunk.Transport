@@ -184,11 +184,11 @@ public sealed class InMemoryBroker(ILogger<InMemoryBroker> logger)
     /// <returns>The channel representing the queue for the address.</returns>
     private Channel<ITransportEnvelope> GetOrCreateQueue(string address)
     {
-        return _queues.GetOrAdd(address, _ =>
+        return _queues.GetOrAdd(address, addr =>
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("Creating queue for address {Address}", address);
+                _logger.LogDebug("Creating queue for address {Address}", addr);
             }
 
             return Channel.CreateUnbounded<ITransportEnvelope>(new UnboundedChannelOptions

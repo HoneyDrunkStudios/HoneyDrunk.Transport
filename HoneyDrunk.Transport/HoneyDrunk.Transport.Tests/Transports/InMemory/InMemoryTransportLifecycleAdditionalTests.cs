@@ -72,10 +72,14 @@ public sealed class InMemoryTransportLifecycleAdditionalTests
     {
         await using var fixture = CreateConsumer();
 
-        await fixture.Consumer.StopAsync();
-        await fixture.Consumer.StartAsync();
-        await fixture.Consumer.StopAsync();
-        await fixture.Consumer.StopAsync();
+        var ex = await Record.ExceptionAsync(async () =>
+        {
+            await fixture.Consumer.StopAsync();
+            await fixture.Consumer.StartAsync();
+            await fixture.Consumer.StopAsync();
+            await fixture.Consumer.StopAsync();
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>

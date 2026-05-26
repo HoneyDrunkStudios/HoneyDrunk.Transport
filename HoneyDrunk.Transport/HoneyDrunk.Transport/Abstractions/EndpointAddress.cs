@@ -41,22 +41,7 @@ public sealed class EndpointAddress : IEndpointAddress
     public IReadOnlyDictionary<string, string> AdditionalProperties { get; init; } = new Dictionary<string, string>();
 
     /// <summary>
-    /// Creates an endpoint address with the specified name and address.
-    /// </summary>
-    /// <param name="name">The logical name.</param>
-    /// <param name="address">The physical address.</param>
-    /// <returns>A new endpoint address instance.</returns>
-    public static IEndpointAddress Create(string name, string address)
-    {
-        return new EndpointAddress
-        {
-            Name = name,
-            Address = address
-        };
-    }
-
-    /// <summary>
-    /// Creates an endpoint address with the specified name, address, and typed metadata.
+    /// Creates an endpoint address with the specified name, address, and optional typed metadata.
     /// </summary>
     /// <param name="name">The logical name.</param>
     /// <param name="address">The physical address.</param>

@@ -93,7 +93,7 @@ public sealed class DefaultErrorHandlingStrategy(ILogger<DefaultErrorHandlingStr
             delayMs = max.TotalMilliseconds;
         }
 
-        // Add jitter (±25%)
+        // Add jitter (+/-25%)
         var jitter = 0.75 + (Random.Shared.NextDouble() * 0.5); // 0.75 - 1.25
         delayMs *= jitter;
         return TimeSpan.FromMilliseconds(delayMs);

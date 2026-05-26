@@ -112,8 +112,9 @@ public sealed class InMemoryBrokerAdditionalTests
         // Arrange
         var broker = new InMemoryBroker(NullLogger<InMemoryBroker>.Instance);
 
-        // Act & Assert - should not throw
-        broker.ClearQueue("non-existent-queue");
+        // Act & Assert
+        var ex = Record.Exception(() => broker.ClearQueue("non-existent-queue"));
+        Assert.Null(ex);
     }
 
     /// <summary>

@@ -104,7 +104,7 @@ public static class EnvelopeMapper
         var timestamp = DateTimeOffset.UtcNow;
         if (message.ApplicationProperties.TryGetValue(TimestampProperty, out var timestampValue)
             && timestampValue is string timestampStr
-            && DateTimeOffset.TryParse(timestampStr, out var parsedTimestamp))
+            && DateTimeOffset.TryParse(timestampStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var parsedTimestamp))
         {
             // Successfully parsed - use parsed value
             timestamp = parsedTimestamp;

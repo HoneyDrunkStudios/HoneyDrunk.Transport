@@ -138,10 +138,10 @@ public sealed class ServiceBusTransportConsumerProcessingTests
             envelope,
             NoOpTransportTransaction.Instance,
             2,
-            CancellationToken.None,
             ToFunc(onComplete),
             ToFunc(onAbandon),
             ToFunc(onDeadLetter),
+            CancellationToken.None,
         ]);
     }
 

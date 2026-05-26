@@ -20,7 +20,10 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// Gets or sets the storage account endpoint URI (for managed identity).
     /// </summary>
     /// <remarks>
-    /// TODO: Add TokenCredential support for managed identity authentication.
+    /// Reserved for managed-identity / <c>TokenCredential</c> connections. <strong>Not yet
+    /// implemented</strong>: <c>QueueClientFactory</c> currently throws
+    /// <see cref="NotImplementedException"/> when this is set and <see cref="ConnectionString"/>
+    /// is empty. Use <see cref="ConnectionString"/> until the credential pipeline lands.
     /// </remarks>
     public Uri? AccountEndpoint { get; set; }
 
@@ -113,6 +116,27 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     public TimeSpan MaxPollingInterval { get; set; } = TimeSpan.FromSeconds(5);
 
     /// <summary>
+    /// Gets or sets the backoff applied after a transient (HTTP 5xx)
+    /// <see cref="Azure.RequestFailedException"/> from the Storage Queue API,
+    /// before the consumer retries its receive loop.
+    /// </summary>
+    /// <remarks>
+    /// Default is 5 seconds. Tests that exercise this branch can lower this so
+    /// the suite doesn't pay multi-second sleeps.
+    /// </remarks>
+    public TimeSpan TransientErrorRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// Gets or sets the backoff applied after an unexpected non-fatal exception
+    /// in the consumer loop, before the next receive iteration.
+    /// </summary>
+    /// <remarks>
+    /// Default is 10 seconds. Tests that exercise this branch can lower this so
+    /// the suite doesn't pay multi-second sleeps.
+    /// </remarks>
+    public TimeSpan UnexpectedErrorRetryDelay { get; set; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
     /// Gets or sets the maximum concurrent publish operations for batch publishing.
     /// </summary>
     /// <remarks>
@@ -134,7 +158,7 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// <strong>Concurrency Model:</strong>
     /// - MaxConcurrency = number of concurrent fetch loops (default: 5).
     /// - BatchProcessingConcurrency = concurrent messages per fetch loop (default: 1).
-    /// - Total concurrent processing = MaxConcurrency × BatchProcessingConcurrency.
+    /// - Total concurrent processing = MaxConcurrency x BatchProcessingConcurrency.
     /// </para>
     /// <para>
     /// <strong>Example:</strong> MaxConcurrency=5, BatchProcessingConcurrency=4 = 20 total concurrent message processing.
@@ -142,7 +166,7 @@ public sealed class StorageQueueOptions : TransportOptions, IValidatableObject
     /// <para>
     /// <strong>Tuning Guidelines:</strong>
     /// - Start with 1 (sequential) and increase if throughput insufficient.
-    /// - Must be ? PrefetchMaxMessages (no benefit processing more than fetched).
+    /// - Must be &lt;= PrefetchMaxMessages (no benefit processing more than fetched).
     /// - Consider message processing time: longer processing = more benefit from parallelism.
     /// - Monitor CPU, memory, and thread pool when increasing.
     /// </para>

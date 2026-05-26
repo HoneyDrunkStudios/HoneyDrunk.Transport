@@ -56,6 +56,7 @@ public sealed class InMemoryBrokerTests
                 return Task.CompletedTask;
             });
         await tcs.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Assert.True(tcs.Task.IsCompletedSuccessfully);
     }
 
     /// <summary>

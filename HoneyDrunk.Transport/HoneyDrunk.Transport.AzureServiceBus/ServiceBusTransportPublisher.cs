@@ -61,45 +61,11 @@ public sealed class ServiceBusTransportPublisher(
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(
-                    "Publishing message {MessageId} to {Destination}",
-                    envelope.MessageId,
-                    destination.Address);
+                _logger.LogDebug("Publishing message {MessageId} to {Destination}", envelope.MessageId, destination.Address);
             }
 
             var serviceBusMessage = EnvelopeMapper.ToServiceBusMessage(envelope);
-
-            // Apply typed properties from endpoint address
-            if (!string.IsNullOrEmpty(destination.PartitionKey))
-            {
-                serviceBusMessage.PartitionKey = destination.PartitionKey;
-            }
-
-            if (!string.IsNullOrEmpty(destination.SessionId))
-            {
-                serviceBusMessage.SessionId = destination.SessionId;
-            }
-
-            if (destination.ScheduledEnqueueTime.HasValue)
-            {
-                serviceBusMessage.ScheduledEnqueueTime = destination.ScheduledEnqueueTime.Value;
-            }
-
-            if (destination.TimeToLive.HasValue)
-            {
-                serviceBusMessage.TimeToLive = destination.TimeToLive.Value;
-            }
-
-            // Fallback to additional properties for backward compatibility
-            if (destination.AdditionalProperties.TryGetValue("PartitionKey", out var partitionKey))
-            {
-                serviceBusMessage.PartitionKey ??= partitionKey;
-            }
-
-            if (destination.AdditionalProperties.TryGetValue("SessionId", out var sessionId))
-            {
-                serviceBusMessage.SessionId ??= sessionId;
-            }
+            ApplyEndpointMetadata(serviceBusMessage, destination);
 
             await _sender!.SendMessageAsync(serviceBusMessage, cancellationToken);
 
@@ -107,9 +73,7 @@ public sealed class ServiceBusTransportPublisher(
 
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(
-                    "Successfully published message {MessageId}",
-                    envelope.MessageId);
+                _logger.LogDebug("Successfully published message {MessageId}", envelope.MessageId);
             }
         }
         catch (Exception ex) when (!ex.IsFatal())
@@ -118,39 +82,12 @@ public sealed class ServiceBusTransportPublisher(
 
             if (_logger.IsEnabled(LogLevel.Error))
             {
-                _logger.LogError(
-                    ex,
-                    "Failed to publish message {MessageId}",
-                    envelope.MessageId);
+                _logger.LogError(ex, "Failed to publish message {MessageId}", envelope.MessageId);
             }
 
-            // Attempt Blob Storage fallback if configured
-            if (_options.Value.BlobFallback.Enabled)
+            if (await TryFallbackToBlobAsync(envelope, destination, ex, cancellationToken).ConfigureAwait(false))
             {
-                try
-                {
-                    var blobUri = await SaveToBlobFallbackAsync(envelope, destination, ex, cancellationToken);
-
-                    if (_logger.IsEnabled(LogLevel.Warning))
-                    {
-                        _logger.LogWarning(
-                            "Message {MessageId} persisted to Blob fallback at {BlobUri}",
-                            envelope.MessageId,
-                            blobUri);
-                    }
-
-                    // Swallow the publish exception since the message is durably stored
-                    return;
-                }
-                catch (Exception blobEx) when (!blobEx.IsFatal())
-                {
-                    if (_logger.IsEnabled(LogLevel.Error))
-                    {
-                        _logger.LogError(blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
-                    }
-
-                    // If fallback fails, rethrow original exception to signal publish failure
-                }
+                return;
             }
 
             throw;
@@ -172,39 +109,7 @@ public sealed class ServiceBusTransportPublisher(
             .Select(envelope =>
             {
                 var message = EnvelopeMapper.ToServiceBusMessage(envelope);
-
-                // Apply typed properties from endpoint address
-                if (!string.IsNullOrEmpty(destination.PartitionKey))
-                {
-                    message.PartitionKey = destination.PartitionKey;
-                }
-
-                if (!string.IsNullOrEmpty(destination.SessionId))
-                {
-                    message.SessionId = destination.SessionId;
-                }
-
-                if (destination.ScheduledEnqueueTime.HasValue)
-                {
-                    message.ScheduledEnqueueTime = destination.ScheduledEnqueueTime.Value;
-                }
-
-                if (destination.TimeToLive.HasValue)
-                {
-                    message.TimeToLive = destination.TimeToLive.Value;
-                }
-
-                // Fallback to additional properties for backward compatibility
-                if (destination.AdditionalProperties.TryGetValue("PartitionKey", out var partitionKey))
-                {
-                    message.PartitionKey ??= partitionKey;
-                }
-
-                if (destination.AdditionalProperties.TryGetValue("SessionId", out var sessionId))
-                {
-                    message.SessionId ??= sessionId;
-                }
-
+                ApplyEndpointMetadata(message, destination);
                 return message;
             })
             .ToList();
@@ -213,10 +118,7 @@ public sealed class ServiceBusTransportPublisher(
         {
             if (_logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug(
-                    "Publishing batch of {Count} messages to {Destination}",
-                    messages.Count,
-                    destination.Address);
+                _logger.LogDebug("Publishing batch of {Count} messages to {Destination}", messages.Count, destination.Address);
             }
 
             await SendMessageBatchesAsync(messages, cancellationToken);
@@ -233,36 +135,9 @@ public sealed class ServiceBusTransportPublisher(
                 _logger.LogError(ex, "Failed to publish batch");
             }
 
-            // Best-effort: persist each envelope to Blob fallback when enabled
-            if (_options.Value.BlobFallback.Enabled)
+            if (await TryFallbackBatchToBlobAsync(envelopeList, destination, ex, cancellationToken).ConfigureAwait(false))
             {
-                var attempts = new List<Exception>();
-                foreach (var env in envelopeList)
-                {
-                    try
-                    {
-                        await SaveToBlobFallbackAsync(env, destination, ex, cancellationToken);
-                    }
-                    catch (Exception blobEx) when (!blobEx.IsFatal())
-                    {
-                        attempts.Add(blobEx);
-                    }
-                }
-
-                if (attempts.Count == 0)
-                {
-                    if (_logger.IsEnabled(LogLevel.Warning))
-                    {
-                        _logger.LogWarning("Batch persisted to Blob fallback");
-                    }
-
-                    return; // Suppress publish error since all messages were saved
-                }
-
-                if (_logger.IsEnabled(LogLevel.Error))
-                {
-                    _logger.LogError("One or more blob fallback uploads failed for the batch");
-                }
+                return;
             }
 
             throw;
@@ -296,6 +171,41 @@ public sealed class ServiceBusTransportPublisher(
         }
 
         _initLock.Dispose();
+    }
+
+    private static void ApplyEndpointMetadata(ServiceBusMessage serviceBusMessage, IEndpointAddress destination)
+    {
+        // Apply typed properties from endpoint address.
+        if (!string.IsNullOrEmpty(destination.PartitionKey))
+        {
+            serviceBusMessage.PartitionKey = destination.PartitionKey;
+        }
+
+        if (!string.IsNullOrEmpty(destination.SessionId))
+        {
+            serviceBusMessage.SessionId = destination.SessionId;
+        }
+
+        if (destination.ScheduledEnqueueTime.HasValue)
+        {
+            serviceBusMessage.ScheduledEnqueueTime = destination.ScheduledEnqueueTime.Value;
+        }
+
+        if (destination.TimeToLive.HasValue)
+        {
+            serviceBusMessage.TimeToLive = destination.TimeToLive.Value;
+        }
+
+        // Fallback to additional properties for backward compatibility.
+        if (destination.AdditionalProperties.TryGetValue("PartitionKey", out var partitionKey))
+        {
+            serviceBusMessage.PartitionKey ??= partitionKey;
+        }
+
+        if (destination.AdditionalProperties.TryGetValue("SessionId", out var sessionId))
+        {
+            serviceBusMessage.SessionId ??= sessionId;
+        }
     }
 
     private async Task SendMessageBatchesAsync(List<ServiceBusMessage> messages, CancellationToken cancellationToken)
@@ -390,5 +300,81 @@ public sealed class ServiceBusTransportPublisher(
 
         var store = _blobFallbackStore ?? new Internal.DefaultBlobFallbackStore();
         return store.SaveAsync(envelope, destination, failure, fallback, cancellationToken);
+    }
+
+    private async Task<bool> TryFallbackToBlobAsync(
+        ITransportEnvelope envelope,
+        IEndpointAddress destination,
+        Exception publishException,
+        CancellationToken cancellationToken)
+    {
+        if (!_options.Value.BlobFallback.Enabled)
+        {
+            return false;
+        }
+
+        try
+        {
+            var blobUri = await SaveToBlobFallbackAsync(envelope, destination, publishException, cancellationToken).ConfigureAwait(false);
+
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("Message {MessageId} persisted to Blob fallback at {BlobUri}", envelope.MessageId, blobUri);
+            }
+
+            return true;
+        }
+        catch (Exception blobEx) when (!blobEx.IsFatal())
+        {
+            // Caller re-throws the original publish exception when this returns false.
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(blobEx, "Blob fallback failed for message {MessageId}", envelope.MessageId);
+            }
+
+            return false;
+        }
+    }
+
+    private async Task<bool> TryFallbackBatchToBlobAsync(
+        IReadOnlyList<ITransportEnvelope> envelopes,
+        IEndpointAddress destination,
+        Exception publishException,
+        CancellationToken cancellationToken)
+    {
+        if (!_options.Value.BlobFallback.Enabled)
+        {
+            return false;
+        }
+
+        var failures = new List<Exception>();
+        foreach (var envelope in envelopes)
+        {
+            try
+            {
+                await SaveToBlobFallbackAsync(envelope, destination, publishException, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception blobEx) when (!blobEx.IsFatal())
+            {
+                failures.Add(blobEx);
+            }
+        }
+
+        if (failures.Count == 0)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning("Batch persisted to Blob fallback");
+            }
+
+            return true;
+        }
+
+        if (_logger.IsEnabled(LogLevel.Error))
+        {
+            _logger.LogError("One or more blob fallback uploads failed for the batch");
+        }
+
+        return false;
     }
 }

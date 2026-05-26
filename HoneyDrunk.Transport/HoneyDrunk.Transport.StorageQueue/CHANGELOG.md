@@ -7,9 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-26
+
+### Added
+
+- `StorageQueueOptions.TransientErrorRetryDelay` and `UnexpectedErrorRetryDelay` (defaults 5s / 10s) — make the previously-hardcoded `Task.Delay` backoffs in `StorageQueueProcessor.RunReceiveAndProcessIterationAsync` tunable. Operators can lower these in test/sandbox configs without changing source, and unit tests no longer pay multi-second sleeps to exercise the error-retry branches.
+
 ### Changed
 
-- Refreshed HoneyDrunk.Standards to 0.2.9 for ADR-0047 testing tooling alignment.
+- Sonar gate-cleanup (ADR-0011 D11). Refactored `StorageQueueProcessor.ConsumeMessagesAsync` and `ProcessMessageAsync` into smaller helpers (`RunReceiveAndProcessIterationAsync`, `ProcessBatchAsync`, `HandlePipelineResultAsync`, `CompleteSuccessAsync`, `PoisonAsync`, `ScheduleRetryOrPoisonAsync`) — cognitive complexity 27 / 41 → under 15.
+- `StorageQueueSender` envelope-headers copy now uses `ToDictionary` instead of the `Dictionary<,>(IDictionary)` ctor.
+- `StorageQueueOptions.AccountEndpoint` doc no longer carries the stale TODO — token credential resolution lives in the factory layer by design.
+- `Azure.Storage.Queues` `12.25.0` → `12.26.0`.
+- `Microsoft.Extensions.{Hosting.Abstractions, Logging.Abstractions, Options, Options.DataAnnotations}` `10.0.5` → `10.0.8`.
 
 ## [0.6.0] - 2026-05-18
 

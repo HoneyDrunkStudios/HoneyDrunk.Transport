@@ -1,3 +1,4 @@
+using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
 using HoneyDrunk.Transport.StorageQueue.Internal;
@@ -84,9 +85,25 @@ public sealed class StorageQueueSenderTests
         var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
         var sender = new StorageQueueSender(factory, options, NullLogger<StorageQueueSender>.Instance);
 
-        // Act & Assert - should not throw
-        await sender.DisposeAsync();
-        await factory.DisposeAsync();
+        try
+        {
+            // Act — explicit single dispose (no `await using` shadow-cleanup) so the
+            // test exercises the post-dispose path without relying on idempotence.
+            await sender.DisposeAsync();
+
+            // Assert — sender is disposed; publishing now throws ObjectDisposedException.
+            var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "after-dispose" });
+            await Assert.ThrowsAsync<ObjectDisposedException>(
+                () => sender.PublishAsync(envelope, EndpointAddress.Create("orders", "orders")));
+        }
+        finally
+        {
+            // Defensive: if the act/assert threw before reaching DisposeAsync, ensure cleanup.
+            // DisposeAsync is idempotent (Interlocked.Exchange sentinel) so the
+            // happy-path double call is a no-op.
+            await sender.DisposeAsync();
+            await factory.DisposeAsync();
+        }
     }
 
     /// <summary>

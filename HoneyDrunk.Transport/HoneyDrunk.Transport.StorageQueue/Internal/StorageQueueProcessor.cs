@@ -227,6 +227,25 @@ internal sealed class StorageQueueProcessor(
     }
 
     /// <summary>
+    /// Waits for the given delay and reports cancellation as a return-value rather
+    /// than an exception. Honors the caller's bool contract (e.g.
+    /// <c>RunReceiveAndProcessIterationAsync</c>) which uses <c>false</c> to signal
+    /// "exit the consumer loop without bubbling <see cref="OperationCanceledException"/>".
+    /// </summary>
+    private static async Task<bool> DelayWithCancellationAsync(TimeSpan delay, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Background consumer loop for receiving and processing messages.
     /// </summary>
     private async Task ConsumeMessagesAsync(int consumerId, CancellationToken cancellationToken)
@@ -249,86 +268,9 @@ internal sealed class StorageQueueProcessor(
 
             while (!cancellationToken.IsCancellationRequested)
             {
-                try
+                if (!await RunReceiveAndProcessIterationAsync(consumerId, queueClient, poisonQueueClient, backoffState, cancellationToken).ConfigureAwait(false))
                 {
-                    // Receive messages from queue
-                    var messages = await ReceiveMessagesAsync(queueClient, cancellationToken);
-
-                    if (messages.Length == 0)
-                    {
-                        // Queue is empty, apply exponential backoff
-                        await HandleEmptyQueueAsync(consumerId, backoffState, cancellationToken);
-                        continue;
-                    }
-
-                    // Reset backoff since we got messages
-                    backoffState.Reset(_options.EmptyQueuePollingInterval);
-
-                    // Process messages with configured batch concurrency
-                    if (_options.BatchProcessingConcurrency == 1)
-                    {
-                        // Sequential processing (default, backward compatible)
-                        foreach (var message in messages)
-                        {
-                            await ProcessMessageAsync(
-                                queueClient,
-                                poisonQueueClient,
-                                message,
-                                cancellationToken);
-                        }
-                    }
-                    else
-                    {
-                        // Parallel processing within batch
-                        using var semaphore = new SemaphoreSlim(_options.BatchProcessingConcurrency);
-                        var tasks = messages.Select(async message =>
-                        {
-                            await semaphore.WaitAsync(cancellationToken);
-                            try
-                            {
-                                await ProcessMessageAsync(
-                                    queueClient,
-                                    poisonQueueClient,
-                                    message,
-                                    cancellationToken);
-                            }
-                            finally
-                            {
-                                semaphore.Release();
-                            }
-                        });
-
-                        await Task.WhenAll(tasks);
-                    }
-                }
-                catch (RequestFailedException ex) when (IsTransientError(ex))
-                {
-                    if (_logger.IsEnabled(LogLevel.Warning))
-                    {
-                        _logger.LogWarning(
-                            ex,
-                            "Consumer {ConsumerId} encountered transient error, will retry",
-                            consumerId);
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-                }
-                catch (OperationCanceledException)
-                {
-                    // Expected when stopping
                     break;
-                }
-                catch (Exception ex) when (!ex.IsFatal())
-                {
-                    if (_logger.IsEnabled(LogLevel.Error))
-                    {
-                        _logger.LogError(
-                            ex,
-                            "Consumer {ConsumerId} encountered unexpected error",
-                            consumerId);
-                    }
-
-                    await Task.Delay(TimeSpan.FromSeconds(10), cancellationToken);
                 }
             }
         }
@@ -351,6 +293,93 @@ internal sealed class StorageQueueProcessor(
         {
             _logger.LogDebug("Consumer {ConsumerId} stopped", consumerId);
         }
+    }
+
+    /// <summary>
+    /// Runs a single receive-and-process iteration of the consumer loop. Returns
+    /// <c>false</c> when the loop should exit (graceful cancellation); <c>true</c>
+    /// to continue.
+    /// </summary>
+    private async Task<bool> RunReceiveAndProcessIterationAsync(
+        int consumerId,
+        QueueClient queueClient,
+        QueueClient poisonQueueClient,
+        ConsumerBackoffState backoffState,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var messages = await ReceiveMessagesAsync(queueClient, cancellationToken).ConfigureAwait(false);
+
+            if (messages.Length == 0)
+            {
+                await HandleEmptyQueueAsync(consumerId, backoffState, cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+
+            backoffState.Reset(_options.EmptyQueuePollingInterval);
+            await ProcessBatchAsync(queueClient, poisonQueueClient, messages, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        catch (RequestFailedException ex) when (IsTransientError(ex))
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(ex, "Consumer {ConsumerId} encountered transient error, will retry", consumerId);
+            }
+
+            // Cancellation during the backoff is a graceful stop, not a failure to
+            // propagate. Honor the method's bool contract: `false` => caller exits the
+            // loop without bubbling `OperationCanceledException` through the consumer.
+            return await DelayWithCancellationAsync(_options.TransientErrorRetryDelay, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            // Expected when stopping; exit the loop.
+            return false;
+        }
+        catch (Exception ex) when (!ex.IsFatal())
+        {
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                _logger.LogError(ex, "Consumer {ConsumerId} encountered unexpected error", consumerId);
+            }
+
+            return await DelayWithCancellationAsync(_options.UnexpectedErrorRetryDelay, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task ProcessBatchAsync(
+        QueueClient queueClient,
+        QueueClient poisonQueueClient,
+        QueueMessage[] messages,
+        CancellationToken cancellationToken)
+    {
+        if (_options.BatchProcessingConcurrency == 1)
+        {
+            foreach (var message in messages)
+            {
+                await ProcessMessageAsync(queueClient, poisonQueueClient, message, cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        using var semaphore = new SemaphoreSlim(_options.BatchProcessingConcurrency);
+        var tasks = messages.Select(async message =>
+        {
+            await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await ProcessMessageAsync(queueClient, poisonQueueClient, message, cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                semaphore.Release();
+            }
+        });
+
+        await Task.WhenAll(tasks).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -412,111 +441,8 @@ internal sealed class StorageQueueProcessor(
 
             try
             {
-                // Process through pipeline
-                var result = await _pipeline.ProcessAsync(envelope, context, cancellationToken);
-
-                if (result == MessageProcessingResult.Success)
-                {
-                    // Delete message from queue
-                    await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
-
-                    TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
-
-                    if (_logger.IsEnabled(LogLevel.Debug))
-                    {
-                        _logger.LogDebug("Successfully processed message {MessageId}", envelope.MessageId);
-                    }
-                }
-                else if (result == MessageProcessingResult.DeadLetter)
-                {
-                    // Move to poison queue immediately
-                    // Note: If deletion fails after poison queue insertion, message may be reprocesseds
-                    // The PoisonQueueMover includes MessageId which can be used for deduplication
-                    try
-                    {
-                        await _poisonMover.MoveMessageToPoisonQueueAsync(
-                            poisonQueueClient,
-                            message,
-                            null,
-                            message.DequeueCount,
-                            cancellationToken);
-
-                        // Delete from primary queue only after successful poison queue insertion
-                        await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
-
-                        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
-                    }
-                    catch (Exception poisonEx) when (!poisonEx.IsFatal())
-                    {
-                        if (_logger.IsEnabled(LogLevel.Error))
-                        {
-                            _logger.LogError(
-                                poisonEx,
-                                "Failed to complete dead-letter operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.",
-                                envelope.MessageId);
-                        }
-
-                        // Don't throw - let message become visible again for retry
-                        // Poison queue deduplication should be handled by MessageId
-                        TransportTelemetry.RecordError(activity, poisonEx);
-                    }
-                }
-                else
-                {
-                    // Retry: Check if max dequeue count exceeded
-                    if (message.DequeueCount >= _options.MaxDequeueCount)
-                    {
-                        if (_logger.IsEnabled(LogLevel.Warning))
-                        {
-                            _logger.LogWarning(
-                                "Message {MessageId} exceeded max dequeue count ({MaxDequeueCount}), moving to poison queue",
-                                envelope.MessageId,
-                                _options.MaxDequeueCount);
-                        }
-
-                        try
-                        {
-                            await _poisonMover.MoveMessageToPoisonQueueAsync(
-                                poisonQueueClient,
-                                message,
-                                null,
-                                message.DequeueCount,
-                                cancellationToken);
-
-                            // Delete from primary queue only after successful poison queue insertion
-                            await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken);
-
-                            TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
-                        }
-                        catch (Exception poisonEx) when (!poisonEx.IsFatal())
-                        {
-                            if (_logger.IsEnabled(LogLevel.Error))
-                            {
-                                _logger.LogError(
-                                    poisonEx,
-                                    "Failed to complete poison queue operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.",
-                                    envelope.MessageId);
-                            }
-
-                            // Don't throw - let message become visible again for retry
-                            TransportTelemetry.RecordError(activity, poisonEx);
-                        }
-                    }
-                    else
-                    {
-                        // Message will become visible again after VisibilityTimeout.
-                        // Optionally extend visibility for longer retry delays.
-                        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Retry);
-
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug(
-                                "Message {MessageId} will be retried (dequeue count: {DequeueCount})",
-                                envelope.MessageId,
-                                message.DequeueCount);
-                        }
-                    }
-                }
+                var result = await _pipeline.ProcessAsync(envelope, context, cancellationToken).ConfigureAwait(false);
+                await HandlePipelineResultAsync(activity, queueClient, poisonQueueClient, message, envelope, result, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception ex) when (!ex.IsFatal())
             {
@@ -592,6 +518,123 @@ internal sealed class StorageQueueProcessor(
         }
 
         await Task.Delay(TimeSpan.FromMilliseconds(delayMs), cancellationToken);
+    }
+
+    private async Task HandlePipelineResultAsync(
+        System.Diagnostics.Activity? activity,
+        QueueClient queueClient,
+        QueueClient poisonQueueClient,
+        QueueMessage message,
+        TransportEnvelope envelope,
+        MessageProcessingResult result,
+        CancellationToken cancellationToken)
+    {
+        switch (result)
+        {
+            case MessageProcessingResult.Success:
+                await CompleteSuccessAsync(activity, queueClient, message, envelope, cancellationToken).ConfigureAwait(false);
+                return;
+
+            case MessageProcessingResult.DeadLetter:
+                await PoisonAsync(activity, queueClient, poisonQueueClient, message, envelope, dueToMaxDequeue: false, cancellationToken).ConfigureAwait(false);
+                return;
+
+            default:
+                await ScheduleRetryOrPoisonAsync(activity, queueClient, poisonQueueClient, message, envelope, cancellationToken).ConfigureAwait(false);
+                return;
+        }
+    }
+
+    private async Task CompleteSuccessAsync(
+        System.Diagnostics.Activity? activity,
+        QueueClient queueClient,
+        QueueMessage message,
+        TransportEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken).ConfigureAwait(false);
+        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Success);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug("Successfully processed message {MessageId}", envelope.MessageId);
+        }
+    }
+
+    private async Task PoisonAsync(
+        System.Diagnostics.Activity? activity,
+        QueueClient queueClient,
+        QueueClient poisonQueueClient,
+        QueueMessage message,
+        TransportEnvelope envelope,
+        bool dueToMaxDequeue,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _poisonMover.MoveMessageToPoisonQueueAsync(
+                poisonQueueClient,
+                message,
+                null,
+                message.DequeueCount,
+                cancellationToken).ConfigureAwait(false);
+
+            // Delete from primary queue only after successful poison queue insertion.
+            await queueClient.DeleteMessageAsync(message.MessageId, message.PopReceipt, cancellationToken).ConfigureAwait(false);
+            TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.DeadLetter);
+        }
+        catch (Exception poisonEx) when (!poisonEx.IsFatal())
+        {
+            if (_logger.IsEnabled(LogLevel.Error))
+            {
+                if (dueToMaxDequeue)
+                {
+                    _logger.LogError(poisonEx, "Failed to complete poison queue operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.", envelope.MessageId);
+                }
+                else
+                {
+                    _logger.LogError(poisonEx, "Failed to complete dead-letter operation for message {MessageId}. Message will be retried and may appear as duplicate in poison queue.", envelope.MessageId);
+                }
+            }
+
+            // Don't rethrow - let message become visible again for retry.
+            // Poison queue deduplication should be handled by MessageId.
+            TransportTelemetry.RecordError(activity, poisonEx);
+        }
+    }
+
+    private async Task ScheduleRetryOrPoisonAsync(
+        System.Diagnostics.Activity? activity,
+        QueueClient queueClient,
+        QueueClient poisonQueueClient,
+        QueueMessage message,
+        TransportEnvelope envelope,
+        CancellationToken cancellationToken)
+    {
+        if (message.DequeueCount >= _options.MaxDequeueCount)
+        {
+            if (_logger.IsEnabled(LogLevel.Warning))
+            {
+                _logger.LogWarning(
+                    "Message {MessageId} exceeded max dequeue count ({MaxDequeueCount}), moving to poison queue",
+                    envelope.MessageId,
+                    _options.MaxDequeueCount);
+            }
+
+            await PoisonAsync(activity, queueClient, poisonQueueClient, message, envelope, dueToMaxDequeue: true, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
+        // Message will become visible again after VisibilityTimeout. Optionally extend visibility for longer retry delays.
+        TransportTelemetry.RecordOutcome(activity, MessageProcessingResult.Retry);
+
+        if (_logger.IsEnabled(LogLevel.Debug))
+        {
+            _logger.LogDebug(
+                "Message {MessageId} will be retried (dequeue count: {DequeueCount})",
+                envelope.MessageId,
+                message.DequeueCount);
+        }
     }
 
     /// <summary>

@@ -7,9 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-05-26
+
 ### Changed
 
-- Refreshed HoneyDrunk.Standards to 0.2.9 for ADR-0047 testing tooling alignment.
+- Sonar gate-cleanup (ADR-0011 D11). Refactored `ServiceBusTransportPublisher` to extract `ApplyEndpointMetadata`, `TryFallbackToBlobAsync`, `TryFallbackBatchToBlobAsync`, and `LogIfEnabled` helpers — cognitive complexity 23 / 36 → under 15.
+- Extracted nested ternary in `DefaultBlobFallbackStore.SaveAsync` into `CreateBlobServiceClient`.
+- `EnvelopeMapper.FromServiceBusMessage` timestamp parsing now passes `CultureInfo.InvariantCulture` + `DateTimeStyles.RoundtripKind`.
+- `ServiceBusReceivedMessageContext` ctor + `Create` overloads reorder `CancellationToken` to last (CA1068). Internal type — no external consumers.
+- `Azure.Storage.Blobs` `12.27.0` → `12.28.0`.
+- `Microsoft.Extensions.Azure` `1.13.1` → `1.14.0`.
+- `Microsoft.Extensions.{Logging.Abstractions, Options}` `10.0.5` → `10.0.8`.
 
 ## [0.6.0] - 2026-05-18
 

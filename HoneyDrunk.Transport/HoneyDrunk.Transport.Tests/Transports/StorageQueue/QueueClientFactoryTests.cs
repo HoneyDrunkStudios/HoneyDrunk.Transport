@@ -108,8 +108,21 @@ public sealed class QueueClientFactoryTests
 
         var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
 
-        // Act & Assert - should not throw
-        await factory.DisposeAsync();
+        try
+        {
+            // Act — explicit single dispose (no `await using` shadow-cleanup) so the
+            // test exercises the post-dispose path without relying on idempotence.
+            await factory.DisposeAsync();
+
+            // Assert — a follow-up operation must surface ObjectDisposedException, proving the dispose
+            // path completed and flipped the internal sentinel.
+            await Assert.ThrowsAsync<ObjectDisposedException>(() => factory.GetOrCreatePrimaryQueueClientAsync());
+        }
+        finally
+        {
+            // Defensive: idempotent (Interlocked sentinel) so the happy-path second call is a no-op.
+            await factory.DisposeAsync();
+        }
     }
 
     /// <summary>
@@ -174,12 +187,15 @@ public sealed class QueueClientFactoryTests
             CreateIfNotExists = false
         });
 
-        var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
+        await using var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
 
-        // Act & Assert - multiple disposes should not throw
+        // Act — multiple Dispose calls must not throw.
         await factory.DisposeAsync();
         await factory.DisposeAsync();
         await factory.DisposeAsync();
+
+        // Assert — factory is disposed, subsequent operation throws.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => factory.GetOrCreatePrimaryQueueClientAsync());
     }
 
     /// <summary>
