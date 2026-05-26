@@ -364,10 +364,10 @@ public sealed class ServiceBusTransportConsumer(
             ITransportEnvelope envelope,
             ITransportTransaction transaction,
             int deliveryCount,
-            CancellationToken cancellationToken,
             Func<Task> completeAsync,
             Func<Task> abandonAsync,
-            Func<Task> deadLetterAsync)
+            Func<Task> deadLetterAsync,
+            CancellationToken cancellationToken)
         {
             Envelope = envelope;
             Transaction = transaction;
@@ -400,14 +400,14 @@ public sealed class ServiceBusTransportConsumer(
 
             return Create(
                 args.Message,
-                args.CancellationToken,
                 () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
                 () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
                 (reason, description) => args.DeadLetterMessageAsync(
                     args.Message,
                     reason,
                     description,
-                    settlementCancellationToken));
+                    settlementCancellationToken),
+                args.CancellationToken);
         }
 
         public static ServiceBusReceivedMessageContext Create(ProcessSessionMessageEventArgs args)
@@ -418,22 +418,22 @@ public sealed class ServiceBusTransportConsumer(
 
             return Create(
                 args.Message,
-                args.CancellationToken,
                 () => args.CompleteMessageAsync(args.Message, settlementCancellationToken),
                 () => args.AbandonMessageAsync(args.Message, cancellationToken: settlementCancellationToken),
                 (reason, description) => args.DeadLetterMessageAsync(
                     args.Message,
                     reason,
                     description,
-                    settlementCancellationToken));
+                    settlementCancellationToken),
+                args.CancellationToken);
         }
 
         private static ServiceBusReceivedMessageContext Create(
             ServiceBusReceivedMessage message,
-            CancellationToken processingCancellationToken,
             Func<Task> completeAsync,
             Func<Task> abandonAsync,
-            Func<string, string, Task> deadLetterAsync)
+            Func<string, string, Task> deadLetterAsync,
+            CancellationToken processingCancellationToken)
         {
             var envelope = EnvelopeMapper.FromServiceBusMessage(message);
 
@@ -441,7 +441,6 @@ public sealed class ServiceBusTransportConsumer(
                 envelope,
                 EnvelopeMapper.CreateTransaction(message),
                 EnvelopeMapper.GetDeliveryCount(message),
-                processingCancellationToken,
                 completeAsync,
                 abandonAsync,
                 () => deadLetterAsync(
@@ -449,7 +448,8 @@ public sealed class ServiceBusTransportConsumer(
                     string.Format(
                         CultureInfo.InvariantCulture,
                         DeadLetterDescriptionFormat,
-                        envelope.MessageId)));
+                        envelope.MessageId)),
+                processingCancellationToken);
         }
     }
 }

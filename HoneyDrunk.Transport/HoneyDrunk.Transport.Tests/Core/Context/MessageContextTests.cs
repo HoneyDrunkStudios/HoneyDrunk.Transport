@@ -45,7 +45,8 @@ public sealed class MessageContextTests
     public async Task CommitAsync_WhenCalled_CompletesSuccessfully()
     {
         var tx = NoOpTransportTransaction.Instance;
-        await tx.CommitAsync();
+        var ex = await Record.ExceptionAsync(() => tx.CommitAsync());
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -56,7 +57,8 @@ public sealed class MessageContextTests
     public async Task RollbackAsync_WhenCalled_CompletesSuccessfully()
     {
         var tx = NoOpTransportTransaction.Instance;
-        await tx.RollbackAsync();
+        var ex = await Record.ExceptionAsync(() => tx.RollbackAsync());
+        Assert.Null(ex);
     }
 
     /// <summary>

@@ -11,10 +11,10 @@ namespace HoneyDrunk.Transport.Tests.Core.Pipeline;
 public sealed class MessageHandlerInvokerTests
 {
     /// <summary>
-    /// Verifies that InvokeHandlerAsync returns null when no handler is registered.
+    /// Verifies that TryInvokeHandler returns false when no handler is registered.
     /// </summary>
     [Fact]
-    public void InvokeHandlerAsync_WithNoHandlerRegistered_ReturnsNull()
+    public void TryInvokeHandler_WithNoHandlerRegistered_ReturnsFalse()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -31,18 +31,19 @@ public sealed class MessageHandlerInvokerTests
         };
 
         // Act
-        var result = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
+        var found = invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task);
 
         // Assert
-        Assert.Null(result);
+        Assert.False(found);
+        Assert.Same(Task.CompletedTask, task);
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync invokes the registered handler successfully.
+    /// Verifies that TryInvokeHandler invokes the registered handler successfully.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_WithRegisteredHandler_InvokesHandler()
+    public async Task TryInvokeHandler_WithRegisteredHandler_InvokesHandler()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -69,8 +70,8 @@ public sealed class MessageHandlerInvokerTests
         };
 
         // Act
-        var task = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
-        Assert.NotNull(task);
+        var found = invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task);
+        Assert.True(found);
         await task;
 
         // Assert
@@ -78,11 +79,11 @@ public sealed class MessageHandlerInvokerTests
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync caches the compiled delegate for performance.
+    /// Verifies that TryInvokeHandler caches the compiled delegate for performance.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_CalledMultipleTimes_UsesCachedDelegate()
+    public async Task TryInvokeHandler_CalledMultipleTimes_UsesCachedDelegate()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -108,16 +109,13 @@ public sealed class MessageHandlerInvokerTests
         };
 
         // Act - invoke multiple times
-        var task1 = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
-        Assert.NotNull(task1);
+        Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task1));
         await task1;
 
-        var task2 = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
-        Assert.NotNull(task2);
+        Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task2));
         await task2;
 
-        var task3 = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
-        Assert.NotNull(task3);
+        Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task3));
         await task3;
 
         // Assert - handler was called 3 times (verifies caching didn't break invocation)
@@ -125,10 +123,10 @@ public sealed class MessageHandlerInvokerTests
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync throws ArgumentNullException for null message.
+    /// Verifies that TryInvokeHandler throws ArgumentNullException for null message.
     /// </summary>
     [Fact]
-    public void InvokeHandlerAsync_WithNullMessage_ThrowsArgumentNullException()
+    public void TryInvokeHandler_WithNullMessage_ThrowsArgumentNullException()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -141,23 +139,16 @@ public sealed class MessageHandlerInvokerTests
             DeliveryCount = 1
         };
 
-        // Act & Assert - ArgumentNullException.ThrowIfNull is synchronous guard
-        try
-        {
-            invoker.InvokeHandlerAsync(null!, typeof(SampleMessage), context, CancellationToken.None);
-            Assert.Fail("Expected ArgumentNullException");
-        }
-        catch (ArgumentNullException ex)
-        {
-            Assert.NotNull(ex);
-        }
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            invoker.TryInvokeHandler(null!, typeof(SampleMessage), context, CancellationToken.None, out _));
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync throws ArgumentNullException for null message type.
+    /// Verifies that TryInvokeHandler throws ArgumentNullException for null message type.
     /// </summary>
     [Fact]
-    public void InvokeHandlerAsync_WithNullMessageType_ThrowsArgumentNullException()
+    public void TryInvokeHandler_WithNullMessageType_ThrowsArgumentNullException()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -171,24 +162,17 @@ public sealed class MessageHandlerInvokerTests
             DeliveryCount = 1
         };
 
-        // Act & Assert - ArgumentNullException.ThrowIfNull is synchronous guard
-        try
-        {
-            invoker.InvokeHandlerAsync(message, null!, context, CancellationToken.None);
-            Assert.Fail("Expected ArgumentNullException");
-        }
-        catch (ArgumentNullException ex)
-        {
-            Assert.NotNull(ex);
-        }
+        // Act & Assert
+        Assert.Throws<ArgumentNullException>(() =>
+            invoker.TryInvokeHandler(message, null!, context, CancellationToken.None, out _));
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync propagates handler exceptions.
+    /// Verifies that TryInvokeHandler propagates handler exceptions.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_WhenHandlerThrows_PropagatesException()
+    public async Task TryInvokeHandler_WhenHandlerThrows_PropagatesException()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -211,11 +195,10 @@ public sealed class MessageHandlerInvokerTests
             DeliveryCount = 1
         };
 
-        // Act & Assert - Pass lambda that invokes and returns the task
+        // Act & Assert
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            var task = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, CancellationToken.None);
-            Assert.NotNull(task);
+            Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), context, CancellationToken.None, out var task));
             await task;
         });
 
@@ -223,11 +206,11 @@ public sealed class MessageHandlerInvokerTests
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync respects cancellation tokens.
+    /// Verifies that TryInvokeHandler respects cancellation tokens.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_WithCancelledToken_ThrowsOperationCanceledException()
+    public async Task TryInvokeHandler_WithCancelledToken_ThrowsOperationCanceledException()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -253,17 +236,16 @@ public sealed class MessageHandlerInvokerTests
         cts.Cancel();
 
         // Act & Assert
-        var task = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), context, cts.Token);
-        Assert.NotNull(task);
+        Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), context, cts.Token, out var task));
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync works with different message types.
+    /// Verifies that TryInvokeHandler works with different message types.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_WithDifferentMessageTypes_InvokesCorrectHandlers()
+    public async Task TryInvokeHandler_WithDifferentMessageTypes_InvokesCorrectHandlers()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -299,13 +281,11 @@ public sealed class MessageHandlerInvokerTests
         };
 
         // Act - invoke SampleMessage handler
-        var task1 = invoker.InvokeHandlerAsync(sampleMessage, typeof(SampleMessage), context, CancellationToken.None);
-        Assert.NotNull(task1);
+        Assert.True(invoker.TryInvokeHandler(sampleMessage, typeof(SampleMessage), context, CancellationToken.None, out var task1));
         await task1;
 
         // Act - invoke OtherMessage handler
-        var task2 = invoker.InvokeHandlerAsync(otherMessage, typeof(OtherMessage), context, CancellationToken.None);
-        Assert.NotNull(task2);
+        Assert.True(invoker.TryInvokeHandler(otherMessage, typeof(OtherMessage), context, CancellationToken.None, out var task2));
         await task2;
 
         // Assert
@@ -314,11 +294,11 @@ public sealed class MessageHandlerInvokerTests
     }
 
     /// <summary>
-    /// Verifies that InvokeHandlerAsync passes context correctly to handler.
+    /// Verifies that TryInvokeHandler passes context correctly to handler.
     /// </summary>
     /// <returns>A task representing the asynchronous test.</returns>
     [Fact]
-    public async Task InvokeHandlerAsync_PassesContextCorrectly()
+    public async Task TryInvokeHandler_PassesContextCorrectly()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -344,8 +324,7 @@ public sealed class MessageHandlerInvokerTests
         expectedContext.Properties["custom"] = "value";
 
         // Act
-        var task = invoker.InvokeHandlerAsync(message, typeof(SampleMessage), expectedContext, CancellationToken.None);
-        Assert.NotNull(task);
+        Assert.True(invoker.TryInvokeHandler(message, typeof(SampleMessage), expectedContext, CancellationToken.None, out var task));
         await task;
 
         // Assert

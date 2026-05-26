@@ -238,7 +238,7 @@ public sealed class TransportHealthResultTests
         // Assert
         Assert.Equal("test", result.Metadata!["StringValue"]);
         Assert.Equal(42, result.Metadata["IntValue"]);
-        Assert.Equal(true, result.Metadata["BoolValue"]);
+        Assert.True((bool)result.Metadata["BoolValue"]);
         Assert.IsType<DateTimeOffset>(result.Metadata["DateValue"]);
         Assert.Equal(3.14, result.Metadata["DoubleValue"]);
     }

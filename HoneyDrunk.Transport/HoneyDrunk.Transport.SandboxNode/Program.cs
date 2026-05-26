@@ -114,9 +114,9 @@ static async Task RunNormalModeAsync()
     // ─────────────────────────────────────────────────────────────────────────────
     // PUBLISHER SCOPE
     // ─────────────────────────────────────────────────────────────────────────────
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
     logger.LogInformation("📤 PUBLISHER: Initializing Kernel GridContext and publishing message");
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
 
     using (var publishScope = host.Services.CreateScope())
     {
@@ -162,9 +162,9 @@ static async Task RunNormalModeAsync()
     // ─────────────────────────────────────────────────────────────────────────────
     // CONSUMER: Start and wait for handler to complete
     // ─────────────────────────────────────────────────────────────────────────────
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
     logger.LogInformation("📥 CONSUMER: Processing message (invariant enforcement active)");
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
 
     await consumer.StartAsync(CancellationToken.None);
 
@@ -180,13 +180,15 @@ static async Task RunNormalModeAsync()
         throw new TimeoutException("Message handler did not complete within timeout.");
     }
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // VERIFY INVARIANTS
-    // ─────────────────────────────────────────────────────────────────────────────
+    VerifyInvariants(logger, verificationResult);
+}
+
+static void VerifyInvariants(ILogger logger, InvariantVerificationResult verificationResult)
+{
     logger.LogInformation("");
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
     logger.LogInformation("🔍 INVARIANT VERIFICATION RESULTS");
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
 
     if (verificationResult.Exception != null)
     {
@@ -195,66 +197,13 @@ static async Task RunNormalModeAsync()
             verificationResult.Exception);
     }
 
-    // Check all invariants
-    var allPassed = true;
+    var allPassed =
+        AssertCorrelationId(logger, verificationResult)
+        & AssertInitialized(logger, verificationResult)
+        & AssertInstanceIdentity(logger, verificationResult)
+        & AssertAccessor(logger, verificationResult);
 
-    // Invariant 1: GridContext values propagated correctly
-    if (verificationResult.CorrelationIdMatch)
-    {
-        logger.LogInformation("  ✅ CorrelationId propagated correctly");
-    }
-    else
-    {
-        logger.LogError("  ❌ CorrelationId mismatch: expected 'sandbox-correlation-001', got '{Actual}'",
-            verificationResult.ActualCorrelationId);
-        allPassed = false;
-    }
-
-    // Invariant 2: Context is initialized
-    if (verificationResult.IsInitialized)
-    {
-        logger.LogInformation("  ✅ GridContext.IsInitialized = true");
-    }
-    else
-    {
-        logger.LogError("  ❌ GridContext.IsInitialized = false");
-        allPassed = false;
-    }
-
-    // Invariant 3 (CRITICAL): MessageContext.GridContext == DI GridContext
-    if (verificationResult.InstanceIdentityVerified)
-    {
-        logger.LogInformation("  ✅ ReferenceEquals(DI GridContext, MessageContext.GridContext) = true");
-    }
-    else
-    {
-        logger.LogError("  ❌ INSTANCE DIVERGENCE DETECTED!");
-        logger.LogError("      DI GridContext:             {DiType} @ {DiHash}",
-            verificationResult.DiContextTypeName, verificationResult.DiContextHashCode);
-        logger.LogError("      MessageContext.GridContext: {McType} @ {McHash}",
-            verificationResult.MessageContextTypeName, verificationResult.MessageContextHashCode);
-        allPassed = false;
-    }
-
-    // Invariant 4: Accessor returns same instance (if available)
-    if (verificationResult.AccessorAvailable)
-    {
-        if (verificationResult.AccessorIdentityVerified)
-        {
-            logger.LogInformation("  ✅ ReferenceEquals(DI GridContext, Accessor.GridContext) = true");
-        }
-        else
-        {
-            logger.LogError("  ❌ Accessor returned different instance!");
-            allPassed = false;
-        }
-    }
-    else
-    {
-        logger.LogInformation("  ℹ️ IGridContextAccessor not testable (non-HTTP scenario, expected)");
-    }
-
-    logger.LogInformation("───────────────────────────────────────────────────────────────────────────────");
+    logger.LogInformation(Banners.Light);
 
     if (!allPassed)
     {
@@ -264,7 +213,69 @@ static async Task RunNormalModeAsync()
     }
 
     logger.LogInformation("🎉 ALL INVARIANTS PASSED - Kernel + Transport integration verified!");
-    logger.LogInformation("═══════════════════════════════════════════════════════════════════════════════");
+    logger.LogInformation(Banners.Heavy);
+}
+
+static bool AssertCorrelationId(ILogger logger, InvariantVerificationResult verificationResult)
+{
+    if (verificationResult.CorrelationIdMatch)
+    {
+        logger.LogInformation("  ✅ CorrelationId propagated correctly");
+        return true;
+    }
+
+    logger.LogError(
+        "  ❌ CorrelationId mismatch: expected 'sandbox-correlation-001', got '{Actual}'",
+        verificationResult.ActualCorrelationId);
+    return false;
+}
+
+static bool AssertInitialized(ILogger logger, InvariantVerificationResult verificationResult)
+{
+    if (verificationResult.IsInitialized)
+    {
+        logger.LogInformation("  ✅ GridContext.IsInitialized = true");
+        return true;
+    }
+
+    logger.LogError("  ❌ GridContext.IsInitialized = false");
+    return false;
+}
+
+static bool AssertInstanceIdentity(ILogger logger, InvariantVerificationResult verificationResult)
+{
+    if (verificationResult.InstanceIdentityVerified)
+    {
+        logger.LogInformation("  ✅ ReferenceEquals(DI GridContext, MessageContext.GridContext) = true");
+        return true;
+    }
+
+    logger.LogError("  ❌ INSTANCE DIVERGENCE DETECTED!");
+    logger.LogError(
+        "      DI GridContext:             {DiType} @ {DiHash}",
+        verificationResult.DiContextTypeName, verificationResult.DiContextHashCode);
+    logger.LogError(
+        "      MessageContext.GridContext: {McType} @ {McHash}",
+        verificationResult.MessageContextTypeName, verificationResult.MessageContextHashCode);
+    return false;
+}
+
+static bool AssertAccessor(ILogger logger, InvariantVerificationResult verificationResult)
+{
+    if (!verificationResult.AccessorAvailable)
+    {
+        logger.LogInformation("  ℹ️ IGridContextAccessor not testable (non-HTTP scenario, expected)");
+        return true;
+    }
+
+    if (verificationResult.AccessorIdentityVerified)
+    {
+        logger.LogInformation("  ✅ ReferenceEquals(DI GridContext, Accessor.GridContext) = true");
+        return true;
+    }
+
+    logger.LogError("  ❌ Accessor returned different instance!");
+    return false;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -278,12 +289,45 @@ static async Task RunNegativeModeAsync()
     var testsPassed = 0;
     var testsFailed = 0;
 
-    // ─────────────────────────────────────────────────────────────────────────────
-    // TEST 1: Transport without Kernel registration must not provide GridContext
-    // ─────────────────────────────────────────────────────────────────────────────
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
-    Console.WriteLine("TEST 1: Transport without Kernel registration");
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
+    AccumulateResult(NegativeTest1_TransportWithoutKernel(), ref testsPassed, ref testsFailed);
+    AccumulateResult(await NegativeTest2_PublishWithUninitializedContextAsync().ConfigureAwait(false), ref testsPassed, ref testsFailed);
+    AccumulateResult(NegativeTest3_AccessUninitializedCorrelationId(), ref testsPassed, ref testsFailed);
+    AccumulateResult(NegativeTest4_GridContextIsScoped(), ref testsPassed, ref testsFailed);
+
+    Console.WriteLine(Banners.Heavy);
+    Console.WriteLine($"NEGATIVE MODE SUMMARY: {testsPassed} passed, {testsFailed} failed");
+    Console.WriteLine(Banners.Heavy);
+
+    if (testsFailed > 0)
+    {
+        throw new InvalidOperationException($"{testsFailed} negative test(s) failed.");
+    }
+}
+
+static void AccumulateResult(bool passed, ref int testsPassed, ref int testsFailed)
+{
+    if (passed)
+    {
+        testsPassed++;
+    }
+    else
+    {
+        testsFailed++;
+    }
+
+    Console.WriteLine();
+}
+
+static void TestBanner(string title)
+{
+    Console.WriteLine(Banners.Light);
+    Console.WriteLine(title);
+    Console.WriteLine(Banners.Light);
+}
+
+static bool NegativeTest1_TransportWithoutKernel()
+{
+    TestBanner("TEST 1: Transport without Kernel registration");
 
     try
     {
@@ -296,48 +340,32 @@ static async Task RunNegativeModeAsync()
         var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
 
-        // Attempting to resolve IGridContext without Kernel should return null or throw
         var gridContext = scope.ServiceProvider.GetService<IGridContext>();
-
-        if (gridContext == null)
+        if (gridContext is null)
         {
             Console.WriteLine("✅ PASSED: IGridContext not registered without Kernel");
-            testsPassed++;
+            return true;
         }
-        else
-        {
-            Console.WriteLine($"❌ FAILED: Got IGridContext without Kernel: {gridContext.GetType().FullName}");
-            testsFailed++;
-        }
+
+        Console.WriteLine($"❌ FAILED: Got IGridContext without Kernel: {gridContext.GetType().FullName}");
+        return false;
     }
     catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"✅ PASSED: Got expected exception: {ex.Message}");
-        testsPassed++;
+        return true;
     }
+}
 
-    Console.WriteLine();
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // TEST 2: Publish with uninitialized Kernel GridContext must throw
-    // ─────────────────────────────────────────────────────────────────────────────
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
-    Console.WriteLine("TEST 2: Publish with uninitialized Kernel GridContext");
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
+static async Task<bool> NegativeTest2_PublishWithUninitializedContextAsync()
+{
+    TestBanner("TEST 2: Publish with uninitialized Kernel GridContext");
 
     try
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
-
-        services.AddHoneyDrunkNode(options =>
-        {
-            options.NodeId = new NodeId("test-node");
-            options.SectorId = new SectorId("core");
-            options.EnvironmentId = new EnvironmentId("test");
-            options.StudioId = "test-studio";
-        });
-
+        AddTestKernel(services);
         services.AddHoneyDrunkInMemoryTransport("test", "test");
 
         var provider = services.BuildServiceProvider();
@@ -345,50 +373,38 @@ static async Task RunNegativeModeAsync()
 
         var publisher = scope.ServiceProvider.GetRequiredService<IMessagePublisher>();
         var uninitializedContext = scope.ServiceProvider.GetRequiredService<IGridContext>();
-
         Console.WriteLine($"  IsInitialized: {uninitializedContext.IsInitialized}");
 
         await publisher.PublishAsync(
             "test-queue",
             new SampleMessage { Content = "Should fail" },
             uninitializedContext,
-            CancellationToken.None);
+            CancellationToken.None).ConfigureAwait(false);
 
         Console.WriteLine("❌ FAILED: Expected exception but publish succeeded");
-        testsFailed++;
+        return false;
     }
     catch (InvalidOperationException ex)
     {
         Console.WriteLine($"✅ PASSED: Got expected InvalidOperationException: {ex.Message}");
-        testsPassed++;
+        return true;
     }
     catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception type: {ex.GetType().Name}: {ex.Message}");
-        testsFailed++;
+        return false;
     }
+}
 
-    Console.WriteLine();
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // TEST 3: Accessing CorrelationId without initialization must throw
-    // ─────────────────────────────────────────────────────────────────────────────
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
-    Console.WriteLine("TEST 3: Kernel GridContext property access without initialization");
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
+static bool NegativeTest3_AccessUninitializedCorrelationId()
+{
+    TestBanner("TEST 3: Kernel GridContext property access without initialization");
 
     try
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
-
-        services.AddHoneyDrunkNode(options =>
-        {
-            options.NodeId = new NodeId("test-node");
-            options.SectorId = new SectorId("core");
-            options.EnvironmentId = new EnvironmentId("test");
-            options.StudioId = "test-studio";
-        });
+        AddTestKernel(services);
 
         var provider = services.BuildServiceProvider();
         using var scope = provider.CreateScope();
@@ -396,46 +412,33 @@ static async Task RunNegativeModeAsync()
         var kernelContext = scope.ServiceProvider.GetRequiredService<IGridContext>();
         Console.WriteLine($"  IsInitialized: {kernelContext.IsInitialized}");
 
-        // This should throw
         var correlationId = kernelContext.CorrelationId;
         Console.WriteLine($"❌ FAILED: Expected exception but got CorrelationId: {correlationId}");
-        testsFailed++;
+        return false;
     }
     catch (InvalidOperationException ex)
     {
         Console.WriteLine($"✅ PASSED: Got expected exception: {ex.Message}");
-        testsPassed++;
+        return true;
     }
     catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception type: {ex.GetType().Name}: {ex.Message}");
-        testsFailed++;
+        return false;
     }
+}
 
-    Console.WriteLine();
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // TEST 4: Verify GridContext is scoped (different per scope)
-    // ─────────────────────────────────────────────────────────────────────────────
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
-    Console.WriteLine("TEST 4: Verify Kernel GridContext is scoped (different instance per scope)");
-    Console.WriteLine("───────────────────────────────────────────────────────────────────────────────");
+static bool NegativeTest4_GridContextIsScoped()
+{
+    TestBanner("TEST 4: Verify Kernel GridContext is scoped (different instance per scope)");
 
     try
     {
         var services = new ServiceCollection();
         services.AddLogging(b => b.AddConsole().SetMinimumLevel(LogLevel.Warning));
-
-        services.AddHoneyDrunkNode(options =>
-        {
-            options.NodeId = new NodeId("test-node");
-            options.SectorId = new SectorId("core");
-            options.EnvironmentId = new EnvironmentId("test");
-            options.StudioId = "test-studio";
-        });
+        AddTestKernel(services);
 
         var provider = services.BuildServiceProvider();
-
         IGridContext context1;
         IGridContext context2;
 
@@ -457,70 +460,28 @@ static async Task RunNegativeModeAsync()
         if (areDifferent)
         {
             Console.WriteLine("✅ PASSED: Different scopes have different GridContext instances");
-            testsPassed++;
+            return true;
         }
-        else
-        {
-            Console.WriteLine("❌ FAILED: Expected different instances but got same");
-            testsFailed++;
-        }
+
+        Console.WriteLine("❌ FAILED: Expected different instances but got same");
+        return false;
     }
     catch (Exception ex) when (!ex.IsFatal())
     {
         Console.WriteLine($"❌ FAILED: Got unexpected exception: {ex.GetType().Name}: {ex.Message}");
-        testsFailed++;
+        return false;
     }
-
-    Console.WriteLine();
-
-    // ─────────────────────────────────────────────────────────────────────────────
-    // Summary
-    // ─────────────────────────────────────────────────────────────────────────────
-    Console.WriteLine("═══════════════════════════════════════════════════════════════════════════════");
-    Console.WriteLine($"NEGATIVE MODE SUMMARY: {testsPassed} passed, {testsFailed} failed");
-    Console.WriteLine("═══════════════════════════════════════════════════════════════════════════════");
-
-    if (testsFailed > 0)
-    {
-        throw new InvalidOperationException($"{testsFailed} negative test(s) failed.");
-    }
-
-    await Task.CompletedTask;
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Verification Types
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/// <summary>
-/// Captures invariant verification results from the message handler.
-/// Thread-safe for async completion signaling.
-/// </summary>
-#pragma warning disable CA1050 // Declare types in namespaces
-public sealed class InvariantVerificationResult
-#pragma warning restore CA1050 // Declare types in namespaces
+static void AddTestKernel(ServiceCollection services)
 {
-    private readonly TaskCompletionSource<bool> _tcs = new();
-
-    // Value checks
-    public bool CorrelationIdMatch { get; set; }
-    public string? ActualCorrelationId { get; set; }
-    public bool IsInitialized { get; set; }
-
-    // Instance identity checks (CRITICAL)
-    public bool InstanceIdentityVerified { get; set; }
-    public string? DiContextTypeName { get; set; }
-    public int DiContextHashCode { get; set; }
-    public string? MessageContextTypeName { get; set; }
-    public int MessageContextHashCode { get; set; }
-
-    // Accessor checks
-    public bool AccessorAvailable { get; set; }
-    public bool AccessorIdentityVerified { get; set; }
-
-    // Exception capture
-    public Exception? Exception { get; set; }
-
-    public void Complete() => _tcs.TrySetResult(true);
-    public Task WaitAsync() => _tcs.Task;
+    services.AddHoneyDrunkNode(options =>
+    {
+        options.NodeId = new NodeId("test-node");
+        options.SectorId = new SectorId("core");
+        options.EnvironmentId = new EnvironmentId("test");
+        options.StudioId = "test-studio";
+    });
 }
+
+// Verification Types live in InvariantVerificationResult.cs under HoneyDrunk.Transport.SandboxNode.

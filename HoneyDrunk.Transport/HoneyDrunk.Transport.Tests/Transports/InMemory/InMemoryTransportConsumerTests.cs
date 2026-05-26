@@ -47,7 +47,8 @@ public sealed class InMemoryTransportConsumerTests
         // Consumer should be running
         await Task.Delay(50);
 
-        await consumer.StopAsync();
+        var stopEx = await Record.ExceptionAsync(() => consumer.StopAsync());
+        Assert.Null(stopEx);
     }
 
     /// <summary>
@@ -79,7 +80,8 @@ public sealed class InMemoryTransportConsumerTests
         await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
-        await consumer.StopAsync();
+        var ex = await Record.ExceptionAsync(() => consumer.StopAsync());
+        Assert.Null(ex);
 
         // Should be stopped
         await Task.Delay(50);
@@ -111,13 +113,15 @@ public sealed class InMemoryTransportConsumerTests
         var scopeFactory = sp.GetRequiredService<IServiceScopeFactory>();
         var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<InMemoryTransportConsumer>.Instance;
 
-        var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
+        await using var consumer = new InMemoryTransportConsumer(broker, pipeline, scopeFactory, options, logger);
 
         await consumer.StartAsync();
+
+        // Act
         await consumer.DisposeAsync();
 
-        // Should be disposed
-        await Task.Delay(50);
+        // Assert — second Start surfaces ObjectDisposedException, proving the dispose completed.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => consumer.StartAsync());
     }
 
     /// <summary>
@@ -162,6 +166,7 @@ public sealed class InMemoryTransportConsumerTests
         await broker.PublishAsync("test-queue4", envelope);
 
         await handled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(handled.Task.IsCompletedSuccessfully);
 
         await consumer.StopAsync();
     }

@@ -1,3 +1,4 @@
+using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Exceptions;
 using HoneyDrunk.Transport.StorageQueue.Configuration;
 using HoneyDrunk.Transport.StorageQueue.Internal;
@@ -81,12 +82,16 @@ public sealed class StorageQueueSenderTests
             CreateIfNotExists = false
         });
 
-        var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
-        var sender = new StorageQueueSender(factory, options, NullLogger<StorageQueueSender>.Instance);
+        await using var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
+        await using var sender = new StorageQueueSender(factory, options, NullLogger<StorageQueueSender>.Instance);
 
-        // Act & Assert - should not throw
+        // Act — dispose order: sender first, then factory.
         await sender.DisposeAsync();
-        await factory.DisposeAsync();
+
+        // Assert — sender is disposed; publishing now throws ObjectDisposedException.
+        var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "after-dispose" });
+        await Assert.ThrowsAsync<ObjectDisposedException>(
+            () => sender.PublishAsync(envelope, EndpointAddress.Create("orders", "orders")));
     }
 
     /// <summary>

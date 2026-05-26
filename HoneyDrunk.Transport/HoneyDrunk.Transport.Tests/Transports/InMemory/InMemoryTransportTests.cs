@@ -39,7 +39,8 @@ public sealed class InMemoryTransportTests
         await consumer.StartAsync();
 
         var envelope = TestData.CreateEnvelope(new SampleMessage { Value = "ok" });
-        await publisher.PublishAsync(envelope, TestData.Address("test", "addr"));
+        var ex = await Record.ExceptionAsync(() => publisher.PublishAsync(envelope, TestData.Address("test", "addr")));
+        Assert.Null(ex);
 
         // Give consumer time to process
         await Task.Delay(100);

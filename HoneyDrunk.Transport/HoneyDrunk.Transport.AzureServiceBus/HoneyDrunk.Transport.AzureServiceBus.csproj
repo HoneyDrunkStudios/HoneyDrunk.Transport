@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.6.0: Kernel Abstractions v0.7.0 alignment and Service Bus consumer orchestration consolidation.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.0: Sonar gate-cleanup. Refactored ServiceBusTransportPublisher (cognitive complexity reduction, blob fallback helper extraction), tightened DateTimeOffset.TryParse format provider, dropped nested ternary in DefaultBlobFallbackStore. Aligns to Azure.Storage.Blobs 12.28.0 and Microsoft.Extensions.Azure 1.14.0.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -32,15 +32,15 @@
   <ItemGroup>
     <PackageReference Include="Azure.Identity" Version="1.21.0" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1" />
-    <PackageReference Include="Azure.Storage.Blobs" Version="12.27.0" />
+    <PackageReference Include="Azure.Storage.Blobs" Version="12.28.0" />
     <!-- HoneyDrunk.Kernel.Abstractions comes transitively from HoneyDrunk.Transport -->
     <PackageReference Include="HoneyDrunk.Standards" Version="0.2.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.13.1" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.5" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Azure" Version="1.14.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup>

@@ -284,7 +284,7 @@ internal sealed class StorageQueueSender(
             Environment = envelope.Environment,
             Timestamp = envelope.Timestamp,
             MessageType = envelope.MessageType,
-            Headers = new Dictionary<string, string>(envelope.Headers),
+            Headers = envelope.Headers.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
             PayloadBase64 = Convert.ToBase64String(envelope.Payload.ToArray()),
             Metadata = new Dictionary<string, string>
             {

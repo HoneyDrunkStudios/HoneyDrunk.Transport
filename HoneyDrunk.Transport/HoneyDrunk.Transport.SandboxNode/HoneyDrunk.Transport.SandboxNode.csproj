@@ -22,14 +22,14 @@
 
   <ItemGroup>
     <!-- Kernel packages for node identity and context -->
-    <PackageReference Include="HoneyDrunk.Kernel" Version="0.7.0" />
-    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.7.0" />
-    
+    <PackageReference Include="HoneyDrunk.Kernel" Version="0.8.0" />
+    <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.8.0" />
+
     <!-- Generic Host -->
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.5" />
-    
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.8" />
+
     <!-- Console logging for readable output -->
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.5" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.8" />
   </ItemGroup>
 
 </Project>

@@ -16,7 +16,7 @@ public sealed class SampleMessageHandler(
     InvariantVerificationResult result,
     IServiceProvider serviceProvider) : IMessageHandler<SampleMessage>
 {
-    public Task HandleAsync(SampleMessage message, MessageContext context, CancellationToken cancellationToken)
+    public Task HandleAsync(SampleMessage message, MessageContext context, CancellationToken cancellationToken = default)
     {
         try
         {
@@ -107,11 +107,11 @@ public sealed class SampleMessageHandler(
                     logger.LogInformation("    HashCode: {Hash}", accessorContext.GetHashCode());
                     logger.LogInformation("    Same as DI: {Same}", accessorSame);
                 }
-                catch (InvalidOperationException)
+                catch (InvalidOperationException ex)
                 {
-                    // Expected in non-HTTP scenario (ScopedGridContextAccessor not set)
+                    // Expected in non-HTTP scenario (ScopedGridContextAccessor not set).
                     result.AccessorAvailable = false;
-                    logger.LogInformation("  Accessor: Not available (non-HTTP scenario)");
+                    logger.LogDebug(ex, "  Accessor: Not available (non-HTTP scenario)");
                 }
             }
             else

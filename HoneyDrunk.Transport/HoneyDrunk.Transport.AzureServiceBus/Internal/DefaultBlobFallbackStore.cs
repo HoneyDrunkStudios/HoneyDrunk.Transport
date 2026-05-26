@@ -18,11 +18,7 @@ internal sealed class DefaultBlobFallbackStore : IBlobFallbackStore
         BlobFallbackOptions options,
         CancellationToken cancellationToken)
     {
-        BlobServiceClient blobServiceClient = !string.IsNullOrWhiteSpace(options.ConnectionString)
-            ? new BlobServiceClient(options.ConnectionString)
-            : !string.IsNullOrWhiteSpace(options.AccountUrl)
-                ? new BlobServiceClient(new Uri(options.AccountUrl), new Azure.Identity.DefaultAzureCredential())
-                : throw new InvalidOperationException("Blob fallback requires either ConnectionString or AccountUrl to be configured.");
+        var blobServiceClient = CreateBlobServiceClient(options);
         var container = blobServiceClient.GetBlobContainerClient(options.ContainerName);
         await container.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
 
@@ -57,5 +53,20 @@ internal sealed class DefaultBlobFallbackStore : IBlobFallbackStore
         await blob.UploadAsync(content, overwrite: true, cancellationToken);
 
         return blob.Uri;
+    }
+
+    private static BlobServiceClient CreateBlobServiceClient(BlobFallbackOptions options)
+    {
+        if (!string.IsNullOrWhiteSpace(options.ConnectionString))
+        {
+            return new BlobServiceClient(options.ConnectionString);
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.AccountUrl))
+        {
+            return new BlobServiceClient(new Uri(options.AccountUrl), new Azure.Identity.DefaultAzureCredential());
+        }
+
+        throw new InvalidOperationException("Blob fallback requires either ConnectionString or AccountUrl to be configured.");
     }
 }

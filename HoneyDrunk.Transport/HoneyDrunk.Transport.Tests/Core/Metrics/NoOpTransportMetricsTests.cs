@@ -30,10 +30,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordMessagePublished("TestMessage", "test-queue");
-        metrics.RecordMessagePublished("TestMessage", "test-queue");
-        metrics.RecordMessagePublished("AnotherMessage", "another-queue");
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessagePublished("TestMessage", "test-queue");
+            metrics.RecordMessagePublished("TestMessage", "test-queue");
+            metrics.RecordMessagePublished("AnotherMessage", "another-queue");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -45,10 +49,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordMessageConsumed("TestMessage", "test-queue");
-        metrics.RecordMessageConsumed("TestMessage", "test-queue");
-        metrics.RecordMessageConsumed("AnotherMessage", "another-queue");
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessageConsumed("TestMessage", "test-queue");
+            metrics.RecordMessageConsumed("TestMessage", "test-queue");
+            metrics.RecordMessageConsumed("AnotherMessage", "another-queue");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -60,10 +68,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromMilliseconds(100), "success");
-        metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromSeconds(1), "retry");
-        metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromMinutes(1), "dead-letter");
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromMilliseconds(100), "success");
+            metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromSeconds(1), "retry");
+            metrics.RecordProcessingDuration("TestMessage", TimeSpan.FromMinutes(1), "dead-letter");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -75,10 +87,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordMessageRetry("TestMessage", 1);
-        metrics.RecordMessageRetry("TestMessage", 2);
-        metrics.RecordMessageRetry("TestMessage", 10);
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessageRetry("TestMessage", 1);
+            metrics.RecordMessageRetry("TestMessage", 2);
+            metrics.RecordMessageRetry("TestMessage", 10);
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -90,10 +106,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordMessageDeadLettered("TestMessage", "max-retries-exceeded");
-        metrics.RecordMessageDeadLettered("TestMessage", "invalid-format");
-        metrics.RecordMessageDeadLettered("AnotherMessage", "processing-error");
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessageDeadLettered("TestMessage", "max-retries-exceeded");
+            metrics.RecordMessageDeadLettered("TestMessage", "invalid-format");
+            metrics.RecordMessageDeadLettered("AnotherMessage", "processing-error");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -105,10 +125,14 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordPayloadSize("TestMessage", 1024, "publish");
-        metrics.RecordPayloadSize("TestMessage", 2048, "consume");
-        metrics.RecordPayloadSize("LargeMessage", 1_000_000, "publish");
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordPayloadSize("TestMessage", 1024, "publish");
+            metrics.RecordPayloadSize("TestMessage", 2048, "consume");
+            metrics.RecordPayloadSize("LargeMessage", 1_000_000, "publish");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -120,24 +144,28 @@ public sealed class NoOpTransportMetricsTests
         // Arrange
         var metrics = NoOpTransportMetrics.Instance;
 
-        // Act & Assert - should not throw
-        metrics.RecordMessagePublished(string.Empty, string.Empty);
-        metrics.RecordMessagePublished(null!, null!);
+        // Act & Assert
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessagePublished(string.Empty, string.Empty);
+            metrics.RecordMessagePublished(null!, null!);
 
-        metrics.RecordMessageConsumed(string.Empty, string.Empty);
-        metrics.RecordMessageConsumed(null!, null!);
+            metrics.RecordMessageConsumed(string.Empty, string.Empty);
+            metrics.RecordMessageConsumed(null!, null!);
 
-        metrics.RecordProcessingDuration(string.Empty, TimeSpan.Zero, string.Empty);
-        metrics.RecordProcessingDuration(null!, TimeSpan.Zero, null!);
+            metrics.RecordProcessingDuration(string.Empty, TimeSpan.Zero, string.Empty);
+            metrics.RecordProcessingDuration(null!, TimeSpan.Zero, null!);
 
-        metrics.RecordMessageRetry(string.Empty, 0);
-        metrics.RecordMessageRetry(null!, 0);
+            metrics.RecordMessageRetry(string.Empty, 0);
+            metrics.RecordMessageRetry(null!, 0);
 
-        metrics.RecordMessageDeadLettered(string.Empty, string.Empty);
-        metrics.RecordMessageDeadLettered(null!, null!);
+            metrics.RecordMessageDeadLettered(string.Empty, string.Empty);
+            metrics.RecordMessageDeadLettered(null!, null!);
 
-        metrics.RecordPayloadSize(string.Empty, 0, string.Empty);
-        metrics.RecordPayloadSize(null!, 0, null!);
+            metrics.RecordPayloadSize(string.Empty, 0, string.Empty);
+            metrics.RecordPayloadSize(null!, 0, null!);
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -162,8 +190,9 @@ public sealed class NoOpTransportMetricsTests
             tasks.Add(Task.Run(() => metrics.RecordPayloadSize("TestMessage", i, "publish")));
         }
 
-        // Assert - all should complete without throwing
-        await Task.WhenAll(tasks);
+        // Assert
+        var ex = await Record.ExceptionAsync(() => Task.WhenAll(tasks));
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -205,9 +234,13 @@ public sealed class NoOpTransportMetricsTests
         var metrics = NoOpTransportMetrics.Instance;
 
         // Act & Assert
-        metrics.RecordProcessingDuration("Test", TimeSpan.Zero, "result");
-        metrics.RecordProcessingDuration("Test", TimeSpan.MaxValue, "result");
-        metrics.RecordProcessingDuration("Test", TimeSpan.MinValue, "result");
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordProcessingDuration("Test", TimeSpan.Zero, "result");
+            metrics.RecordProcessingDuration("Test", TimeSpan.MaxValue, "result");
+            metrics.RecordProcessingDuration("Test", TimeSpan.MinValue, "result");
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -220,9 +253,13 @@ public sealed class NoOpTransportMetricsTests
         var metrics = NoOpTransportMetrics.Instance;
 
         // Act & Assert
-        metrics.RecordPayloadSize("Test", 0, "direction");
-        metrics.RecordPayloadSize("Test", long.MaxValue, "direction");
-        metrics.RecordPayloadSize("Test", -1, "direction"); // Negative sizes
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordPayloadSize("Test", 0, "direction");
+            metrics.RecordPayloadSize("Test", long.MaxValue, "direction");
+            metrics.RecordPayloadSize("Test", -1, "direction"); // Negative sizes
+        });
+        Assert.Null(ex);
     }
 
     /// <summary>
@@ -235,8 +272,12 @@ public sealed class NoOpTransportMetricsTests
         var metrics = NoOpTransportMetrics.Instance;
 
         // Act & Assert
-        metrics.RecordMessageRetry("Test", 0);
-        metrics.RecordMessageRetry("Test", -1);
-        metrics.RecordMessageRetry("Test", int.MinValue);
+        var ex = Record.Exception(() =>
+        {
+            metrics.RecordMessageRetry("Test", 0);
+            metrics.RecordMessageRetry("Test", -1);
+            metrics.RecordMessageRetry("Test", int.MinValue);
+        });
+        Assert.Null(ex);
     }
 }

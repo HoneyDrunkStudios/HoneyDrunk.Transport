@@ -106,10 +106,14 @@ public sealed class QueueClientFactoryTests
             CreateIfNotExists = false
         });
 
-        var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
+        await using var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
 
-        // Act & Assert - should not throw
+        // Act
         await factory.DisposeAsync();
+
+        // Assert — a follow-up operation must surface ObjectDisposedException, proving the dispose
+        // path completed and flipped the internal sentinel.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => factory.GetOrCreatePrimaryQueueClientAsync());
     }
 
     /// <summary>
@@ -174,12 +178,15 @@ public sealed class QueueClientFactoryTests
             CreateIfNotExists = false
         });
 
-        var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
+        await using var factory = new QueueClientFactory(options, NullLogger<QueueClientFactory>.Instance);
 
-        // Act & Assert - multiple disposes should not throw
+        // Act — multiple Dispose calls must not throw.
         await factory.DisposeAsync();
         await factory.DisposeAsync();
         await factory.DisposeAsync();
+
+        // Assert — factory is disposed, subsequent operation throws.
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => factory.GetOrCreatePrimaryQueueClientAsync());
     }
 
     /// <summary>
