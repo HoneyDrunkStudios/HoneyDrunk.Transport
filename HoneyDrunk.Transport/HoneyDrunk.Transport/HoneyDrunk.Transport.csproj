@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport</PackageId>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Transport-agnostic messaging library for .NET. Provides a unified abstraction layer over different message brokers with middleware pipeline pattern, retry strategies, and transactional outbox support. Uses HoneyDrunk.Kernel.Abstractions for Grid-aware context propagation.</Description>
-    <PackageReleaseNotes>v0.7.0: Sonar gate-cleanup (ADR-0011 D11). Removes the redundant `EndpointAddress.Create(name, address)` 2-arg overload (use the 7-arg overload with named arguments). Aligns to HoneyDrunk.Kernel.Abstractions 0.8.0 and Microsoft.Extensions 10.0.8.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.1: Sonar follow-up cleanup (ADR-0011 D11). No public API changes. See CHANGELOG.md.</PackageReleaseNotes>
     <PackageTags>messaging;transport;broker;middleware;pipeline;outbox;retry;servicebus;distributed;kernel;grid;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

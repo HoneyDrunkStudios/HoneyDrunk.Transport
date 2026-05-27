@@ -148,6 +148,10 @@ public sealed class InMemoryTransportLifecycleAdditionalTests
     /// <param name="broker">Optional broker instance.</param>
     /// <param name="pipeline">Optional message pipeline.</param>
     /// <returns>An in-memory consumer fixture.</returns>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "InMemoryTransportConsumer and ServiceProvider ownership is transferred to ConsumerFixture, which disposes both in DisposeAsync. CA2000 cannot trace cross-method ownership transfer through a primary-constructor capture (documented analyzer limitation).")]
     private static ConsumerFixture CreateConsumer(
         InMemoryBroker? broker = null,
         IMessagePipeline? pipeline = null)
@@ -182,17 +186,11 @@ public sealed class InMemoryTransportLifecycleAdditionalTests
         }
     }
 
-    private sealed class ConsumerFixture : IAsyncDisposable
+    private sealed class ConsumerFixture(InMemoryTransportConsumer consumer, ServiceProvider provider) : IAsyncDisposable
     {
-        public ConsumerFixture(InMemoryTransportConsumer consumer, ServiceProvider provider)
-        {
-            Consumer = consumer;
-            Provider = provider;
-        }
+        public InMemoryTransportConsumer Consumer { get; } = consumer;
 
-        public InMemoryTransportConsumer Consumer { get; }
-
-        private ServiceProvider Provider { get; }
+        private ServiceProvider Provider { get; } = provider;
 
         public async ValueTask DisposeAsync()
         {

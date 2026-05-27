@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.7.0: Sonar gate-cleanup. Refactored ServiceBusTransportPublisher (cognitive complexity reduction, blob fallback helper extraction), tightened DateTimeOffset.TryParse format provider, dropped nested ternary in DefaultBlobFallbackStore. Aligns to Azure.Storage.Blobs 12.28.0 and Microsoft.Extensions.Azure 1.14.0.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.1: Sonar follow-up cleanup (ADR-0011 D11). Version alignment with HoneyDrunk.Transport 0.7.1. No public API changes. See CHANGELOG.md.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

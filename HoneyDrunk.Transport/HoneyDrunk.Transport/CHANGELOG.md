@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-27
+
+### Internal
+
+- Sonar follow-up cleanup (ADR-0011 D11). No public API changes.
+- `MessageProcessingFailureTests` switched its `TheoryData<Exception>` to `TheoryData<string>` — Test Explorer can now enumerate individual data rows (Sonar S6562, "TheoryData type arguments must be serializable"). The test method constructs each exception from a kind identifier via a private factory.
+
 ## [0.7.0] - 2026-05-26
 
 ### Changed (breaking)

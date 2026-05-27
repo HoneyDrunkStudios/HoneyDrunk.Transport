@@ -8,23 +8,19 @@ namespace HoneyDrunk.Transport.Tests.Core.Abstractions;
 public sealed class MessageProcessingFailureTests
 {
     /// <summary>
-    /// Gets transient exceptions for classification tests.
+    /// Gets transient exception identifiers for classification tests.
+    /// Test rows are <see cref="string"/>s — not Exceptions — so Test Explorer
+    /// can enumerate the rows individually (Sonar S6562 — TheoryData type
+    /// arguments must be serializable). The test method constructs the
+    /// exception from the identifier via <see cref="BuildTransientException(string)"/>.
     /// </summary>
-    public static TheoryData<Exception> TransientExceptions => new()
-    {
-        new TimeoutException("timeout"),
-        new HttpRequestException("service unavailable", null, System.Net.HttpStatusCode.ServiceUnavailable)
-    };
+    public static TheoryData<string> TransientExceptionKinds => new("timeout", "service-unavailable");
 
     /// <summary>
-    /// Gets permanent exceptions for classification tests.
+    /// Gets permanent exception identifiers for classification tests.
+    /// See <see cref="TransientExceptionKinds"/> for the rationale.
     /// </summary>
-    public static TheoryData<Exception> PermanentExceptions => new()
-    {
-        new ArgumentException("argument"),
-        new ArgumentNullException("value"),
-        new InvalidOperationException("invalid")
-    };
+    public static TheoryData<string> PermanentExceptionKinds => new("argument", "argument-null", "invalid-operation");
 
     /// <summary>
     /// Success creates a success result without failure metadata.
@@ -93,11 +89,13 @@ public sealed class MessageProcessingFailureTests
     /// <summary>
     /// Transient exceptions are retried.
     /// </summary>
-    /// <param name="exception">The exception to classify.</param>
+    /// <param name="kind">The transient exception kind to construct and classify.</param>
     [Theory]
-    [MemberData(nameof(TransientExceptions))]
-    public void FromException_WhenExceptionIsTransient_ReturnsRetry(Exception exception)
+    [MemberData(nameof(TransientExceptionKinds))]
+    public void FromException_WhenExceptionIsTransient_ReturnsRetry(string kind)
     {
+        var exception = BuildTransientException(kind);
+
         var result = MessageProcessingFailure.FromException(exception, deliveryCount: 1);
 
         Assert.Equal(MessageProcessingResult.Retry, result.Result);
@@ -108,11 +106,13 @@ public sealed class MessageProcessingFailureTests
     /// <summary>
     /// Permanent exceptions are dead-lettered.
     /// </summary>
-    /// <param name="exception">The exception to classify.</param>
+    /// <param name="kind">The permanent exception kind to construct and classify.</param>
     [Theory]
-    [MemberData(nameof(PermanentExceptions))]
-    public void FromException_WhenExceptionIsPermanent_ReturnsPermanentDeadLetter(Exception exception)
+    [MemberData(nameof(PermanentExceptionKinds))]
+    public void FromException_WhenExceptionIsPermanent_ReturnsPermanentDeadLetter(string kind)
     {
+        var exception = BuildPermanentException(kind);
+
         var result = MessageProcessingFailure.FromException(exception, deliveryCount: 1);
 
         Assert.Equal(MessageProcessingResult.DeadLetter, result.Result);
@@ -134,6 +134,24 @@ public sealed class MessageProcessingFailureTests
         Assert.Equal("UnknownError", result.Category);
         Assert.Same(exception, result.Exception);
     }
+
+    private static Exception BuildTransientException(string kind) => kind switch
+    {
+        "timeout" => new TimeoutException("timeout"),
+        "service-unavailable" => new HttpRequestException("service unavailable", null, System.Net.HttpStatusCode.ServiceUnavailable),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown transient exception kind."),
+    };
+
+    private static Exception BuildPermanentException(string kind) => kind switch
+    {
+        "argument" => new ArgumentException("argument"),
+
+        // paramName must match a method parameter name (CA2208) — `kind` is the
+        // only one available here; the actual paramName isn't asserted by tests.
+        "argument-null" => new ArgumentNullException(nameof(kind)),
+        "invalid-operation" => new InvalidOperationException("invalid"),
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown permanent exception kind."),
+    };
 
     /// <summary>
     /// Custom exception used to represent an unclassified failure.
