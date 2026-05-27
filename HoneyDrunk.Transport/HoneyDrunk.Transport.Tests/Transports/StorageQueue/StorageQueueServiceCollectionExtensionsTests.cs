@@ -18,8 +18,7 @@ public sealed class StorageQueueServiceCollectionExtensionsTests
     /// type arguments must be serializable). The test method builds the
     /// invalid configuration from the identifier.
     /// </summary>
-    public static TheoryData<string> InvalidFluentSettings => new()
-    {
+    public static TheoryData<string> InvalidFluentSettings => new(
         "MaxDequeueCount-zero",
         "MaxDequeueCount-over-limit",
         "VisibilityTimeout-zero",
@@ -33,8 +32,7 @@ public sealed class StorageQueueServiceCollectionExtensionsTests
         "BatchPublishConcurrency-zero",
         "BatchPublishConcurrency-over-limit",
         "BatchProcessingConcurrency-zero",
-        "BatchProcessingConcurrency-over-limit",
-    };
+        "BatchProcessingConcurrency-over-limit");
 
     /// <summary>
     /// Delegate registration wires transport services and configured options.

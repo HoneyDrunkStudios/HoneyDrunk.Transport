@@ -14,13 +14,13 @@ public sealed class MessageProcessingFailureTests
     /// arguments must be serializable). The test method constructs the
     /// exception from the identifier via <see cref="BuildTransientException(string)"/>.
     /// </summary>
-    public static TheoryData<string> TransientExceptionKinds => new() { "timeout", "service-unavailable" };
+    public static TheoryData<string> TransientExceptionKinds => new("timeout", "service-unavailable");
 
     /// <summary>
     /// Gets permanent exception identifiers for classification tests.
     /// See <see cref="TransientExceptionKinds"/> for the rationale.
     /// </summary>
-    public static TheoryData<string> PermanentExceptionKinds => new() { "argument", "argument-null", "invalid-operation" };
+    public static TheoryData<string> PermanentExceptionKinds => new("argument", "argument-null", "invalid-operation");
 
     /// <summary>
     /// Success creates a success result without failure metadata.
