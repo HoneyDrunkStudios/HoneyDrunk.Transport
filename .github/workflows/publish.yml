@@ -44,7 +44,7 @@ jobs:
     name: Build, Pack & Publish
     needs: prepare
     permissions:
-      contents: read
+      contents: write
       packages: write
       id-token: write
       security-events: write
@@ -56,47 +56,17 @@ jobs:
       project-path: 'HoneyDrunk.Transport/HoneyDrunk.Transport.slnx'
       enable-nuget-publish: true
       nuget-source: 'https://api.nuget.org/v3/index.json'
+      package-version: ${{ needs.prepare.outputs.version }}
+      create-github-release: true
+      github-release-tag: ${{ needs.prepare.outputs.version-tag }}
+      release-product-name: HoneyDrunk.Transport
+      release-product-description: 'Transport-agnostic messaging library for .NET with middleware pipeline pattern.'
+      release-nuget-packages: |
+        HoneyDrunk.Transport
+        HoneyDrunk.Transport.InMemory
+        HoneyDrunk.Transport.AzureServiceBus
+        HoneyDrunk.Transport.StorageQueue
+      release-docs-url: 'https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme'
       actions-ref: 'main'
     secrets:
       nuget-api-key: ${{ secrets.NUGET_API_KEY }}
-
-  github-release:
-    name: Create GitHub Release
-    needs: [prepare, release]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Checkout Actions
-        uses: actions/checkout@v5
-        with:
-          repository: HoneyDrunkStudios/HoneyDrunk.Actions
-          ref: main
-          path: .actions
-
-      - name: Generate Release Notes
-        id: notes
-        uses: ./.actions/.github/actions/release/generate-notes
-        with:
-          version: ${{ needs.prepare.outputs.version }}
-          product-name: HoneyDrunk.Transport
-          product-description: 'Transport-agnostic messaging library for .NET with middleware pipeline pattern.'
-          nuget-packages: |
-            HoneyDrunk.Transport
-            HoneyDrunk.Transport.InMemory
-            HoneyDrunk.Transport.AzureServiceBus
-            HoneyDrunk.Transport.StorageQueue
-          docs-url: 'https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport#readme'
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v3
-        with:
-          tag_name: ${{ needs.prepare.outputs.version-tag }}
-          name: HoneyDrunk.Transport ${{ needs.prepare.outputs.version-tag }}
-          body: ${{ steps.notes.outputs.body }}
-          generate_release_notes: ${{ steps.notes.outputs.has-changelog == 'false' }}
-          draft: false
-          prerelease: false
