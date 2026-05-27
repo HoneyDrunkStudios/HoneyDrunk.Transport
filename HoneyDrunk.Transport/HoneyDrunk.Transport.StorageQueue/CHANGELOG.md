@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-27
+
+### Internal
+
+- `StorageQueueSender.SerializeEnvelope` uses target-typed `new()` for the headers Dictionary clone (Sonar S6602 — collection-initialization can be simplified). No behavior change.
+
 ## [0.7.0] - 2026-05-26
 
 ### Added

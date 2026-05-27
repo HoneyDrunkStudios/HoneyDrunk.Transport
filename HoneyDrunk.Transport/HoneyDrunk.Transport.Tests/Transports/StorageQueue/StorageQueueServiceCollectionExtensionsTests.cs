@@ -12,24 +12,28 @@ namespace HoneyDrunk.Transport.Tests.Transports.StorageQueue;
 public sealed class StorageQueueServiceCollectionExtensionsTests
 {
     /// <summary>
-    /// Gets invalid fluent storage queue settings.
+    /// Gets identifiers for invalid fluent storage queue settings.
+    /// Test rows are <see cref="string"/>s — not <see cref="Action"/>s — so Test
+    /// Explorer can enumerate the rows individually (Sonar S6562 — TheoryData
+    /// type arguments must be serializable). The test method builds the
+    /// invalid configuration from the identifier.
     /// </summary>
-    public static TheoryData<Action> InvalidFluentSettings => new()
+    public static TheoryData<string> InvalidFluentSettings => new()
     {
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMaxDequeueCount(0),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMaxDequeueCount(101),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithVisibilityTimeout(TimeSpan.Zero),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithVisibilityTimeout(TimeSpan.FromDays(8)),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMessageTimeToLive(TimeSpan.Zero),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMessageTimeToLive(TimeSpan.FromDays(8)),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithPrefetchCount(0),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithPrefetchCount(33),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithConcurrency(0),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithConcurrency(101),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchPublishConcurrency(0),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchPublishConcurrency(129),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchProcessingConcurrency(0),
-        () => new ServiceCollection().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchProcessingConcurrency(33)
+        "MaxDequeueCount-zero",
+        "MaxDequeueCount-over-limit",
+        "VisibilityTimeout-zero",
+        "VisibilityTimeout-over-limit",
+        "MessageTimeToLive-zero",
+        "MessageTimeToLive-over-limit",
+        "PrefetchCount-zero",
+        "PrefetchCount-over-limit",
+        "Concurrency-zero",
+        "Concurrency-over-limit",
+        "BatchPublishConcurrency-zero",
+        "BatchPublishConcurrency-over-limit",
+        "BatchProcessingConcurrency-zero",
+        "BatchProcessingConcurrency-over-limit",
     };
 
     /// <summary>
@@ -144,11 +148,37 @@ public sealed class StorageQueueServiceCollectionExtensionsTests
     /// <summary>
     /// Invalid fluent numeric settings are rejected.
     /// </summary>
-    /// <param name="apply">The invalid configuration call.</param>
+    /// <param name="settingId">The identifier for the invalid configuration call.</param>
     [Theory]
     [MemberData(nameof(InvalidFluentSettings))]
-    public void FluentStorageQueueOptions_WhenInvalid_ThrowArgumentOutOfRange(Action apply)
+    public void FluentStorageQueueOptions_WhenInvalid_ThrowArgumentOutOfRange(string settingId)
     {
+        Action apply = BuildInvalidFluentSetting(settingId);
+
         Assert.Throws<ArgumentOutOfRangeException>(apply);
+    }
+
+    private static Action BuildInvalidFluentSetting(string settingId)
+    {
+        IServiceCollection NewServices() => new ServiceCollection();
+
+        return settingId switch
+        {
+            "MaxDequeueCount-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMaxDequeueCount(0),
+            "MaxDequeueCount-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMaxDequeueCount(101),
+            "VisibilityTimeout-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithVisibilityTimeout(TimeSpan.Zero),
+            "VisibilityTimeout-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithVisibilityTimeout(TimeSpan.FromDays(8)),
+            "MessageTimeToLive-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMessageTimeToLive(TimeSpan.Zero),
+            "MessageTimeToLive-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithMessageTimeToLive(TimeSpan.FromDays(8)),
+            "PrefetchCount-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithPrefetchCount(0),
+            "PrefetchCount-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithPrefetchCount(33),
+            "Concurrency-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithConcurrency(0),
+            "Concurrency-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithConcurrency(101),
+            "BatchPublishConcurrency-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchPublishConcurrency(0),
+            "BatchPublishConcurrency-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchPublishConcurrency(129),
+            "BatchProcessingConcurrency-zero" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchProcessingConcurrency(0),
+            "BatchProcessingConcurrency-over-limit" => () => NewServices().AddHoneyDrunkTransportStorageQueue("UseDevelopmentStorage=true", "orders").WithBatchProcessingConcurrency(33),
+            _ => throw new ArgumentOutOfRangeException(nameof(settingId), settingId, "Unknown invalid fluent setting identifier."),
+        };
     }
 }

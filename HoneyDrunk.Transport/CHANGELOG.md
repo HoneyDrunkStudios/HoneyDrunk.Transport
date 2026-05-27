@@ -15,6 +15,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-05-27
+
+### Changed
+
+- `StorageQueueSender.SerializeEnvelope` uses target-typed `new()` for the headers Dictionary clone (Sonar S6602 — collection-init simplification). No behavior change.
+
+### Internal
+
+- Sonar follow-up cleanup (ADR-0011 D11). No public API changes; no breaking changes; patch bump.
+- `MessageProcessingFailureTests` switched its `TheoryData<Exception>` to `TheoryData<string>` and constructs the exception from a kind identifier in a private factory — Test Explorer can now enumerate individual data rows (Sonar S6562 — TheoryData type arguments must be serializable). Same treatment applied to `StorageQueueServiceCollectionExtensionsTests.InvalidFluentSettings` (was `TheoryData<Action>`).
+- `ConsumerFixture` nested types in `ServiceBusTransportConsumerProcessingTests` and `InMemoryTransportLifecycleAdditionalTests` converted to primary constructors (Sonar S1944). Each `CreateConsumer` test helper carries a targeted `[SuppressMessage("Reliability", "CA2000")]` with justification — CA2000 cannot trace cross-method ownership transfer through a primary-constructor capture (documented analyzer limitation); ownership is in fact transferred to `ConsumerFixture`, which disposes both the consumer and the `ServiceProvider` in `DisposeAsync`.
+- Test-only collection-init simplifications (CA1825 / SA1202 / SA1515 / CA2208) cleared in the process of restructuring the TheoryData call sites.
+- All package versions bumped `0.7.0 → 0.7.1` per pre-1.0 semver (no breaking changes).
+
 ## [0.7.0] - 2026-05-26
 
 ### Changed (breaking)

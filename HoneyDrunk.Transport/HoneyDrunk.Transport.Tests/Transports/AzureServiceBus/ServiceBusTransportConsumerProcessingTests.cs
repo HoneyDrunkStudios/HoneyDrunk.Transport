@@ -112,6 +112,10 @@ public sealed class ServiceBusTransportConsumerProcessingTests
         Assert.Equal(0, completeCount);
     }
 
+    [System.Diagnostics.CodeAnalysis.SuppressMessage(
+        "Reliability",
+        "CA2000:Dispose objects before losing scope",
+        Justification = "ServiceBusTransportConsumer and ServiceProvider ownership is transferred to ConsumerFixture, which disposes both in DisposeAsync. CA2000 cannot trace cross-method ownership transfer through a primary-constructor capture (documented analyzer limitation).")]
     private static ConsumerFixture CreateConsumer(IMessagePipeline pipeline, bool autoComplete)
     {
         var provider = new ServiceCollection().BuildServiceProvider();
@@ -161,17 +165,11 @@ public sealed class ServiceBusTransportConsumerProcessingTests
         await task;
     }
 
-    private sealed class ConsumerFixture : IAsyncDisposable
+    private sealed class ConsumerFixture(ServiceBusTransportConsumer consumer, ServiceProvider provider) : IAsyncDisposable
     {
-        public ConsumerFixture(ServiceBusTransportConsumer consumer, ServiceProvider provider)
-        {
-            Consumer = consumer;
-            Provider = provider;
-        }
+        public ServiceBusTransportConsumer Consumer { get; } = consumer;
 
-        public ServiceBusTransportConsumer Consumer { get; }
-
-        private ServiceProvider Provider { get; }
+        private ServiceProvider Provider { get; } = provider;
 
         public async ValueTask DisposeAsync()
         {

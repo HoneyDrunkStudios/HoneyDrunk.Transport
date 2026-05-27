@@ -284,14 +284,14 @@ internal sealed class StorageQueueSender(
             Environment = envelope.Environment,
             Timestamp = envelope.Timestamp,
             MessageType = envelope.MessageType,
-            Headers = new Dictionary<string, string>(envelope.Headers),
+            Headers = new(envelope.Headers),
             PayloadBase64 = Convert.ToBase64String(envelope.Payload.ToArray()),
             Metadata = new Dictionary<string, string>
             {
                 ["EnvelopeVersion"] = "1.0",
                 ["Transport"] = "StorageQueue",
-                ["ContentType"] = "application/json"
-            }
+                ["ContentType"] = "application/json",
+            },
         };
 
         return JsonSerializer.Serialize(queueEnvelope, SerializerOptions);

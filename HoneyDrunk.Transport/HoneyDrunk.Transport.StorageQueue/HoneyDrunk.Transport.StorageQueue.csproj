@@ -9,10 +9,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
-    <PackageReleaseNotes>v0.7.0: Sonar gate-cleanup. Refactored StorageQueueProcessor.ConsumeMessagesAsync and ProcessMessageAsync (cognitive complexity reduction, dispatcher helpers for batch + result handling). Aligns to Azure.Storage.Queues 12.26.0 and Microsoft.Extensions 10.0.8.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.1: Sonar follow-up cleanup (ADR-0011 D11). StorageQueueSender.SerializeEnvelope uses target-typed `new()` for the headers Dictionary clone. No public API changes. See CHANGELOG.md.</PackageReleaseNotes>
     <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
