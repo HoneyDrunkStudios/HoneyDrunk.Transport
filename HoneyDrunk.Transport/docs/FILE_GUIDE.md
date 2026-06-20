@@ -321,7 +321,7 @@ builder.Services.Configure<OutboxDispatcherOptions>(options =>
 - ✅ Typed endpoint addressing with metadata
 - ✅ High-performance logging with LoggerMessage source generators
 
-See [ROADMAP.md](ROADMAP.md) for complete implementation details and [ARCHITECTURAL_GAPS.md](ARCHITECTURAL_GAPS.md) for status tracking.
+See the per-package CHANGELOGs for implementation details and version history.
 
 ---
 
@@ -555,11 +555,9 @@ Applications using HoneyDrunk.Transport:
 ## 📖 Additional Resources
 
 ### Official Documentation
-- [README.md](../README.md) - Project overview and quick start
+- [README.md](../../README.md) - Project overview and quick start
 - [CHANGELOG.md](../HoneyDrunk.Transport/CHANGELOG.md) - Version history and migration guides
-- [ROADMAP.md](ROADMAP.md) - Implementation tracking
-- [.github/copilot-instructions.md](../.github/copilot-instructions.md) - Coding standards
-- [ARCHITECTURAL_GAPS.md](ARCHITECTURAL_GAPS.md) - Design status and future roadmap
+- [.github/copilot-instructions.md](../../.github/copilot-instructions.md) - Coding standards
 
 ### Related Projects
 - [HoneyDrunk.Kernel](https://github.com/HoneyDrunkStudios/HoneyDrunk.Kernel) - Core Grid primitives
