@@ -12,29 +12,29 @@ see the package CHANGELOGs:
 - [HoneyDrunk.Transport.InMemory](HoneyDrunk.Transport/HoneyDrunk.Transport.InMemory/CHANGELOG.md)
 - [HoneyDrunk.Transport.StorageQueue](HoneyDrunk.Transport/HoneyDrunk.Transport.StorageQueue/CHANGELOG.md)
 
-## Unreleased
+## [Unreleased]
 
-## 0.7.1 - Sonar follow-up cleanup
+## [0.7.1] - 2026-05-27
 
 ### Changed
 
 - Sonar follow-up cleanup (ADR-0011 D11). No public API changes; patch bump across all packages.
 
-## 0.7.0 - Kernel adoption and Sonar cleanup
+## [0.7.0] - 2026-05-26
 
 ### Changed
 
 - Removed the `EndpointAddress.Create(string, string)` 2-arg overload (Sonar S3427); the 7-arg overload remains.
 - Bumped HoneyDrunk.Kernel dependencies and aligned the test stack.
 
-## 0.6.0 - ServiceBus consumer consolidation
+## [0.6.0] - 2026-05-18
 
 ### Added
 
 - Repository changelog and consolidated Azure Service Bus consumer.
 - Typed tenant ids for Grid context (ADR-0026).
 
-## 0.1.0 - Initial scaffold
+## [0.1.0] - 2025-11-01
 
 ### Added
 
