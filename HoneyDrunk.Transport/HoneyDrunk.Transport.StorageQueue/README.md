@@ -1,4 +1,4 @@
-﻿# HoneyDrunk.Transport.StorageQueue
+# HoneyDrunk.Transport.StorageQueue
 
 [![NuGet](https://img.shields.io/nuget/v/HoneyDrunk.Transport.StorageQueue.svg)](https://www.nuget.org/packages/HoneyDrunk.Transport.StorageQueue/)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -66,7 +66,7 @@ dotnet add package HoneyDrunk.Transport.StorageQueue
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.7.1" />
+<PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.7.2" />
 ```
 
 ---

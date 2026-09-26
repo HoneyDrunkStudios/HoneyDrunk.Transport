@@ -1,4 +1,4 @@
-﻿# HoneyDrunk.Transport.AzureServiceBus
+# HoneyDrunk.Transport.AzureServiceBus
 
 [![NuGet](https://img.shields.io/nuget/v/HoneyDrunk.Transport.AzureServiceBus.svg)](https://www.nuget.org/packages/HoneyDrunk.Transport.AzureServiceBus/)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -72,7 +72,7 @@ dotnet add package HoneyDrunk.Transport.AzureServiceBus
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.7.1" />
+<PackageReference Include="HoneyDrunk.Transport.AzureServiceBus" Version="0.7.2" />
 ```
 
 ---

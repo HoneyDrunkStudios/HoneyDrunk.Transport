@@ -1,4 +1,4 @@
-﻿# HoneyDrunk.Transport
+# HoneyDrunk.Transport
 
 [![NuGet](https://img.shields.io/nuget/v/HoneyDrunk.Transport.svg)](https://www.nuget.org/packages/HoneyDrunk.Transport/)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -72,7 +72,7 @@ dotnet add package HoneyDrunk.Transport
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport" Version="0.7.1" />
+<PackageReference Include="HoneyDrunk.Transport" Version="0.7.2" />
 ```
 
 ---

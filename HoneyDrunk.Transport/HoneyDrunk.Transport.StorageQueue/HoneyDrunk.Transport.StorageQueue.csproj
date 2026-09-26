@@ -9,10 +9,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
-    <Version>0.7.1</Version>
+    <Version>0.7.2</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
-    <PackageReleaseNotes>v0.7.1: Sonar follow-up cleanup (ADR-0011 D11). StorageQueueSender.SerializeEnvelope uses target-typed `new()` for the headers Dictionary clone. No public API changes. See CHANGELOG.md.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.7.2: Refresh stable dependencies while preserving target frameworks and HoneyDrunk public contracts.</PackageReleaseNotes>
     <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -34,16 +34,16 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Azure.Storage.Queues" Version="12.26.0" />
+    <PackageReference Include="Azure.Storage.Queues" Version="12.27.1" />
     <!-- HoneyDrunk.Kernel.Abstractions comes transitively from HoneyDrunk.Transport -->
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.2.9">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.3.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.8" />
-    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.12" />
   </ItemGroup>
 
   <ItemGroup>
@@ -52,7 +52,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.201" />
+    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.401" />
   </ItemGroup>
 
 </Project>
