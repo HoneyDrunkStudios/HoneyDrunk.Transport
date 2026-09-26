@@ -158,7 +158,7 @@ public async Task ProcessesOrderCreatedMessage()
 
 ## 📄 License
 
-This project is licensed under the [MIT License](../LICENSE).
+This project is licensed under the [MIT License](../../LICENSE).
 
 ---
 
