@@ -5,6 +5,12 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-09-26
+
+### Changed
+
+- Refresh dependency and shared build-tooling versions; preserve target frameworks and existing public contracts. See the [repository dependency changes](../../CHANGELOG.md).
+
 ## [Unreleased]
 
 ## [0.7.1] - 2026-05-27
