@@ -1,5 +1,9 @@
 # Changelog
 
+## [Unreleased]
+
+- Honor Retry, Abandon and DeadLetter in both Service Bus completion modes; propagate automatic-mode callback/settlement failures to the SDK instead of allowing successful completion. Successful automatic completion, manual settlement, public APIs and Blob fallback publishing semantics remain unchanged.
+
 ## [0.7.2] - 2026-09-26
 
 ### Changed

@@ -308,10 +308,13 @@ public sealed class ServiceBusTransportConsumer(
                     receivedMessage.Envelope.MessageId);
             }
 
-            if (!_options.Value.AutoComplete)
+            if (_options.Value.AutoComplete)
             {
-                await receivedMessage.AbandonAsync();
+                // The SDK must observe failure; a normal callback return permits auto-completion.
+                throw;
             }
+
+            await receivedMessage.AbandonAsync();
         }
     }
 
@@ -319,15 +322,14 @@ public sealed class ServiceBusTransportConsumer(
         MessageProcessingResult result,
         ServiceBusReceivedMessageContext receivedMessage)
     {
-        if (_options.Value.AutoComplete)
-        {
-            return;
-        }
-
         switch (result)
         {
             case MessageProcessingResult.Success:
-                await receivedMessage.CompleteAsync();
+                if (!_options.Value.AutoComplete)
+                {
+                    await receivedMessage.CompleteAsync();
+                }
+
                 break;
 
             case MessageProcessingResult.Retry:

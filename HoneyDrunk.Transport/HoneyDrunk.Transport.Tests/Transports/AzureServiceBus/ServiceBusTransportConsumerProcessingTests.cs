@@ -112,6 +112,140 @@ public sealed class ServiceBusTransportConsumerProcessingTests
         Assert.Equal(0, completeCount);
     }
 
+    /// <summary>Non-success results settle explicitly in either completion mode through SDK event arguments.</summary>
+    /// <param name="autoComplete">Whether successful callbacks are completed by the SDK.</param>
+    /// <param name="result">Pipeline disposition.</param>
+    /// <param name="session">Whether the session callback is used.</param>
+    /// <returns>The callback test.</returns>
+    [Theory]
+    [InlineData(true, MessageProcessingResult.Retry, false)]
+    [InlineData(false, MessageProcessingResult.Retry, false)]
+    [InlineData(true, MessageProcessingResult.Abandon, false)]
+    [InlineData(false, MessageProcessingResult.Abandon, false)]
+    [InlineData(true, MessageProcessingResult.DeadLetter, false)]
+    [InlineData(false, MessageProcessingResult.DeadLetter, false)]
+    [InlineData(true, MessageProcessingResult.Success, false)]
+    [InlineData(false, MessageProcessingResult.Success, false)]
+    [InlineData(true, MessageProcessingResult.Retry, true)]
+    [InlineData(false, MessageProcessingResult.Retry, true)]
+    [InlineData(true, MessageProcessingResult.Abandon, true)]
+    [InlineData(false, MessageProcessingResult.Abandon, true)]
+    [InlineData(true, MessageProcessingResult.DeadLetter, true)]
+    [InlineData(false, MessageProcessingResult.DeadLetter, true)]
+    [InlineData(true, MessageProcessingResult.Success, true)]
+    [InlineData(false, MessageProcessingResult.Success, true)]
+    public async Task ProcessMessageAsync_PipelineResult_PreservesSettlement(bool autoComplete, MessageProcessingResult result, bool session)
+    {
+        var pipeline = Substitute.For<IMessagePipeline>();
+        pipeline.ProcessAsync(Arg.Any<ITransportEnvelope>(), Arg.Any<MessageContext>(), Arg.Any<CancellationToken>()).Returns(result);
+        await using var fixture = CreateConsumer(pipeline, autoComplete);
+        await using ServiceBusReceiver receiver = session ? Substitute.For<ServiceBusSessionReceiver>() : Substitute.For<ServiceBusReceiver>();
+        var message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("{}"), messageId: "settlement");
+        object eventArgs = session
+            ? new ProcessSessionMessageEventArgs(message, (ServiceBusSessionReceiver)receiver, CancellationToken.None)
+            : new ProcessMessageEventArgs(message, receiver, CancellationToken.None);
+
+        await InvokeProcessingAsync(fixture.Consumer, session ? "ProcessSessionMessageAsync" : "ProcessMessageAsync", eventArgs);
+
+        await receiver.Received(result == MessageProcessingResult.Success && !autoComplete ? 1 : 0).CompleteMessageAsync(message, CancellationToken.None);
+        await receiver.Received(result is MessageProcessingResult.Retry or MessageProcessingResult.Abandon ? 1 : 0)
+            .AbandonMessageAsync(message, Arg.Any<IDictionary<string, object>>(), CancellationToken.None);
+        await receiver.Received(result == MessageProcessingResult.DeadLetter ? 1 : 0)
+            .DeadLetterMessageAsync(message, Arg.Any<string>(), Arg.Any<string>(), CancellationToken.None);
+    }
+
+    /// <summary>Auto-completion must observe failures, including cancellation, instead of treating them as success.</summary>
+    /// <param name="cancelled">Whether processing was cancelled.</param>
+    /// <returns>The callback test.</returns>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ProcessMessageAsync_AutoCompleteFailure_PropagatesToSdk(bool cancelled)
+    {
+        Exception failure = cancelled ? new OperationCanceledException("cancelled") : new InvalidOperationException("failed");
+        var pipeline = Substitute.For<IMessagePipeline>();
+        pipeline.ProcessAsync(Arg.Any<ITransportEnvelope>(), Arg.Any<MessageContext>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException<MessageProcessingResult>(failure));
+        await using var fixture = CreateConsumer(pipeline, autoComplete: true);
+        await using var receiver = Substitute.For<ServiceBusReceiver>();
+        var message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("{}"), messageId: "failure");
+        var eventArgs = new ProcessMessageEventArgs(message, receiver, CancellationToken.None);
+
+        var observed = await Record.ExceptionAsync(() => InvokeProcessingAsync(fixture.Consumer, "ProcessMessageAsync", eventArgs));
+
+        Assert.Same(failure, observed);
+        Assert.Empty(receiver.ReceivedCalls());
+    }
+
+    /// <summary>A failed explicit settlement cannot turn into a successful automatic callback.</summary>
+    /// <returns>The callback test.</returns>
+    [Fact]
+    public async Task ProcessMessageAsync_AutoCompleteSettlementFails_PropagatesToSdk()
+    {
+        var pipeline = Substitute.For<IMessagePipeline>();
+        pipeline.ProcessAsync(Arg.Any<ITransportEnvelope>(), Arg.Any<MessageContext>(), Arg.Any<CancellationToken>()).Returns(MessageProcessingResult.DeadLetter);
+        await using var fixture = CreateConsumer(pipeline, autoComplete: true);
+        await using var receiver = Substitute.For<ServiceBusReceiver>();
+        var failure = new ServiceBusException("lock lost", ServiceBusFailureReason.MessageLockLost);
+        receiver.DeadLetterMessageAsync(Arg.Any<ServiceBusReceivedMessage>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(failure));
+        var message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("{}"), messageId: "lock-lost");
+
+        var observed = await Record.ExceptionAsync(() => InvokeProcessingAsync(fixture.Consumer, "ProcessMessageAsync", new ProcessMessageEventArgs(message, receiver, CancellationToken.None)));
+
+        Assert.Same(failure, observed);
+        await receiver.DidNotReceive().CompleteMessageAsync(message, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Real pipeline handler exceptions retain their retry or poison disposition.</summary>
+    /// <param name="autoComplete">Whether successful callbacks are completed by the SDK.</param>
+    /// <param name="poison">Whether the handler explicitly rejects a poison message.</param>
+    /// <returns>The pipeline/callback test.</returns>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, false)]
+    [InlineData(true, true)]
+    [InlineData(false, true)]
+    public async Task ProcessMessageAsync_HandlerFails_PreservesPipelineDisposition(bool autoComplete, bool poison)
+    {
+        var handler = Substitute.For<IMessageHandler<SampleMessage>>();
+        Exception failure = poison ? new MessageHandlerException("poison", MessageProcessingResult.DeadLetter) : new InvalidOperationException("persistence failed");
+        handler.HandleAsync(Arg.Any<SampleMessage>(), Arg.Any<MessageContext>(), Arg.Any<CancellationToken>()).Returns(Task.FromException(failure));
+        await using var provider = new ServiceCollection().AddSingleton(handler).BuildServiceProvider();
+        var pipeline = new MessagePipeline([], new HoneyDrunk.Transport.DependencyInjection.JsonMessageSerializer(), provider, NullLogger<MessagePipeline>.Instance);
+        await using var client = Substitute.For<ServiceBusClient>();
+        await using var consumer = new ServiceBusTransportConsumer(client, pipeline, provider.GetRequiredService<IServiceScopeFactory>(), Options.Create(new AzureServiceBusOptions { Address = "orders", AutoComplete = autoComplete }), NullLogger<ServiceBusTransportConsumer>.Instance);
+        await using var receiver = Substitute.For<ServiceBusReceiver>();
+        var message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("{\"value\":\"test\"}"), messageId: "handler-failure", subject: typeof(SampleMessage).AssemblyQualifiedName);
+
+        await InvokeProcessingAsync(consumer, "ProcessMessageAsync", new ProcessMessageEventArgs(message, receiver, CancellationToken.None));
+
+        await handler.Received(1).HandleAsync(Arg.Any<SampleMessage>(), Arg.Any<MessageContext>(), Arg.Any<CancellationToken>());
+        await receiver.Received(poison ? 0 : 1).AbandonMessageAsync(message, Arg.Any<IDictionary<string, object>>(), CancellationToken.None);
+        await receiver.Received(poison ? 1 : 0).DeadLetterMessageAsync(message, Arg.Any<string>(), Arg.Any<string>(), CancellationToken.None);
+        await receiver.DidNotReceive().CompleteMessageAsync(message, Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>Manual cancellation still abandons using a non-cancelled settlement token.</summary>
+    /// <returns>The cancellation test.</returns>
+    [Fact]
+    public async Task ProcessMessageAsync_ManualCancellation_AbandonsWithoutProcessingToken()
+    {
+        using var cancellation = new CancellationTokenSource();
+        await cancellation.CancelAsync();
+        var pipeline = Substitute.For<IMessagePipeline>();
+        pipeline.ProcessAsync(Arg.Any<ITransportEnvelope>(), Arg.Any<MessageContext>(), cancellation.Token)
+            .Returns(Task.FromCanceled<MessageProcessingResult>(cancellation.Token));
+        await using var fixture = CreateConsumer(pipeline, autoComplete: false);
+        await using var receiver = Substitute.For<ServiceBusReceiver>();
+        var message = ServiceBusModelFactory.ServiceBusReceivedMessage(body: BinaryData.FromString("{}"), messageId: "cancelled");
+
+        await InvokeProcessingAsync(fixture.Consumer, "ProcessMessageAsync", new ProcessMessageEventArgs(message, receiver, cancellation.Token));
+
+        await receiver.Received(1).AbandonMessageAsync(message, Arg.Any<IDictionary<string, object>>(), CancellationToken.None);
+        await receiver.DidNotReceive().CompleteMessageAsync(message, Arg.Any<CancellationToken>());
+    }
+
     [System.Diagnostics.CodeAnalysis.SuppressMessage(
         "Reliability",
         "CA2000:Dispose objects before losing scope",

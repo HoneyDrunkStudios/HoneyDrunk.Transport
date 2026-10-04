@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve Retry, Abandon and DeadLetter results when automatic completion is enabled; propagate processing/cancellation/settlement failures to the SDK. Add SDK-argument callback coverage for standard/session messages and real handler failures. Successful automatic completion and the manual settlement policy are unchanged.
+
 ## [0.7.1] - 2026-05-27
 
 ### Internal
