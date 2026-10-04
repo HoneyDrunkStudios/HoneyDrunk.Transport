@@ -11,6 +11,10 @@
 
 This provider is configured via `AzureServiceBusOptions`, extending the core `TransportOptions` type.
 
+Automatic completion applies to successful processing only. Retry/Abandon and DeadLetter results are explicitly settled in either mode, and automatic-mode callback failures propagate to the SDK. SQL-backed lifecycle handlers should select `AutoComplete = false` and return success only after their business state and acknowledgment commit. Local fake-based tests verify callback behavior; they do not prove broker redelivery or lock handling.
+
+Blob fallback retains its existing publish-success semantics: a successful fallback write can return normally without a broker send. Keep it disabled beneath a SQL outbox unless a durable replay owner and dispatch/retention contract are defined. A successful publish or fallback write is not evidence of consumer business completion.
+
 **Key Features:**
 - ✅ **Topics & Subscriptions** - Pub/sub messaging patterns
 - ✅ **Sessions** - Ordered message processing per session
