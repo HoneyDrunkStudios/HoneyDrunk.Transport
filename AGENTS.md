@@ -21,3 +21,11 @@ dotnet test HoneyDrunk.Transport/HoneyDrunk.Transport.slnx -c Release --no-build
 Use the checked-in workflow and relevant test documentation for additional integration prerequisites, coverage and consumer checks. Do not use live resources or credentials merely to make a local check pass.
 
 Read the [engineering guide](docs/engineering-guide.md) for repository-specific contracts and patterns.
+
+## Code Review Rules
+
+Apply the [shared review criteria](https://github.com/HoneyDrunkStudios/HoneyDrunk.Standards/blob/main/HoneyDrunk.Standards/docs/CONVENTIONS.md#code-review) to changed behavior, using the repository boundaries above. Report actionable findings with the failing path, concrete impact and a small corrective action; disclose unavailable evidence. These rules grant no cross-repository access or merge authority.
+
+- Keep envelopes/contracts and middleware provider-neutral, broker SDKs in adapters and durable outbox storage in its owning data implementation. Preserve serialization compatibility, correlation and cancellation across message boundaries.
+- Trace duplicate delivery, acknowledgement, retry, poison-message and ordering paths; flag lost messages, unsafe replay or claims of exactly-once behavior without end-to-end evidence. Check bounded concurrency/backpressure and resource cleanup.
+- Require changed adapter/contract failure tests that distinguish broker acceptance from application completion. Use realistic duplicate/retry/cancellation cases and the existing shared contracts rather than adding a speculative message framework.
