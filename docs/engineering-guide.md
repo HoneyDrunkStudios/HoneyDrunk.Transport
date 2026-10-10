@@ -1,4 +1,4 @@
-# HoneyDrunk.Transport Codebase Guide
+# HoneyDrunk.Transport engineering guide
 
 ## Architecture Overview
 
@@ -149,7 +149,7 @@ Three-tier error handling:
    - `DeadLetter` - Move to DLQ, no retry
 
 ### Transactional Outbox Pattern
-For exactly-once processing with database transactions:
+For transactional publication with retry-safe consumers:
 1. Implement `IOutboxStore` against your database
 2. Save messages via `SaveAsync()` within your unit-of-work transaction
 3. Background `IOutboxDispatcher` polls `LoadPendingAsync()` and publishes
@@ -168,7 +168,7 @@ For exactly-once processing with database transactions:
 ## Code Style Conventions
 
 ### Primary Constructors
-Modern C# 14 syntax:
+Primary-constructor syntax supported by the pinned SDK:
 ```csharp
 public sealed class ServiceBusTransportPublisher(
     ServiceBusClient client,
@@ -195,31 +195,9 @@ public sealed class ServiceBusTransportPublisher(
 
 ## Thread-Safety & Concurrency Patterns
 
-### Disposal Pattern (Critical)
-Use thread-safe disposal:
+### Disposal and concurrency
 
-```csharp
-public async ValueTask DisposeAsync()
-{
-    if (Interlocked.Exchange(ref _disposed, true))
-        return;
-    
-    await _initLock.WaitAsync();
-    try
-    {
-        if (_sender != null)
-        {
-            await _sender.DisposeAsync();
-            _sender = null;
-        }
-    }
-    finally
-    {
-        _initLock.Release();
-        _initLock.Dispose();
-    }
-}
-```
+Review the actual provider lifecycle before changing disposal. Make shutdown idempotent, prevent new work once disposal begins, and coordinate existing operations before disposing synchronization primitives or clients. Test concurrent calls, cancellation and disposal failures; a generic semaphore snippet cannot establish that ownership contract.
 
 ### Collection Thread-Safety
 Use `ImmutableList` for collections modified during enumeration:

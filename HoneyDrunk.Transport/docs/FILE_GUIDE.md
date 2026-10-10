@@ -1,4 +1,4 @@
-﻿# 📦 HoneyDrunk.Transport - Complete File Guide
+# 📦 HoneyDrunk.Transport - Complete File Guide
 
 ## Overview
 
@@ -557,7 +557,7 @@ Applications using HoneyDrunk.Transport:
 ### Official Documentation
 - [README.md](../../README.md) - Project overview and quick start
 - [CHANGELOG.md](../HoneyDrunk.Transport/CHANGELOG.md) - Version history and migration guides
-- [.github/copilot-instructions.md](../../.github/copilot-instructions.md) - Coding standards
+- [engineering guide](../../docs/engineering-guide.md) - Coding standards
 
 ### Related Projects
 - [HoneyDrunk.Kernel](https://github.com/HoneyDrunkStudios/HoneyDrunk.Kernel) - Core Grid primitives
@@ -578,4 +578,4 @@ Applications using HoneyDrunk.Transport:
 ---
 
 *Last Updated: 2025-12-03*  
-*Target Framework: .NET 10.0*  
+*Target Framework: .NET 10.0*
