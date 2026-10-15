@@ -52,11 +52,12 @@ jobs:
       contents: read
       checks: write
       pull-requests: write
-    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/job-sonarcloud.yml@main
+    uses: HoneyDrunkStudios/HoneyDrunk.Actions/.github/workflows/job-sonarcloud.yml@20166f0d62b7027ad46130ec2c8f4eb652e0ffa5
     with:
       dotnet-version: '10.0.x'
       runs-on: 'ubuntu-latest'
       working-directory: 'HoneyDrunk.Transport'
+      collect-failure-findings: true
       sonar-organization: 'honeydrunkstudios'
       sonar-project-key: 'honeydrunkstudios_HoneyDrunk.Transport'
       coverage-artifact-name: 'coverage-reports-ubuntu-latest'
