@@ -331,24 +331,22 @@ HoneyDrunk.Transport/
 │   └── DependencyInjection/                 # AddHoneyDrunkTransportCore()
 │
 ├── src/HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
-│   ├── Publishing/                          # ServiceBusTransportPublisher
-│   ├── Consuming/                           # ServiceBusTransportConsumer
-│   ├── BlobFallback/                        # Blob storage for failed publishes
-│   ├── Health/                              # ServiceBusHealthContributor
+│   ├── Configuration/                       # AzureServiceBusOptions, BlobFallbackOptions
+│   ├── Internal/                            # Blob fallback store for failed publishes
+│   ├── Mapping/                             # Envelope and transaction mapping
 │   └── DependencyInjection/                 # AddHoneyDrunkServiceBusTransport()
 │
 ├── src/HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
-│   ├── Publishing/                          # StorageQueueTransportPublisher
-│   ├── Consuming/                           # StorageQueueTransportConsumer
-│   ├── Health/                              # StorageQueueHealthContributor
+│   ├── Configuration/                       # StorageQueueOptions
+│   ├── Internal/                            # Sender, processor, poison queue mover
 │   └── DependencyInjection/                 # AddHoneyDrunkTransportStorageQueue()
 │
 ├── src/HoneyDrunk.Transport.InMemory/           # In-memory provider (testing)
-│   ├── InMemoryBroker                       # Thread-safe in-memory message store
-│   ├── Health/                              # InMemoryHealthContributor
+│   ├── InMemoryBroker.cs                    # Thread-safe in-memory message store
 │   └── DependencyInjection/                 # AddHoneyDrunkInMemoryTransport()
 │
-└── tests/HoneyDrunk.Transport.Tests/              # xUnit test suite
+├── tests/HoneyDrunk.Transport.Tests/              # xUnit test suite
+└── tests/HoneyDrunk.Transport.SandboxNode/        # Kernel + Transport invariant canary (not packed)
 ```
 
 ---

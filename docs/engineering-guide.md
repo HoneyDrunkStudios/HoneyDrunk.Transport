@@ -22,6 +22,7 @@ src/HoneyDrunk.Transport.AzureServiceBus/   # Azure Service Bus transport implem
 src/HoneyDrunk.Transport.StorageQueue/      # Azure Storage Queue transport implementation
 src/HoneyDrunk.Transport.InMemory/          # In-memory broker for testing
 tests/HoneyDrunk.Transport.Tests/             # xUnit test suite
+tests/HoneyDrunk.Transport.SandboxNode/       # Kernel + Transport invariant canary (not packed)
 ```
 
 ## Key Concepts
@@ -157,13 +158,14 @@ For transactional publication with retry-safe consumers:
 ## Development Workflows
 
 ### Adding New Transport Providers
-1. Create project `src/HoneyDrunk.Transport.{BrokerName}/`
+1. Create project `src/HoneyDrunk.Transport.{BrokerName}/` and add it to `HoneyDrunk.Transport.slnx` at the repository root
 2. Reference **ONLY** `HoneyDrunk.Kernel.Abstractions` (not full Kernel)
 3. Reference `HoneyDrunk.Transport` core project
 4. Implement `ITransportPublisher` and `ITransportConsumer`
 5. Implement `ITransportHealthContributor` for health checks
 6. Map Grid context fields (NodeId, StudioId, Environment) to broker metadata
 7. Follow Azure Service Bus implementation as reference template
+8. Add tests under `tests/HoneyDrunk.Transport.Tests/Transports/{BrokerName}/`
 
 ## Code Style Conventions
 

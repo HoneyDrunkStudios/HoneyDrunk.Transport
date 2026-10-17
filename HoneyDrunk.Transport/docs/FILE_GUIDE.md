@@ -458,6 +458,8 @@ HoneyDrunk.Transport/
 │       ├── EnvelopeMapper.cs          # Envelope-to-ServiceBus mapping
 │       └── ServiceBusTransportTransaction.cs # Transaction wrapper
 │
+├── tests/HoneyDrunk.Transport.SandboxNode/ # Kernel + Transport invariant canary (not packed)
+│
 └── tests/HoneyDrunk.Transport.Tests/       # Unit and integration tests
     ├── Core/                          # Core functionality tests
     │   ├── Configuration/             # Configuration tests
