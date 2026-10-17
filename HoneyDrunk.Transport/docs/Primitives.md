@@ -16,7 +16,7 @@
 
 Concrete implementations that back the core transport abstractions. This folder contains the envelope and factory types that wrap messages with Grid context metadata for transport across service boundaries.
 
-**Location:** `HoneyDrunk.Transport/Primitives/`
+**Location:** `src/HoneyDrunk.Transport/Primitives/`
 
 **What Lives Here:**
 - **TransportEnvelope** - Immutable envelope implementation with Grid context support

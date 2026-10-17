@@ -30,7 +30,7 @@
 
 Testing patterns for Transport applications using InMemory transport, mocking strategies, and integration test patterns.
 
-**Location:** `HoneyDrunk.Transport.Tests/`
+**Location:** `tests/HoneyDrunk.Transport.Tests/`
 
 **Key Concepts:**
 - **Unit tests** are pure and independent—no DI container, no runtime

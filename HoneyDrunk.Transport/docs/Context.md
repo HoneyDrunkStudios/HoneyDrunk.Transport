@@ -17,7 +17,7 @@
 
 Grid context integration for distributed context propagation across Node boundaries. Bridges Transport envelopes to Kernel's `IGridContext`.
 
-**Location:** `HoneyDrunk.Transport/Context/`
+**Location:** `src/HoneyDrunk.Transport/Context/`
 
 > **Key Concept (Kernel vNext v0.4.0+):** Transport does **not** create its own GridContext. It **initializes** an existing DI-scoped `IGridContext` owned by Kernel using envelope metadata. This ensures exactly one GridContext per DI scope, maintaining the Kernel vNext invariant.
 

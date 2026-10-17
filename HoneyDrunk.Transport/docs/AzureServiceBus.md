@@ -25,7 +25,7 @@ Azure Service Bus transport for enterprise messaging with advanced features like
 
 The Service Bus transport implements the standard transport contracts (`ITransportPublisher`, `ITransportConsumer`, `ITransportTopology`) and participates in the shared pipeline and runtime just like Storage Queue and InMemory.
 
-**Location:** `HoneyDrunk.Transport.AzureServiceBus/`
+**Location:** `src/HoneyDrunk.Transport.AzureServiceBus/`
 
 **Key Characteristics:**
 - ✅ Topics and subscriptions (pub/sub)

@@ -331,7 +331,7 @@ The Abstractions folder contains both pure interfaces and the shared contract ty
 
 ```
 HoneyDrunk.Transport/
-├── HoneyDrunk.Transport/              # Core abstractions and pipeline
+├── src/HoneyDrunk.Transport/              # Core abstractions and pipeline
 │   ├── Abstractions/                  # Contracts and interfaces
 │   │   ├── EndpointAddress.cs         # Transport-agnostic endpoint address implementation
 │   │   ├── IEndpointAddress.cs        # Endpoint address contract
@@ -416,7 +416,7 @@ HoneyDrunk.Transport/
 │   └── Publishers/                    # Publisher implementations
 │       └── MessagePublisher.cs        # High-level publisher
 │
-├── HoneyDrunk.Transport.InMemory/    # In-memory transport
+├── src/HoneyDrunk.Transport.InMemory/    # In-memory transport
 │   ├── InMemoryBroker.cs              # In-memory message broker
 │   ├── InMemoryTopology.cs            # Topology capabilities
 │   ├── InMemoryTransportPublisher.cs  # Publisher implementation
@@ -424,7 +424,7 @@ HoneyDrunk.Transport/
 │   └── DependencyInjection/
 │       └── ServiceCollectionExtensions.cs # DI extensions
 │
-├── HoneyDrunk.Transport.StorageQueue/ # Azure Storage Queue transport
+├── src/HoneyDrunk.Transport.StorageQueue/ # Azure Storage Queue transport
 │   ├── StorageQueueTopology.cs        # Topology capabilities
 │   ├── Configuration/
 │   │   └── StorageQueueOptions.cs     # Storage queue options
@@ -437,7 +437,7 @@ HoneyDrunk.Transport/
 │       ├── StorageQueueProcessor.cs   # Message processor
 │       └── StorageQueueSender.cs      # Message sender
 │
-├── HoneyDrunk.Transport.AzureServiceBus/ # Azure Service Bus transport
+├── src/HoneyDrunk.Transport.AzureServiceBus/ # Azure Service Bus transport
 │   ├── ServiceBusTopology.cs          # Topology capabilities
 │   ├── ServiceBusTransportPublisher.cs # Publisher implementation
 │   ├── ServiceBusTransportConsumer.cs # Consumer implementation
@@ -458,7 +458,7 @@ HoneyDrunk.Transport/
 │       ├── EnvelopeMapper.cs          # Envelope-to-ServiceBus mapping
 │       └── ServiceBusTransportTransaction.cs # Transaction wrapper
 │
-└── HoneyDrunk.Transport.Tests/       # Unit and integration tests
+└── tests/HoneyDrunk.Transport.Tests/       # Unit and integration tests
     ├── Core/                          # Core functionality tests
     │   ├── Configuration/             # Configuration tests
     │   ├── Context/                   # Context tests

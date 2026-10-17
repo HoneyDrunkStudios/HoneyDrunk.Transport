@@ -21,11 +21,11 @@ Metrics collection abstractions for recording transport operations. Integrates w
 
 **Locations:**
 
-- **Metrics:** `HoneyDrunk.Transport/Metrics/`
+- **Metrics:** `src/HoneyDrunk.Transport/Metrics/`
   - `ITransportMetrics.cs` - Metrics abstraction
   - `NoOpTransportMetrics.cs` - Default no-op implementation
 
-- **Telemetry:** `HoneyDrunk.Transport/Telemetry/`
+- **Telemetry:** `src/HoneyDrunk.Transport/Telemetry/`
   - `TransportTelemetry.cs` - ActivitySource utilities
   - `TelemetryMiddleware.cs` - Pipeline integration
 
@@ -305,7 +305,7 @@ services.AddSingleton<ITransportMetrics, KernelTransportMetrics>();
 
 ## TransportTelemetry.cs
 
-**Location:** `HoneyDrunk.Transport/Telemetry/TransportTelemetry.cs`
+**Location:** `src/HoneyDrunk.Transport/Telemetry/TransportTelemetry.cs`
 
 OpenTelemetry integration for distributed tracing. The `ActivitySource` name (`"HoneyDrunk.Transport"`) is stable and used for log correlation.
 
