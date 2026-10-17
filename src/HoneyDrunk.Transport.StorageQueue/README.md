@@ -142,9 +142,9 @@ catch (MessageTooLargeException ex)
 
 ## 📚 Documentation
 
-- **[Storage Queue Guide](../docs/StorageQueue.md)** - Detailed implementation guide
-- **[Configuration Guide](../docs/Configuration.md)** - StorageQueueOptions reference
-- **[Complete File Guide](../docs/FILE_GUIDE.md)** - Architecture documentation
+- **[Storage Queue Guide](../../HoneyDrunk.Transport/docs/StorageQueue.md)** - Detailed implementation guide
+- **[Configuration Guide](../../HoneyDrunk.Transport/docs/Configuration.md)** - StorageQueueOptions reference
+- **[Complete File Guide](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md)** - Architecture documentation
 
 ---
 
@@ -156,4 +156,4 @@ This project is licensed under the [MIT License](../../LICENSE).
 
 **Built with 🍯 by HoneyDrunk Studios**
 
-[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
+[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)

@@ -68,7 +68,7 @@ jobs:
       dotnet-version: '10.0.x'
       configuration: 'Release'
       runs-on: 'ubuntu-latest'
-      project-path: 'HoneyDrunk.Transport/HoneyDrunk.Transport.slnx'
+      project-path: 'HoneyDrunk.Transport.slnx'
       enable-nuget-pack: true
       enable-nuget-publish: false
       nuget-source: 'https://api.nuget.org/v3/index.json'

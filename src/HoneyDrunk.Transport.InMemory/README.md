@@ -150,9 +150,9 @@ public async Task ProcessesOrderCreatedMessage()
 
 ## 📚 Documentation
 
-- **[Testing Guide](../docs/Testing.md)** - Test patterns and examples
-- **[InMemory Guide](../docs/InMemory.md)** - Detailed implementation guide
-- **[Complete File Guide](../docs/FILE_GUIDE.md)** - Architecture documentation
+- **[Testing Guide](../../HoneyDrunk.Transport/docs/Testing.md)** - Test patterns and examples
+- **[InMemory Guide](../../HoneyDrunk.Transport/docs/InMemory.md)** - Detailed implementation guide
+- **[Complete File Guide](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md)** - Architecture documentation
 
 ---
 
@@ -164,4 +164,4 @@ This project is licensed under the [MIT License](../../LICENSE).
 
 **Built with 🍯 by HoneyDrunk Studios**
 
-[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
+[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)

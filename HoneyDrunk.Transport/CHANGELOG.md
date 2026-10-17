@@ -6,10 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 **Note:** See individual package CHANGELOGs for detailed changes:
-- [HoneyDrunk.Transport CHANGELOG](HoneyDrunk.Transport/CHANGELOG.md)
-- [HoneyDrunk.Transport.AzureServiceBus CHANGELOG](HoneyDrunk.Transport.AzureServiceBus/CHANGELOG.md)
-- [HoneyDrunk.Transport.InMemory CHANGELOG](HoneyDrunk.Transport.InMemory/CHANGELOG.md)
-- [HoneyDrunk.Transport.StorageQueue CHANGELOG](HoneyDrunk.Transport.StorageQueue/CHANGELOG.md)
+- [HoneyDrunk.Transport CHANGELOG](../src/HoneyDrunk.Transport/CHANGELOG.md)
+- [HoneyDrunk.Transport.AzureServiceBus CHANGELOG](../src/HoneyDrunk.Transport.AzureServiceBus/CHANGELOG.md)
+- [HoneyDrunk.Transport.InMemory CHANGELOG](../src/HoneyDrunk.Transport.InMemory/CHANGELOG.md)
+- [HoneyDrunk.Transport.StorageQueue CHANGELOG](../src/HoneyDrunk.Transport.StorageQueue/CHANGELOG.md)
 
 ---
 

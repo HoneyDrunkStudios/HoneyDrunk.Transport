@@ -137,12 +137,12 @@ public class OrderCreatedHandler : IMessageHandler<OrderCreated>
 
 ## 📚 Documentation
 
-- **[Complete File Guide](../docs/FILE_GUIDE.md)** - Architecture documentation
-- **[Abstractions](../docs/Abstractions.md)** - Core contracts
-- **[Pipeline](../docs/Pipeline.md)** - Middleware system
-- **[Configuration](../docs/Configuration.md)** - Settings and retry
-- **[Runtime](../docs/Runtime.md)** - Consumer lifecycle
-- **[Testing](../docs/Testing.md)** - Test patterns
+- **[Complete File Guide](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md)** - Architecture documentation
+- **[Abstractions](../../HoneyDrunk.Transport/docs/Abstractions.md)** - Core contracts
+- **[Pipeline](../../HoneyDrunk.Transport/docs/Pipeline.md)** - Middleware system
+- **[Configuration](../../HoneyDrunk.Transport/docs/Configuration.md)** - Settings and retry
+- **[Runtime](../../HoneyDrunk.Transport/docs/Runtime.md)** - Consumer lifecycle
+- **[Testing](../../HoneyDrunk.Transport/docs/Testing.md)** - Test patterns
 
 ---
 
@@ -154,4 +154,4 @@ This project is licensed under the [MIT License](../../LICENSE).
 
 **Built with 🍯 by HoneyDrunk Studios**
 
-[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
+[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)

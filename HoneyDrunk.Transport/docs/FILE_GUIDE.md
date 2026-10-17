@@ -556,7 +556,7 @@ Applications using HoneyDrunk.Transport:
 
 ### Official Documentation
 - [README.md](../../README.md) - Project overview and quick start
-- [CHANGELOG.md](../HoneyDrunk.Transport/CHANGELOG.md) - Version history and migration guides
+- [CHANGELOG.md](../../src/HoneyDrunk.Transport/CHANGELOG.md) - Version history and migration guides
 - [engineering guide](../../docs/engineering-guide.md) - Coding standards
 
 ### Related Projects
