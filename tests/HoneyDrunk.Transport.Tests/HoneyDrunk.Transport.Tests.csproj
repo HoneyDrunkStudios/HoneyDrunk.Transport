@@ -24,10 +24,10 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\HoneyDrunk.Transport.StorageQueue\HoneyDrunk.Transport.StorageQueue.csproj" />
-    <ProjectReference Include="..\HoneyDrunk.Transport\HoneyDrunk.Transport.csproj" />
-    <ProjectReference Include="..\HoneyDrunk.Transport.InMemory\HoneyDrunk.Transport.InMemory.csproj" />
-    <ProjectReference Include="..\HoneyDrunk.Transport.AzureServiceBus\HoneyDrunk.Transport.AzureServiceBus.csproj" />
+    <ProjectReference Include="..\..\src\HoneyDrunk.Transport.StorageQueue\HoneyDrunk.Transport.StorageQueue.csproj" />
+    <ProjectReference Include="..\..\src\HoneyDrunk.Transport\HoneyDrunk.Transport.csproj" />
+    <ProjectReference Include="..\..\src\HoneyDrunk.Transport.InMemory\HoneyDrunk.Transport.InMemory.csproj" />
+    <ProjectReference Include="..\..\src\HoneyDrunk.Transport.AzureServiceBus\HoneyDrunk.Transport.AzureServiceBus.csproj" />
   </ItemGroup>
 
   <ItemGroup>

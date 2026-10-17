@@ -1,0 +1,37 @@
+<Solution>
+  <Folder Name="/Docs/">
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/Docs/Engineering/">
+    <File Path="AGENTS.md" />
+    <File Path="docs/engineering-guide.md" />
+  </Folder>
+  <Folder Name="/Docs/FileGuide/">
+    <File Path="HoneyDrunk.Transport/docs/Abstractions.md" />
+    <File Path="HoneyDrunk.Transport/docs/Architecture.md" />
+    <File Path="HoneyDrunk.Transport/docs/AzureServiceBus.md" />
+    <File Path="HoneyDrunk.Transport/docs/Configuration.md" />
+    <File Path="HoneyDrunk.Transport/docs/Context.md" />
+    <File Path="HoneyDrunk.Transport/docs/DependencyInjection.md" />
+    <File Path="HoneyDrunk.Transport/docs/FILE_GUIDE.md" />
+    <File Path="HoneyDrunk.Transport/docs/Health.md" />
+    <File Path="HoneyDrunk.Transport/docs/InMemory.md" />
+    <File Path="HoneyDrunk.Transport/docs/Metrics.md" />
+    <File Path="HoneyDrunk.Transport/docs/Outbox.md" />
+    <File Path="HoneyDrunk.Transport/docs/Pipeline.md" />
+    <File Path="HoneyDrunk.Transport/docs/Primitives.md" />
+    <File Path="HoneyDrunk.Transport/docs/StorageQueue.md" />
+    <File Path="HoneyDrunk.Transport/docs/Testing.md" />
+    <File Path="HoneyDrunk.Transport/docs/Runtime.md" />
+  </Folder>
+  <Folder Name="/Pipelines/">
+    <File Path=".github/workflows/publish.yml" />
+    <File Path=".github/workflows/pr.yml" />
+  </Folder>
+  <Project Path="src/HoneyDrunk.Transport.AzureServiceBus/HoneyDrunk.Transport.AzureServiceBus.csproj" />
+  <Project Path="src/HoneyDrunk.Transport.InMemory/HoneyDrunk.Transport.InMemory.csproj" />
+  <Project Path="tests/HoneyDrunk.Transport.SandboxNode/HoneyDrunk.Transport.SandboxNode.csproj" />
+  <Project Path="src/HoneyDrunk.Transport.StorageQueue/HoneyDrunk.Transport.StorageQueue.csproj" />
+  <Project Path="tests/HoneyDrunk.Transport.Tests/HoneyDrunk.Transport.Tests.csproj" />
+  <Project Path="src/HoneyDrunk.Transport/HoneyDrunk.Transport.csproj" />
+</Solution>

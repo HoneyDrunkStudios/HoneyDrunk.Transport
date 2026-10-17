@@ -18,7 +18,7 @@
 
 Health monitoring abstractions for transport components. Integrates with Kernel health aggregation for Kubernetes readiness/liveness probes.
 
-**Location:** `HoneyDrunk.Transport/Health/`
+**Location:** `src/HoneyDrunk.Transport/Health/`
 
 Transport health contributors are collected by `ITransportRuntime` and can be included in the node's composite health check using Kernel's contributor aggregation model.
 

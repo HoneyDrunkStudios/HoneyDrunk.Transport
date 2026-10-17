@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- **Core Pipeline** (`HoneyDrunk.Transport/Pipeline/`)
+- **Core Pipeline** (`src/HoneyDrunk.Transport/Pipeline/`)
   - [IMessagePipeline.cs](#imessagepipelinecs)
   - [MessagePipeline.cs](#messagepipelinecs)
   - [IMessageMiddleware.cs](#imessagemiddlewarecs)
@@ -15,12 +15,12 @@
   - [MessageHandlerInvoker.cs](#messagehandlerinvokercs)
   - [TransportExecutionContext.cs](#transportexecutioncontextcs)
   - [MessageHandlerException.cs](#messagehandlerexceptioncs)
-- **Built-in Middleware** (`HoneyDrunk.Transport/Pipeline/Middleware/`)
+- **Built-in Middleware** (`src/HoneyDrunk.Transport/Pipeline/Middleware/`)
   - [GridContextPropagationMiddleware.cs](#gridcontextpropagationmiddlewarecs)
   - [LoggingMiddleware.cs](#loggingmiddlewarecs)
   - [RetryMiddleware.cs](#retrymiddlewarecs)
   - [CorrelationMiddleware.cs](#correlationmiddlewarecs) *(deprecated)*
-- **Telemetry Middleware** (`HoneyDrunk.Transport/Telemetry/`)
+- **Telemetry Middleware** (`src/HoneyDrunk.Transport/Telemetry/`)
   - [TelemetryMiddleware.cs](#telemetrymiddlewarecs)
 
 ---
@@ -29,7 +29,7 @@
 
 The middleware pipeline system that processes messages in an onion-style pattern. Each middleware layer wraps the next, enabling cross-cutting concerns like logging, telemetry, and validation.
 
-**Location:** `HoneyDrunk.Transport/Pipeline/`
+**Location:** `src/HoneyDrunk.Transport/Pipeline/`
 
 ### Error Handling Flow
 
@@ -527,7 +527,7 @@ services.AddSingleton<IMessageMiddleware>(sp =>
 
 ## TelemetryMiddleware.cs
 
-**Location:** `HoneyDrunk.Transport/Telemetry/TelemetryMiddleware.cs`
+**Location:** `src/HoneyDrunk.Transport/Telemetry/TelemetryMiddleware.cs`
 
 Creates OpenTelemetry spans for distributed tracing.
 

@@ -19,7 +19,7 @@
 
 The Runtime layer provides unified lifecycle orchestration for all transport consumers. It integrates with ASP.NET Core's hosting model via `IHostedService`, ensuring proper startup and graceful shutdown of message processing across all registered transport adapters.
 
-**Location:** `HoneyDrunk.Transport/Runtime/`
+**Location:** `src/HoneyDrunk.Transport/Runtime/`
 
 **Key Responsibilities:**
 - Coordinate startup of all registered transport consumers

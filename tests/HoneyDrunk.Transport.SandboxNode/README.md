@@ -15,7 +15,7 @@ creates its own on consume. If any invariant is violated the process exits non-z
 
 ## How To Run
 
-From this directory:
+From this directory (`tests/HoneyDrunk.Transport.SandboxNode/`):
 
 ```bash
 # Normal mode: enforce all invariants (fails loudly on violation)

@@ -7,7 +7,7 @@
 ## Table of Contents
 
 - [Overview](#overview)
-- **Core Transport** (`HoneyDrunk.Transport/Configuration/`)
+- **Core Transport** (`src/HoneyDrunk.Transport/Configuration/`)
   - [TransportCoreOptions.cs](#transportcoreoptionscs)
   - [TransportOptions.cs](#transportoptionscs)
   - [RetryOptions.cs](#retryoptionscs)
@@ -18,13 +18,13 @@
   - [DefaultErrorHandlingStrategy.cs](#defaulterrorhandlingstrategycs)
   - [ConfigurableErrorHandlingStrategy.cs](#configurableerrorhandlingstrategycs)
   - [ExceptionTypeMapStrategy.cs](#exceptiontypemapstrategycs)
-- **Azure Service Bus** (`HoneyDrunk.Transport.AzureServiceBus/Configuration/`)
+- **Azure Service Bus** (`src/HoneyDrunk.Transport.AzureServiceBus/Configuration/`)
   - [AzureServiceBusOptions.cs](#azureservicebusoptionscs)
   - [ServiceBusRetryOptions.cs](#servicebusretryoptionscs)
   - [ServiceBusRetryMode.cs](#servicebusretrymodecs)
   - [ServiceBusEntityType.cs](#servicebusentitytypecs)
   - [BlobFallbackOptions.cs](#blobfallbackoptionscs)
-- **Azure Storage Queue** (`HoneyDrunk.Transport.StorageQueue/Configuration/`)
+- **Azure Storage Queue** (`src/HoneyDrunk.Transport.StorageQueue/Configuration/`)
   - [StorageQueueOptions.cs](#storagequeueoptions)
 
 ---
@@ -35,9 +35,9 @@ Configuration classes for controlling transport behavior including retry policie
 
 **Locations:**
 
-- Core: `HoneyDrunk.Transport/Configuration/`
-- Azure Service Bus: `HoneyDrunk.Transport.AzureServiceBus/Configuration/`
-- Azure Storage Queue: `HoneyDrunk.Transport.StorageQueue/Configuration/`
+- Core: `src/HoneyDrunk.Transport/Configuration/`
+- Azure Service Bus: `src/HoneyDrunk.Transport.AzureServiceBus/Configuration/`
+- Azure Storage Queue: `src/HoneyDrunk.Transport.StorageQueue/Configuration/`
 
 ---
 

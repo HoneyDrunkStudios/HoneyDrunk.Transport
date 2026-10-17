@@ -33,10 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 For detailed, per-package history (including breaking changes and migration notes),
 see the package CHANGELOGs:
 
-- [HoneyDrunk.Transport](HoneyDrunk.Transport/HoneyDrunk.Transport/CHANGELOG.md)
-- [HoneyDrunk.Transport.AzureServiceBus](HoneyDrunk.Transport/HoneyDrunk.Transport.AzureServiceBus/CHANGELOG.md)
-- [HoneyDrunk.Transport.InMemory](HoneyDrunk.Transport/HoneyDrunk.Transport.InMemory/CHANGELOG.md)
-- [HoneyDrunk.Transport.StorageQueue](HoneyDrunk.Transport/HoneyDrunk.Transport.StorageQueue/CHANGELOG.md)
+- [HoneyDrunk.Transport](src/HoneyDrunk.Transport/CHANGELOG.md)
+- [HoneyDrunk.Transport.AzureServiceBus](src/HoneyDrunk.Transport.AzureServiceBus/CHANGELOG.md)
+- [HoneyDrunk.Transport.InMemory](src/HoneyDrunk.Transport.InMemory/CHANGELOG.md)
+- [HoneyDrunk.Transport.StorageQueue](src/HoneyDrunk.Transport.StorageQueue/CHANGELOG.md)
 
 
 ### Verified HoneyDrunk dependencies

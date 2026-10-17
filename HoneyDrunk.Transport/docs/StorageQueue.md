@@ -27,7 +27,7 @@ The Storage Queue transport implements the standard transport contracts (`ITrans
 
 It is intended for simple, high-volume workloads where at-least-once delivery and small payloads are acceptable.
 
-**Location:** `HoneyDrunk.Transport.StorageQueue/`
+**Location:** `src/HoneyDrunk.Transport.StorageQueue/`
 
 **Key Characteristics:**
 - ✅ Cost-effective ($0.0004 per 10,000 transactions)

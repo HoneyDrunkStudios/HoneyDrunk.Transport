@@ -1,5 +1,10 @@
 # HoneyDrunk.Transport
 
+## Repository layout
+
+Open `HoneyDrunk.Transport.slnx` from the repository root. Production projects live in `src/`, test and canary projects in `tests/`, and examples in `samples/` where present. Shared build configuration stays at the root; project names, namespaces and package identities are unchanged. Existing documentation and release-history locations are retained.
+
+
 [![PR](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml/badge.svg)](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -312,7 +317,7 @@ public interface ITransportHealthContributor
 
 ```
 HoneyDrunk.Transport/
-├── HoneyDrunk.Transport/                    # Core abstractions & pipeline
+├── src/HoneyDrunk.Transport/                    # Core abstractions & pipeline
 │   ├── Abstractions/                        # Publisher, consumer, handler contracts
 │   ├── Pipeline/                            # Middleware execution engine
 │   ├── Configuration/                       # TransportCoreOptions, RetryOptions
@@ -325,25 +330,23 @@ HoneyDrunk.Transport/
 │   ├── Telemetry/                           # OpenTelemetry integration
 │   └── DependencyInjection/                 # AddHoneyDrunkTransportCore()
 │
-├── HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
-│   ├── Publishing/                          # ServiceBusTransportPublisher
-│   ├── Consuming/                           # ServiceBusTransportConsumer
-│   ├── BlobFallback/                        # Blob storage for failed publishes
-│   ├── Health/                              # ServiceBusHealthContributor
+├── src/HoneyDrunk.Transport.AzureServiceBus/    # Azure Service Bus provider
+│   ├── Configuration/                       # AzureServiceBusOptions, BlobFallbackOptions
+│   ├── Internal/                            # Blob fallback store for failed publishes
+│   ├── Mapping/                             # Envelope and transaction mapping
 │   └── DependencyInjection/                 # AddHoneyDrunkServiceBusTransport()
 │
-├── HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
-│   ├── Publishing/                          # StorageQueueTransportPublisher
-│   ├── Consuming/                           # StorageQueueTransportConsumer
-│   ├── Health/                              # StorageQueueHealthContributor
+├── src/HoneyDrunk.Transport.StorageQueue/       # Azure Storage Queue provider
+│   ├── Configuration/                       # StorageQueueOptions
+│   ├── Internal/                            # Sender, processor, poison queue mover
 │   └── DependencyInjection/                 # AddHoneyDrunkTransportStorageQueue()
 │
-├── HoneyDrunk.Transport.InMemory/           # In-memory provider (testing)
-│   ├── InMemoryBroker                       # Thread-safe in-memory message store
-│   ├── Health/                              # InMemoryHealthContributor
+├── src/HoneyDrunk.Transport.InMemory/           # In-memory provider (testing)
+│   ├── InMemoryBroker.cs                    # Thread-safe in-memory message store
 │   └── DependencyInjection/                 # AddHoneyDrunkInMemoryTransport()
 │
-└── HoneyDrunk.Transport.Tests/              # xUnit test suite
+├── tests/HoneyDrunk.Transport.Tests/              # xUnit test suite
+└── tests/HoneyDrunk.Transport.SandboxNode/        # Kernel + Transport invariant canary (not packed)
 ```
 
 ---

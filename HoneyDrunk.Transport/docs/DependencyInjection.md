@@ -25,7 +25,7 @@
 
 Fluent service registration extensions for configuring transport services. Provides builder pattern for composable transport setup.
 
-**Location:** `HoneyDrunk.Transport/DependencyInjection/`
+**Location:** `src/HoneyDrunk.Transport/DependencyInjection/`
 
 ---
 

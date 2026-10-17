@@ -30,7 +30,7 @@ In-memory transport adapter for development and testing.
 - Requires no external infrastructure
 - **Not intended for production use**
 
-**Location:** `HoneyDrunk.Transport.InMemory/`
+**Location:** `src/HoneyDrunk.Transport.InMemory/`
 
 > ⚠️ **Not for Production:** The InMemory transport is intended only for development and tests. It does not provide durability, scaling, or fault tolerance guarantees.
 

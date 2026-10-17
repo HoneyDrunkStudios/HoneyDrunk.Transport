@@ -32,7 +32,7 @@
 
 Core interfaces and transport-agnostic types that define the transport abstraction layer. This folder contains both pure interfaces and shared contract types that all transports and handlers rely on. These contracts enable transport-agnostic messaging where applications depend on interfaces rather than specific broker implementations.
 
-**Location:** `HoneyDrunk.Transport/Abstractions/`
+**Location:** `src/HoneyDrunk.Transport/Abstractions/`
 
 **Key Abstractions:**
 - **IMessagePublisher** - Primary application/service-facing API for publishing typed messages with Grid context

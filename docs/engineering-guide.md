@@ -7,7 +7,7 @@ HoneyDrunk.Transport is a **transport-agnostic messaging library** for .NET 10.0
 ### Core Projects Structure
 
 ```
-HoneyDrunk.Transport/           # Core abstractions and middleware pipeline
+src/HoneyDrunk.Transport/           # Core abstractions and middleware pipeline
 ├── Abstractions/               # Publisher/Consumer interfaces, envelope contracts
 ├── Pipeline/                   # Middleware execution engine
 ├── Configuration/              # Retry, backoff, error handling options
@@ -18,10 +18,11 @@ HoneyDrunk.Transport/           # Core abstractions and middleware pipeline
 ├── Outbox/                     # Transactional outbox pattern abstractions
 └── Primitives/                 # EnvelopeFactory, TransportEnvelope implementations
 
-HoneyDrunk.Transport.AzureServiceBus/   # Azure Service Bus transport implementation
-HoneyDrunk.Transport.StorageQueue/      # Azure Storage Queue transport implementation
-HoneyDrunk.Transport.InMemory/          # In-memory broker for testing
-HoneyDrunk.Transport.Tests/             # xUnit test suite
+src/HoneyDrunk.Transport.AzureServiceBus/   # Azure Service Bus transport implementation
+src/HoneyDrunk.Transport.StorageQueue/      # Azure Storage Queue transport implementation
+src/HoneyDrunk.Transport.InMemory/          # In-memory broker for testing
+tests/HoneyDrunk.Transport.Tests/             # xUnit test suite
+tests/HoneyDrunk.Transport.SandboxNode/       # Kernel + Transport invariant canary (not packed)
 ```
 
 ## Key Concepts
@@ -157,13 +158,14 @@ For transactional publication with retry-safe consumers:
 ## Development Workflows
 
 ### Adding New Transport Providers
-1. Create project `HoneyDrunk.Transport.{BrokerName}/`
+1. Create project `src/HoneyDrunk.Transport.{BrokerName}/` and add it to `HoneyDrunk.Transport.slnx` at the repository root
 2. Reference **ONLY** `HoneyDrunk.Kernel.Abstractions` (not full Kernel)
 3. Reference `HoneyDrunk.Transport` core project
 4. Implement `ITransportPublisher` and `ITransportConsumer`
 5. Implement `ITransportHealthContributor` for health checks
 6. Map Grid context fields (NodeId, StudioId, Environment) to broker metadata
 7. Follow Azure Service Bus implementation as reference template
+8. Add tests under `tests/HoneyDrunk.Transport.Tests/Transports/{BrokerName}/`
 
 ## Code Style Conventions
 

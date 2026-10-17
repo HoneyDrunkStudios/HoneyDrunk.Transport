@@ -186,9 +186,9 @@ public class FailedMessageReplayer(
 
 ## 📚 Documentation
 
-- **[Azure Service Bus Guide](../docs/AzureServiceBus.md)** - Detailed implementation guide
-- **[Blob Fallback Guide](../docs/AzureServiceBus.md#blob-fallback)** - Failure handling patterns
-- **[Complete File Guide](../docs/FILE_GUIDE.md)** - Architecture documentation
+- **[Azure Service Bus Guide](../../HoneyDrunk.Transport/docs/AzureServiceBus.md)** - Detailed implementation guide
+- **[Blob Fallback Guide](../../HoneyDrunk.Transport/docs/AzureServiceBus.md#blob-fallback)** - Failure handling patterns
+- **[Complete File Guide](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md)** - Architecture documentation
 
 ---
 
@@ -200,4 +200,4 @@ This project is licensed under the [MIT License](../../LICENSE).
 
 **Built with 🍯 by HoneyDrunk Studios**
 
-[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)
+[GitHub](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport) • [Documentation](../../HoneyDrunk.Transport/docs/FILE_GUIDE.md) • [Issues](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/issues)

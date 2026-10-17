@@ -22,7 +22,7 @@
 
 The transactional outbox pattern ensures exactly-once message delivery by storing messages in the database within the same transaction as business logic. A background dispatcher then publishes these messages reliably.
 
-**Location:** `HoneyDrunk.Transport/Outbox/`
+**Location:** `src/HoneyDrunk.Transport/Outbox/`
 
 **Layering Note:**
 
