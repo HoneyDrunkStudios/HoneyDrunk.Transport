@@ -72,7 +72,7 @@ dotnet add package HoneyDrunk.Transport
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport" Version="0.7.2" />
+<PackageReference Include="HoneyDrunk.Transport" Version="0.7.3" />
 ```
 
 ---
