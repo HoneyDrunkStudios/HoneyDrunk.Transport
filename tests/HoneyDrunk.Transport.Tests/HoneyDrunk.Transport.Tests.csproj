@@ -13,11 +13,11 @@
 
   <ItemGroup>
     <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.8.1" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.3.0">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.4.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
-    <PackageReference Include="HoneyDrunk.Standards.Tests" Version="0.3.0" PrivateAssets="all" />
+    <PackageReference Include="HoneyDrunk.Standards.Tests" Version="0.4.1" PrivateAssets="all" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
     <PackageReference Include="Azure.Storage.Queues" Version="12.27.1" />
     <PackageReference Include="Azure.Core" Version="1.63.0" />

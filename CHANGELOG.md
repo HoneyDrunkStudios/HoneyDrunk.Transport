@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- Update HoneyDrunk.Standards and HoneyDrunk.Standards.Tests to 0.4.1 to consume the architecture analyzer and TODO issue-link fixes.
+
 - Honor Retry, Abandon and DeadLetter in both Service Bus completion modes; propagate automatic-mode callback/settlement failures to the SDK instead of allowing successful completion. Successful automatic completion, manual settlement, public APIs and Blob fallback publishing semantics remain unchanged.
 
 ## [0.7.2] - 2026-09-26

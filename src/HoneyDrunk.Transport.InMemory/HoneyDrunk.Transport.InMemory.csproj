@@ -31,7 +31,7 @@
 
   <ItemGroup>
     <PackageReference Include="HoneyDrunk.Kernel.Abstractions" Version="0.8.1" />
-    <PackageReference Include="HoneyDrunk.Standards" Version="0.3.0">
+    <PackageReference Include="HoneyDrunk.Standards" Version="0.4.1">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
