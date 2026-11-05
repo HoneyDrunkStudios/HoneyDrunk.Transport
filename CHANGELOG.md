@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.7.3] - 2026-11-05
+
+### Changed
+
+- Refresh NuGet dependencies and adopt upstream package releases in dependency order. Preserve target frameworks and public contracts.
+
+| Dependency | Previous | Updated |
+| --- | --- | --- |
+| Azure.Core | 1.63.0 | 1.64.0 |
+| Azure.Storage.Blobs | 12.29.2 | 12.30.1 |
+| Azure.Storage.Queues | 12.27.1 | 12.28.1 |
+| HoneyDrunk.Kernel | 0.8.1 | 0.8.2 |
+| HoneyDrunk.Kernel.Abstractions | 0.8.1 | 0.8.2 |
+| HoneyDrunk.Standards | 0.3.0 | 0.4.3 |
+| HoneyDrunk.Standards.Tests | 0.3.0 | 0.4.3 |
+| Microsoft.CodeAnalysis.NetAnalyzers | 10.0.401 | 10.0.403 |
+| Microsoft.Extensions.Hosting | 10.0.12 | 10.0.14 |
+| Microsoft.Extensions.Hosting.Abstractions | 10.0.12 | 10.0.14 |
+| Microsoft.Extensions.Logging.Abstractions | 10.0.12 | 10.0.14 |
+| Microsoft.Extensions.Logging.Console | 10.0.12 | 10.0.14 |
+| Microsoft.Extensions.Options | 10.0.12 | 10.0.14 |
+| Microsoft.Extensions.Options.DataAnnotations | 10.0.12 | 10.0.14 |
+
 ## [Unreleased]
 
 - Honor Retry, Abandon and DeadLetter in both Service Bus completion modes; propagate automatic-mode callback/settlement failures to the SDK instead of allowing successful completion. Successful automatic completion, manual settlement, public APIs and Blob fallback publishing semantics remain unchanged.
