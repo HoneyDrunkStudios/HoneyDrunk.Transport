@@ -6,6 +6,7 @@ namespace HoneyDrunk.Transport.Configuration;
 /// Default error handling strategy implementing simple classification rules.
 /// Retries transient exceptions with exponential backoff; dead letters permanent; unknown retries linear then dead letters.
 /// </summary>
+/// <param name="logger">The logger for failed message processing.</param>
 public sealed class DefaultErrorHandlingStrategy(ILogger<DefaultErrorHandlingStrategy> logger) : IErrorHandlingStrategy
 {
     // Pre-compiled logging delegates to minimize formatting overhead (CA1873)

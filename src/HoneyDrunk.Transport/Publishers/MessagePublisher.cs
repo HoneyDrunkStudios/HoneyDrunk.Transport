@@ -14,6 +14,9 @@ namespace HoneyDrunk.Transport.Publishers;
 /// 2. Creating an envelope with Grid context metadata
 /// 3. Delegating to the low-level <see cref="ITransportPublisher"/>.
 /// </remarks>
+/// <param name="transportPublisher">The transport-specific publisher.</param>
+/// <param name="serializer">The message payload serializer.</param>
+/// <param name="envelopeFactory">The factory that supplies message envelope metadata.</param>
 public sealed class MessagePublisher(
     ITransportPublisher transportPublisher,
     IMessageSerializer serializer,
