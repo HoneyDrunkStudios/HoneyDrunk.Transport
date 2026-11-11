@@ -9,10 +9,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.StorageQueue</PackageId>
-    <Version>0.7.3</Version>
+    <Version>0.8.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Storage Queue transport implementation for HoneyDrunk.Transport. Provides cost-effective, high-volume messaging with automatic poison queue handling and exponential backoff.</Description>
-    <PackageReleaseNotes>v0.7.3: Refresh NuGet dependencies and adopt published upstream packages; preserve target frameworks and public contracts.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.8.0: Require .NET 11 and include the Transport runtime fix for overlapping host shutdown and container disposal. Public APIs and message serialization remain unchanged.</PackageReleaseNotes>
     <PackageTags>messaging;storage-queue;azure;transport;poison-queue;retry;backoff;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

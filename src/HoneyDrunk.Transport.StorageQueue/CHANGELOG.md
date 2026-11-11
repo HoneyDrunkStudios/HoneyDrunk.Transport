@@ -5,6 +5,14 @@ All notable changes to HoneyDrunk.Transport.StorageQueue will be documented in t
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-11
+
+### Changed
+
+- Require .NET 11 or newer. Consumers on .NET 10 must remain on 0.7.x until they upgrade.
+- Align with HoneyDrunk.Transport 0.8.0, including safe runtime disposal during overlapping host shutdown. Public APIs and message serialization remain unchanged.
+- See the [repository release notes](../../CHANGELOG.md) for compatibility and regression-test details.
+
 ## [0.7.3] - 2026-11-05
 
 ### Changed
