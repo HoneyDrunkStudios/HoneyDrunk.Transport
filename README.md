@@ -2,7 +2,7 @@
 
 ## .NET 11 upgrade
 
-The repository targets .NET 11 and selects SDK 11.0.100 through `global.json` (stable patch roll-forward). Install a matching SDK before restoring, building or testing. Runtime consumer applications must target .NET 11 or newer when adopting packages built from this source. Pure abstractions packages retain .NET 10 and add .NET 11 targets where present. Existing published HoneyDrunk dependency versions remain unchanged until their coordinated release.
+Beginning with version 0.8.0, all four Transport packages require .NET 11 or newer. Consumers on .NET 10 must remain on 0.7.x until they upgrade. The repository selects SDK 11.0.100 through `global.json` (stable patch roll-forward); install a matching SDK before restoring, building or testing. See the [0.8.0 release notes](CHANGELOG.md#080---2026-11-11) for the runtime shutdown fix and compatibility details.
 
 Framework-aligned packages use 11.0.0; independently versioned Azure, identity, resilience and analyzer packages keep their existing versions. Public contracts and serialization settings are unchanged. Runtime shutdown now defers semaphore disposal until active and queued lifecycle calls finish, preventing overlapping host shutdown and container disposal from throwing during consumer cleanup. The runtime and ASP.NET Core improvements apply without opting into experimental APIs or changing the test runner.
 

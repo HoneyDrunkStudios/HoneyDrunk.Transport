@@ -5,6 +5,18 @@ All notable changes to HoneyDrunk.Transport will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-11-11
+
+### Changed
+
+- Target .NET 11 with SDK 11.0.100 and framework-aligned packages at 11.0.0. All four Transport packages now require consumer applications to target .NET 11 or newer; consumers on .NET 10 must remain on 0.7.x until they upgrade.
+- Adopt HoneyDrunk.Standards 0.4.4 build-time checks. Public APIs, package identities and message serialization remain unchanged.
+
+### Fixed
+
+- Defer the Transport runtime semaphore's disposal until active and queued lifecycle operations finish. Overlapping host shutdown and dependency-injection container disposal no longer dispose synchronization resources while consumer cleanup is in progress.
+- Cover overlapping shutdown/disposal and canceled queued lifecycle operations with deterministic regression tests.
+
 ## [0.7.3] - 2026-11-05
 
 ### Changed

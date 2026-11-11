@@ -8,10 +8,10 @@
 
     <!-- Package Metadata -->
     <PackageId>HoneyDrunk.Transport.AzureServiceBus</PackageId>
-    <Version>0.7.3</Version>
+    <Version>0.8.0</Version>
     <Authors>HoneyDrunk Studios</Authors>
     <Description>Azure Service Bus transport implementation for HoneyDrunk.Transport. Provides topic/subscription support, session handling, and distributed tracing integration for Service Bus messaging.</Description>
-    <PackageReleaseNotes>v0.7.3: Refresh NuGet dependencies and adopt published upstream packages; preserve target frameworks and public contracts.</PackageReleaseNotes>
+    <PackageReleaseNotes>v0.8.0: Require .NET 11 and include the Transport runtime fix for overlapping host shutdown and container disposal. Public APIs and message serialization remain unchanged.</PackageReleaseNotes>
 	<PackageTags>messaging;transport;azure;servicebus;cloud;distributed;queue;topic;session;multi-tenant</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
