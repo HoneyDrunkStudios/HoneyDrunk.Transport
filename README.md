@@ -1,5 +1,13 @@
 # HoneyDrunk.Transport
 
+## .NET 11 upgrade
+
+The repository targets .NET 11 and selects SDK 11.0.100 through `global.json` (stable patch roll-forward). Install a matching SDK before restoring, building or testing. Runtime consumer applications must target .NET 11 or newer when adopting packages built from this source. Pure abstractions packages retain .NET 10 and add .NET 11 targets where present. Existing published HoneyDrunk dependency versions remain unchanged until their coordinated release.
+
+Framework-aligned packages use 11.0.0; independently versioned Azure, identity, resilience and analyzer packages keep their existing versions. Public contracts and serialization settings are unchanged. Runtime shutdown now defers semaphore disposal until active and queued lifecycle calls finish, preventing overlapping host shutdown and container disposal from throwing during consumer cleanup. The runtime and ASP.NET Core improvements apply without opting into experimental APIs or changing the test runner.
+
+See the official [.NET 11 release](https://devblogs.microsoft.com/dotnet/announcing-dotnet-11/) and [breaking changes](https://learn.microsoft.com/dotnet/core/compatibility/11) before rollout.
+
 ## Repository layout
 
 Open `HoneyDrunk.Transport.slnx` from the repository root. Production projects live in `src/`, test and canary projects in `tests/`, and examples in `samples/` where present. Shared build configuration stays at the root; project names, namespaces and package identities are unchanged. Existing documentation and release-history locations are retained.
@@ -7,7 +15,7 @@ Open `HoneyDrunk.Transport.slnx` from the repository root. Production projects l
 
 [![PR](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml/badge.svg)](https://github.com/HoneyDrunkStudios/HoneyDrunk.Transport/actions/workflows/pr.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![.NET 11](https://img.shields.io/badge/.NET-11.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/11.0)
 
 > **Reliable messaging and outbox infrastructure for the Hive** - Transport unifies brokers, queues, and event buses under one contract ensuring delivery, order, and idempotence. It powers communication between Nodes—Data, Pulse, Vault, and beyond—so every message finds its way.
 

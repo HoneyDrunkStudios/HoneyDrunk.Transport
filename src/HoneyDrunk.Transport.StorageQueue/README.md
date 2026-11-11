@@ -1,7 +1,7 @@
 # HoneyDrunk.Transport.StorageQueue
 
 [![NuGet](https://img.shields.io/nuget/v/HoneyDrunk.Transport.StorageQueue.svg)](https://www.nuget.org/packages/HoneyDrunk.Transport.StorageQueue/)
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![.NET 11](https://img.shields.io/badge/.NET-11.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/11.0)
 
 > **Cost-Effective Azure Messaging** - Azure Storage Queue transport for high-volume, simple queue scenarios at $0.0004 per 10,000 transactions.
 

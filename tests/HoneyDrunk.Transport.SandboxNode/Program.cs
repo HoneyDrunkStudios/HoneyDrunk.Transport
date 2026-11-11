@@ -15,15 +15,12 @@ using Microsoft.Extensions.Logging;
 // HoneyDrunk.Transport Sandbox - Architecture Enforcement Canary
 // ═══════════════════════════════════════════════════════════════════════════════
 //
-// NON-NEGOTIABLE INVARIANTS (sandbox crashes if violated):
-//   1) Exactly ONE GridContext per DI scope
-//   2) That GridContext is DI-owned by Kernel
-//   3) Transport MUST NOT create its own GridContext on consume
-//   4) MessageContext.GridContext MUST reference the DI-owned GridContext
-//   5) All accessors return the SAME instance
-//
-// This is a canary, not a demo. If Transport violates Kernel vNext invariants,
-// this sandbox MUST fail loudly with a non-zero exit code.
+// INVARIANTS (sandbox crashes if violated):
+//   1) Kernel owns the DI-scoped runtime GridContext.
+//   2) Transport creates an initialized snapshot from envelope metadata.
+//   3) Correlation, tenant, project and node identity survive propagation.
+//   4) Snapshot baggage is isolated from envelope and DI context mutations.
+//   5) Context properties reference the same message snapshot.
 //
 // Usage:
 //   dotnet run                          - Normal mode: enforce full invariants
@@ -67,7 +64,7 @@ catch (Exception ex) when (!ex.IsFatal())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// NORMAL MODE: Enforce all Kernel vNext invariants
+// NORMAL MODE: Enforce the current Kernel/Transport snapshot contract
 // ═══════════════════════════════════════════════════════════════════════════════
 static async Task RunNormalModeAsync()
 {
@@ -200,7 +197,7 @@ static void VerifyInvariants(ILogger logger, InvariantVerificationResult verific
     var allPassed =
         AssertCorrelationId(logger, verificationResult)
         & AssertInitialized(logger, verificationResult)
-        & AssertInstanceIdentity(logger, verificationResult)
+        & AssertSnapshotContract(logger, verificationResult)
         & AssertAccessor(logger, verificationResult);
 
     logger.LogInformation(Banners.Light);
@@ -208,8 +205,7 @@ static void VerifyInvariants(ILogger logger, InvariantVerificationResult verific
     if (!allPassed)
     {
         throw new InvalidOperationException(
-            "GridContext instance divergence detected in Transport consume pipeline. " +
-            "Transport MUST use the DI-owned GridContext, not create its own.");
+            "Transport snapshot propagation or isolation invariant failed.");
     }
 
     logger.LogInformation("🎉 ALL INVARIANTS PASSED - Kernel + Transport integration verified!");
@@ -242,21 +238,16 @@ static bool AssertInitialized(ILogger logger, InvariantVerificationResult verifi
     return false;
 }
 
-static bool AssertInstanceIdentity(ILogger logger, InvariantVerificationResult verificationResult)
+static bool AssertSnapshotContract(ILogger logger, InvariantVerificationResult verificationResult)
 {
-    if (verificationResult.InstanceIdentityVerified)
+    if (verificationResult.SnapshotIdentityVerified && verificationResult.SnapshotIsolationVerified)
     {
-        logger.LogInformation("  ✅ ReferenceEquals(DI GridContext, MessageContext.GridContext) = true");
+        logger.LogInformation("  ✅ Snapshot identity propagated and baggage isolated from source contexts");
         return true;
     }
 
-    logger.LogError("  ❌ INSTANCE DIVERGENCE DETECTED!");
-    logger.LogError(
-        "      DI GridContext:             {DiType} @ {DiHash}",
-        verificationResult.DiContextTypeName, verificationResult.DiContextHashCode);
-    logger.LogError(
-        "      MessageContext.GridContext: {McType} @ {McHash}",
-        verificationResult.MessageContextTypeName, verificationResult.MessageContextHashCode);
+    logger.LogError("  ❌ Snapshot identity valid: {Identity}; baggage isolated: {Isolation}",
+        verificationResult.SnapshotIdentityVerified, verificationResult.SnapshotIsolationVerified);
     return false;
 }
 

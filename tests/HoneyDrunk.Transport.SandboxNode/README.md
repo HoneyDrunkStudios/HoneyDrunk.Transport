@@ -9,9 +9,12 @@ is excluded from SonarQube analysis — it exists as an architecture-enforcement
 
 The sandbox wires up Kernel (`AddHoneyDrunkNode`) plus the in-memory transport
 (`AddHoneyDrunkInMemoryTransport`), publishes a `SampleMessage`, consumes it through
-the middleware pipeline, and asserts the Kernel ⇄ Transport invariants — chiefly
-that there is exactly one DI-owned `GridContext` per scope and that Transport never
-creates its own on consume. If any invariant is violated the process exits non-zero.
+the middleware pipeline, and verifies the current snapshot contract: Kernel owns
+the DI-scoped runtime context; Transport creates an initialized `GridContextSnapshot`
+from the envelope. The canary checks correlation, node/studio/environment, tenant,
+project, causation and timestamp propagation, plus baggage isolation from the
+envelope and DI context. Snapshot baggage remains mutable through `AddBaggage`;
+isolation means mutations do not leak into the source. Any failed invariant exits non-zero.
 
 ## How To Run
 
@@ -27,6 +30,6 @@ dotnet run -- --negative-mode
 
 Negative mode can also be enabled with the `NEGATIVE_MODE=true` environment variable.
 
-Requires the .NET 10 SDK. The sample uses only project references plus
+Requires the .NET 11 SDK. The sample uses only project references plus
 HoneyDrunk.Kernel and the Generic Host, so no external broker or Azure resources
 are needed.
