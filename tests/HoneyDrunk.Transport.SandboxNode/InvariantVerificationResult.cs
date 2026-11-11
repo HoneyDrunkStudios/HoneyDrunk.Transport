@@ -13,12 +13,9 @@ public sealed class InvariantVerificationResult
     public string? ActualCorrelationId { get; set; }
     public bool IsInitialized { get; set; }
 
-    // Instance identity checks (CRITICAL)
-    public bool InstanceIdentityVerified { get; set; }
-    public string? DiContextTypeName { get; set; }
-    public int DiContextHashCode { get; set; }
-    public string? MessageContextTypeName { get; set; }
-    public int MessageContextHashCode { get; set; }
+    // Snapshot identity and source isolation checks
+    public bool SnapshotIdentityVerified { get; set; }
+    public bool SnapshotIsolationVerified { get; set; }
 
     // Accessor checks
     public bool AccessorAvailable { get; set; }

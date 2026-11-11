@@ -2,7 +2,7 @@
 
 ## Architecture Overview
 
-HoneyDrunk.Transport is a **transport-agnostic messaging library** for .NET 10.0 that provides a unified abstraction layer over different message brokers. The architecture follows a **middleware pipeline pattern** similar to ASP.NET Core and integrates with **HoneyDrunk.Kernel** for Grid-aware distributed context propagation.
+HoneyDrunk.Transport is a **transport-agnostic messaging library** for .NET 11.0 that provides a unified abstraction layer over different message brokers. The architecture follows a **middleware pipeline pattern** similar to ASP.NET Core and integrates with **HoneyDrunk.Kernel** for Grid-aware distributed context propagation.
 
 ### Core Projects Structure
 

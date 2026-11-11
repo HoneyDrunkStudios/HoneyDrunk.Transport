@@ -18,9 +18,8 @@ public sealed class MessageContext
     /// Populated by GridContextPropagationMiddleware from envelope metadata.
     /// </summary>
     /// <remarks>
-    /// <b>Kernel vNext (v0.4.0+):</b> This property holds a reference to the DI-scoped
-    /// <see cref="IGridContext"/> owned by Kernel. Middleware initializes the existing
-    /// context rather than creating a new one.
+    /// Middleware creates an initialized <see cref="GridContextSnapshot"/> from envelope
+    /// metadata. This snapshot is separate from the DI-scoped Kernel runtime context.
     /// </remarks>
     public IGridContext? GridContext { get; set; }
 
@@ -38,9 +37,8 @@ public sealed class MessageContext
     /// Gets or initializes the service provider for resolving scoped services.
     /// </summary>
     /// <remarks>
-    /// <b>Kernel vNext (v0.4.0+):</b> This is the scoped <see cref="IServiceProvider"/>
-    /// for the current message processing operation. Middleware uses this to resolve
-    /// the DI-owned <see cref="IGridContext"/> for initialization.
+    /// This is the scoped <see cref="IServiceProvider"/> for the current message
+    /// processing operation. Handlers can resolve application services from this scope.
     /// </remarks>
     public IServiceProvider? ServiceProvider { get; init; }
 

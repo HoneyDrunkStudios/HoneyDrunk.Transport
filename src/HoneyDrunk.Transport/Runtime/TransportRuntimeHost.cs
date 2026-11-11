@@ -23,6 +23,9 @@ public sealed partial class TransportRuntimeHost(
     ILogger<TransportRuntimeHost> logger) : IHostedService, ITransportRuntime, IDisposable
 {
     private readonly SemaphoreSlim _lock = new(1, 1);
+    private readonly object _lifecycleGate = new();
+    private int _pendingOperations;
+    private bool _disposeRequested;
 
     /// <inheritdoc/>
     public bool IsRunning { get; private set; }
@@ -30,9 +33,12 @@ public sealed partial class TransportRuntimeHost(
     /// <inheritdoc/>
     public async Task StartAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken);
+        BeginLifecycleOperation();
+        var acquired = false;
         try
         {
+            await _lock.WaitAsync(cancellationToken);
+            acquired = true;
             if (IsRunning)
             {
                 LogTransportAlreadyRunning(logger);
@@ -51,16 +57,24 @@ public sealed partial class TransportRuntimeHost(
         }
         finally
         {
-            _lock.Release();
+            if (acquired)
+            {
+                _lock.Release();
+            }
+
+            CompleteLifecycleOperation();
         }
     }
 
     /// <inheritdoc/>
     public async Task StopAsync(CancellationToken cancellationToken = default)
     {
-        await _lock.WaitAsync(cancellationToken);
+        BeginLifecycleOperation();
+        var acquired = false;
         try
         {
+            await _lock.WaitAsync(cancellationToken);
+            acquired = true;
             if (!IsRunning)
             {
                 LogTransportNotRunning(logger);
@@ -79,7 +93,12 @@ public sealed partial class TransportRuntimeHost(
         }
         finally
         {
-            _lock.Release();
+            if (acquired)
+            {
+                _lock.Release();
+            }
+
+            CompleteLifecycleOperation();
         }
     }
 
@@ -93,7 +112,19 @@ public sealed partial class TransportRuntimeHost(
     /// <inheritdoc/>
     public void Dispose()
     {
-        _lock?.Dispose();
+        lock (_lifecycleGate)
+        {
+            if (_disposeRequested)
+            {
+                return;
+            }
+
+            _disposeRequested = true;
+            if (_pendingOperations == 0)
+            {
+                _lock.Dispose();
+            }
+        }
     }
 
     /// <inheritdoc/>
@@ -144,6 +175,30 @@ public sealed partial class TransportRuntimeHost(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Error stopping consumer {ConsumerType}")]
     private static partial void LogConsumerStopError(ILogger logger, string consumerType, Exception ex);
+
+    private void BeginLifecycleOperation()
+    {
+        lock (_lifecycleGate)
+        {
+            ObjectDisposedException.ThrowIf(_disposeRequested, this);
+            _pendingOperations++;
+        }
+    }
+
+    private void CompleteLifecycleOperation()
+    {
+        lock (_lifecycleGate)
+        {
+            _pendingOperations--;
+
+            // Host shutdown and DI disposal can overlap while a consumer is stopping.
+            // Include queued operations so no waiter or holder loses its semaphore.
+            if (_disposeRequested && _pendingOperations == 0)
+            {
+                _lock.Dispose();
+            }
+        }
+    }
 
     private async Task StartConsumerAsync(ITransportConsumer consumer, CancellationToken cancellationToken)
     {

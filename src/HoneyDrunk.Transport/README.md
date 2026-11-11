@@ -1,7 +1,7 @@
 # HoneyDrunk.Transport
 
 [![NuGet](https://img.shields.io/nuget/v/HoneyDrunk.Transport.svg)](https://www.nuget.org/packages/HoneyDrunk.Transport/)
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/10.0)
+[![.NET 11](https://img.shields.io/badge/.NET-11.0-512BD4)](https://dotnet.microsoft.com/download/dotnet/11.0)
 
 > **Transport-Agnostic Messaging for .NET** - Unified abstraction over message brokers with a middleware pipeline, Grid context propagation, and retry strategies.
 

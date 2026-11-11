@@ -1,4 +1,5 @@
 using HoneyDrunk.Kernel.Abstractions.Context;
+using HoneyDrunk.Kernel.Context;
 using HoneyDrunk.Transport.Abstractions;
 using HoneyDrunk.Transport.Exceptions;
 using Microsoft.Extensions.DependencyInjection;
@@ -7,9 +8,9 @@ using Microsoft.Extensions.Logging;
 namespace HoneyDrunk.Transport.SandboxNode;
 
 /// <summary>
-/// Message handler that ENFORCES Kernel vNext invariants.
+/// Message handler that enforces the transport snapshot contract.
 /// This is NOT a demo - it is an invariant verification gate.
-/// If Transport violates the one-GridContext-per-scope rule, this handler exposes it.
+/// Verifies propagated identity and baggage isolation from the envelope and DI context.
 /// </summary>
 public sealed class SampleMessageHandler(
     ILogger<SampleMessageHandler> logger,
@@ -33,44 +34,35 @@ public sealed class SampleMessageHandler(
                 return Task.CompletedTask;
             }
 
-            // ═══════════════════════════════════════════════════════════════════════════
-            // CRITICAL INVARIANT: Resolve GridContext from DI and compare identity
-            // ═══════════════════════════════════════════════════════════════════════════
             var diGridContext = serviceProvider.GetRequiredService<IGridContext>();
+            var envelope = context.Envelope;
+            result.SnapshotIdentityVerified = !diGridContext.IsInitialized &&
+                messageGridContext is GridContextSnapshot &&
+                !ReferenceEquals(diGridContext, messageGridContext) &&
+                messageGridContext.NodeId == "sandbox-node" &&
+                messageGridContext.StudioId == "honeydrunk-studios" &&
+                messageGridContext.Environment == "sandbox" &&
+                messageGridContext.TenantId.ToString() == "01ARZ3NDEKTSV4RRFFQ69G5FAV" &&
+                messageGridContext.ProjectId == "project-alpha" &&
+                messageGridContext.CausationId == envelope.CausationId &&
+                messageGridContext.CreatedAtUtc == envelope.Timestamp &&
+                ReferenceEquals(context.Properties["GridContext"], messageGridContext);
 
-            logger.LogInformation("  DI GridContext:");
-            logger.LogInformation("    Type: {Type}", diGridContext.GetType().FullName);
-            logger.LogInformation("    HashCode: {Hash}", diGridContext.GetHashCode());
-            logger.LogInformation("    IsInitialized: {Init}", diGridContext.IsInitialized);
+            var headersCopied = envelope.Headers.All(header =>
+                messageGridContext.Baggage.TryGetValue(header.Key, out var value) && value == header.Value);
 
-            logger.LogInformation("  MessageContext.GridContext:");
-            logger.LogInformation("    Type: {Type}", messageGridContext.GetType().FullName);
-            logger.LogInformation("    HashCode: {Hash}", messageGridContext.GetHashCode());
-            logger.LogInformation("    IsInitialized: {Init}", messageGridContext.IsInitialized);
-
-            // Record instance details for reporting
-            result.DiContextTypeName = diGridContext.GetType().FullName;
-            result.DiContextHashCode = diGridContext.GetHashCode();
-            result.MessageContextTypeName = messageGridContext.GetType().FullName;
-            result.MessageContextHashCode = messageGridContext.GetHashCode();
-
-            // ═══════════════════════════════════════════════════════════════════════════
-            // CRITICAL CHECK: Reference equality
-            // If this fails, Transport is creating its own GridContext (VIOLATION)
-            // ═══════════════════════════════════════════════════════════════════════════
-            var sameInstance = ReferenceEquals(diGridContext, messageGridContext);
-            result.InstanceIdentityVerified = sameInstance;
-
-            if (sameInstance)
+            // Snapshot baggage is mutable by contract, but must not alias either source.
+            messageGridContext.AddBaggage("snapshot-probe", "message-only");
+            if (diGridContext is GridContext runtimeContext && !runtimeContext.IsInitialized)
             {
-                logger.LogInformation("  ✅ SAME INSTANCE: ReferenceEquals = true");
+                runtimeContext.Initialize("canary-di-only");
             }
-            else
-            {
-                logger.LogError("  ❌ DIFFERENT INSTANCES: ReferenceEquals = false");
-                logger.LogError("      This is an ARCHITECTURE VIOLATION!");
-                logger.LogError("      Transport MUST use the DI-owned GridContext.");
-            }
+
+            diGridContext.AddBaggage("di-probe", "scope-only");
+            result.SnapshotIsolationVerified = headersCopied &&
+                !envelope.Headers.ContainsKey("snapshot-probe") &&
+                !diGridContext.Baggage.ContainsKey("snapshot-probe") &&
+                !messageGridContext.Baggage.ContainsKey("di-probe");
 
             // ═══════════════════════════════════════════════════════════════════════════
             // Value verification (secondary check)
