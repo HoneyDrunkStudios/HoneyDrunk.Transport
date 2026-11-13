@@ -14,6 +14,7 @@ jobs:
     name: PR Core
     if: github.event_name == 'pull_request'
     permissions:
+      actions: read
       contents: read
       checks: write
       issues: write
