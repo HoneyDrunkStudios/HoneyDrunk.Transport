@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Changed
+
+- Build the Azure Storage Queue adapter with the stable C# version selected by .NET 11.
+
 ## [0.8.0] - 2026-11-11
 
 ### Changed
