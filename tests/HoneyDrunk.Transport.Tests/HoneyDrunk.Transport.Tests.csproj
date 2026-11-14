@@ -20,7 +20,7 @@
     <PackageReference Include="HoneyDrunk.Standards.Tests" Version="0.4.4" PrivateAssets="all" />
     <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0" />
     <PackageReference Include="Azure.Storage.Queues" Version="12.28.1" />
-    <PackageReference Include="Azure.Core" Version="1.64.0" />
+    <PackageReference Include="Azure.Core" Version="1.65.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="10.0.403" />
+    <PackageReference Update="Microsoft.CodeAnalysis.NetAnalyzers" Version="11.0.100" />
   </ItemGroup>
 
 </Project>
