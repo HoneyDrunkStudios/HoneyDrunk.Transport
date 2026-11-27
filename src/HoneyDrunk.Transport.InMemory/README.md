@@ -51,7 +51,7 @@ dotnet add package HoneyDrunk.Transport.InMemory
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport.InMemory" Version="0.7.3" />
+<PackageReference Include="HoneyDrunk.Transport.InMemory" Version="0.8.0" />
 ```
 
 ---
