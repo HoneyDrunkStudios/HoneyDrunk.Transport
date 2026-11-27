@@ -66,7 +66,7 @@ dotnet add package HoneyDrunk.Transport.StorageQueue
 ```
 
 ```xml
-<PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.7.3" />
+<PackageReference Include="HoneyDrunk.Transport.StorageQueue" Version="0.8.0" />
 ```
 
 ---
